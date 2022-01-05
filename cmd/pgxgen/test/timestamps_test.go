@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/cmd/pgxgen/test/global_ts_models"
 	"github.com/tkcrm/pgxgen/cmd/pgxgen/test/models"
 )

@@ -8,7 +8,7 @@ import (
 	"os"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/examples/query_argument_names/models"
 )
 

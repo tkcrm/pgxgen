@@ -9,7 +9,7 @@ import (
 	"time"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/examples/timestamps/models"
 )
 

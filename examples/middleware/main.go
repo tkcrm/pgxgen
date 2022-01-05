@@ -9,7 +9,7 @@ import (
 	"sort"
 
 	_ "github.com/jackc/pgx/v4/stdlib"
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/examples/id_in_set/models"
 	"github.com/tkcrm/pgxgen/middleware"
 )

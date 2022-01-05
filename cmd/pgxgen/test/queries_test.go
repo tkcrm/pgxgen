@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid"
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 
 	"github.com/tkcrm/pgxgen/cmd/pgxgen/test/models"
 )

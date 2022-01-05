@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/middleware"
 )
 

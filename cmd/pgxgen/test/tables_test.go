@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/cmd/pgxgen/test/jsontypes"
 	"github.com/tkcrm/pgxgen/cmd/pgxgen/test/models"
 	"github.com/tkcrm/pgxgen/include"

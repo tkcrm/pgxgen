@@ -20,7 +20,7 @@ import (
 	"database/sql/driver"
 	"time"
 
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 )
 
 type ExecFunc func(ctx context.Context, query string, args ...interface{}) (sql.Result, error)

@@ -3,7 +3,7 @@ package test
 import (
 	"testing"
 
-	"github.com/opendoor/pgxgen"
+	"github.com/tkcrm/pgxgen"
 	"github.com/tkcrm/pgxgen/cmd/pgxgen/test/models"
 )
 
