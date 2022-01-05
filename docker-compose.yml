@@ -1,0 +1,118 @@
+version: "3.8"
+
+services:
+  lint:
+    build: .
+    environment:
+      LINT: "1"
+      DB_HOST: "postgres13"
+    volumes:
+      - ".:/pgxgen"
+    links:
+      - "postgres13"
+    depends_on:
+      - "postgres13"
+
+  msgv:
+    build:
+      context: .
+      dockerfile: Dockerfile.msgv
+    environment:
+      DB_HOST: "postgres13"
+    links:
+      - "postgres13"
+    depends_on:
+      - "postgres13"
+    volumes:
+      - ".:/pgxgen"
+
+  test13:
+    build: .
+    environment:
+      DB_HOST: "postgres13"
+    links:
+      - "postgres13"
+    depends_on:
+      - "postgres13"
+    volumes:
+      - ".:/pgxgen"
+
+  test12:
+    build: .
+    environment:
+      DB_HOST: "postgres12"
+    links:
+      - "postgres12"
+    depends_on:
+      - "postgres12"
+    volumes:
+      - ".:/pgxgen"
+
+  test11:
+    build: .
+    environment:
+      DB_HOST: "postgres11"
+    links:
+      - "postgres11"
+    depends_on:
+      - "postgres11"
+    volumes:
+      - ".:/pgxgen"
+
+  test10:
+    build: .
+    environment:
+      DB_HOST: "postgres10"
+    links:
+      - "postgres10"
+    depends_on:
+      - "postgres10"
+    volumes:
+      - ".:/pgxgen"
+
+  test9_6:
+    build: .
+    environment:
+      DB_HOST: "postgres9_6"
+    links:
+      - "postgres9_6"
+    depends_on:
+      - "postgres9_6"
+    volumes:
+      - ".:/pgxgen"
+
+  test9_5:
+    build: .
+    environment:
+      DB_HOST: "postgres9_5"
+    links:
+      - "postgres9_5"
+    depends_on:
+      - "postgres9_5"
+    volumes:
+      - ".:/pgxgen"
+
+  postgres13:
+    image: postgres:13
+    environment:
+      POSTGRES_PASSWORD: "test"
+  postgres12:
+    image: postgres:12
+    environment:
+      POSTGRES_PASSWORD: "test"
+  postgres11:
+    image: postgres:11
+    environment:
+      POSTGRES_PASSWORD: "test"
+  postgres10:
+    image: postgres:10
+    environment:
+      POSTGRES_PASSWORD: "test"
+  postgres9_6:
+    image: postgres:9.6
+    environment:
+      POSTGRES_PASSWORD: "test"
+  postgres9_5:
+    image: postgres:9.5
+    environment:
+      POSTGRES_PASSWORD: "test"

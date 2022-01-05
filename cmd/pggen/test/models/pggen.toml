@@ -1,0 +1,600 @@
+
+[[type_override]]
+    postgres_type_name = "uuid"
+    pkg = "\"github.com/gofrs/uuid\""
+    type_name = "uuid.UUID"
+    nullable_type_name = "uuid.NullUUID"
+    nullable_to_boxed = '''
+        func(u uuid.NullUUID) *uuid.UUID {
+            if u.Valid {
+                return &u.UUID
+            }
+            return nil
+        }({{ .Value }})
+    '''
+
+####################################################################################
+#                                                                                  #
+#                                       public                                     #
+#                                                                                  #
+####################################################################################
+
+#
+# Queries
+#
+
+[[query]]
+    name = "returns_text"
+    # null flags can be provided to assert that return values can never be null
+    null_flags = "-"
+    body = "SELECT 'foo'::text AS t"
+
+[[query]]
+    name = "concats_text"
+    body = "SELECT $1 || $2 AS t"
+
+[[query]]
+    name = "select_matching_string"
+    body = '''
+    SELECT t.text_field
+    FROM type_rainbow t
+    WHERE t.text_field = $1
+    '''
+
+[[query]]
+    name = "select_string_types"
+    body = '''
+    SELECT t.text_field, t.text_field_not_null,
+           t.varchar_field, t.varchar_field_not_null,
+           t.char_field, t.char_field_not_null
+    FROM type_rainbow t
+    '''
+
+[[query]]
+    name = "select_money"
+    body = '''
+    SELECT money_field, money_field_not_null from type_rainbow;
+    '''
+
+[[query]]
+    name = "select_time"
+    # nullability of fields can be specified in a longer form way if
+    # the terse null flags syntax gets to confusing for a wide query.
+    not_null_fields = [
+        "ts_field_not_null",
+        "tsz_field_not_null",
+        "date_field_not_null",
+        "time_field_not_null",
+        "timez_field_not_null",
+    ]
+    body = '''
+    SELECT
+        ts_field,
+        ts_field_not_null,
+        tsz_field,
+        tsz_field_not_null,
+        date_field,
+        date_field_not_null,
+        time_field,
+        time_field_not_null,
+        timez_field,
+        timez_field_not_null
+    FROM type_rainbow
+    '''
+
+[[query]]
+    name = "select_bool"
+    body = "SELECT bool_field, bool_field_not_null FROM type_rainbow"
+
+[[query]]
+    name = "select_enum"
+    body = "SELECT enum_field, enum_field_not_null FROM type_rainbow"
+
+[[query]]
+    name = "select_uuid"
+    # multiple null flags can be provided
+    null_flags = "n-"
+    body = "SELECT uuid_field, uuid_field_not_null FROM type_rainbow"
+
+[[query]]
+    name = "select_numbers"
+    body = '''
+    SELECT
+        smallint_field,
+        smallint_field_not_null,
+        integer_field,
+        integer_field_not_null,
+        bigint_field,
+        bigint_field_not_null,
+        decimal_field,
+        decimal_field_not_null,
+        numeric_field,
+        numeric_field_not_null,
+        numeric_prec_field,
+        numeric_prec_field_not_null,
+        numeric_prec_scale_field,
+        numeric_prec_scale_field_not_null,
+        real_field,
+        real_field_not_null,
+        double_field,
+        double_field_not_null,
+        serial_field,
+        serial_field_not_null,
+        big_serial_field,
+        big_serial_field_not_null
+    FROM type_rainbow
+    '''
+
+[[query]]
+    name = "select_blobs"
+    body = "SELECT bytea_field, bytea_field_not_null FROM type_rainbow"
+
+[[query]]
+    name = "get_small_entity_1"
+    return_type = "SmallEntity"
+    body = "SELECT * FROM small_entities"
+
+[[query]]
+    name = "get_small_entity_2"
+    return_type = "SmallEntity"
+    body = "SELECT * FROM small_entities"
+
+[[query]]
+    name = "NonNullText"
+    body = '''
+    SELECT text_field FROM type_rainbow WHERE text_field IS NOT NULL
+    '''
+    null_flags = "-"
+
+[[query]]
+    name = "MixedNullText"
+    body = '''
+    SELECT text_field FROM type_rainbow ORDER BY text_field
+    '''
+
+[[query]]
+    name = "MultiReturn"
+    body = '''
+    SELECT text_field, smallint_field
+    FROM type_rainbow
+    ORDER BY smallint_field
+    '''
+
+[[query]]
+    name = "TextArg"
+    body = '''
+    SELECT text_field FROM type_rainbow WHERE text_field = $1
+    '''
+
+[[query]]
+    name = "MoneyArg"
+    body = '''
+    SELECT money_field FROM type_rainbow WHERE money_field = $1
+    '''
+
+[[query]]
+    name = "DateTimeArg"
+    body = '''
+    SELECT ts_field
+    FROM type_rainbow
+    WHERE ts_field > $1
+      AND tsz_field > $2
+      AND date_field > $3
+    '''
+# TODO: different postgres versions return different results when
+#       the time fields are compared against. My locally installed
+#       postgres `AND time_field < $4 AND timez_field < $5` and the
+#       ci's dockized version wants the comparisons to be flipped.
+#       I give it a 50/50 chance of this being a bug in pgxgen or lib/pq.
+
+[[query]]
+    name = "BooleanArg"
+    body = '''
+    SELECT bool_field FROM type_rainbow WHERE bool_field = $1
+    '''
+
+[[query]]
+    name = "EnumArg"
+    body = '''
+    SELECT enum_field FROM type_rainbow WHERE enum_field = $1
+    '''
+
+[[query]]
+    name = "UUIDArg"
+    body = '''
+    SELECT uuid_field FROM type_rainbow WHERE uuid_field = $1
+    '''
+
+[[query]]
+    name = "ByteaArg"
+    body = '''
+    SELECT bytea_field FROM type_rainbow WHERE bytea_field = $1
+    '''
+
+[[query]]
+    name = "NumberArgs"
+    body = '''
+    SELECT
+        smallint_field
+    FROM type_rainbow
+    WHERE smallint_field > $1
+      AND integer_field > $2
+      AND bigint_field > $3
+      AND decimal_field > $4
+      AND numeric_field > $5
+      AND numeric_prec_field > $6
+      AND numeric_prec_scale_field > $7
+      AND real_field > $8
+      AND double_field > $9
+      AND serial_field > $10
+      AND big_serial_field > $11
+    '''
+
+[[query]]
+    name = "HasNamedReturn1"
+    body = '''
+    SELECT * FROM small_entities
+    '''
+    return_type = "SmallEntity"
+
+[[query]]
+    name = "HasNamedReturn2"
+    body = '''
+    SELECT * FROM small_entities
+    '''
+    return_type = "SmallEntity"
+
+[[query]]
+    name = "GetSmallEntityByID"
+    body = '''
+    SELECT * FROM small_entities WHERE id = $1
+    '''
+    return_type = "SmallEntity"
+
+[[query]]
+    name = "GetSmallEntityByAnint"
+    body = '''
+    SELECT * FROM small_entities WHERE anint = $1
+    '''
+    return_type = "SmallEntity"
+
+[[query]]
+    name = "TypeRainbowIDs"
+    body = "SELECT id FROM type_rainbow"
+    null_flags = "-"
+
+[[query]]
+    name = "ListText"
+    body = '''
+    SELECT text_field FROM type_rainbow WHERE id = ANY($1)
+    '''
+
+[[query]]
+    name = "RollUpNums"
+    body = '''
+    SELECT array_agg(bigint_field) as ints, array_agg(decimal_field) as decs
+    FROM type_rainbow
+    '''
+
+[[query]]
+    name = "ListEnumAsArray"
+    body = '''
+    SELECT array_agg(enum_field_not_null) as enums
+    FROM type_rainbow
+    WHERE enum_field_not_null = ANY($1)
+    '''
+    # we are deliberately not setting the null flags to exercise
+    # NullEnumType
+    #
+[[query]]
+    name = "ListEnumAsArrayWithNulls"
+    body = '''
+    SELECT array_agg(enum_field) as enums
+    FROM type_rainbow
+    WHERE enum_field_not_null = ANY($1)
+    '''
+
+[[query]]
+    name = "ForceError"
+    body = "SELECT * FROM inject_sql('ya done goofed')"
+
+[[query]]
+    name = "AllMatchingEnums"
+    body = "SELECT array_agg(value) as variants FROM simple_enums WHERE value = ANY($1)"
+
+[[query]]
+    name = "SearchForNullableEnum"
+    nullable_arguments = true
+    return_type = "SimpleEnum"
+    single_result = true
+    body = "SELECT * FROM simple_enums WHERE (value = $1) OR (value IS NULL AND $1 IS NULL)"
+
+[[query]]
+    name = "SearchForNullableEnumSingleColResult"
+    nullable_arguments = true
+    single_result = true
+    body = "SELECT value FROM simple_enums WHERE (value = $1) OR (value IS NULL AND $1 IS NULL)"
+
+[[query]]
+    name = "SelectJSON"
+    not_null_fields = ["json_field_not_null", "jsonb_field_not_null"]
+    body = '''
+    SELECT
+        json_field,
+        json_field_not_null,
+        jsonb_field,
+        jsonb_field_not_null
+    FROM type_rainbow
+    '''
+
+[[query]]
+    name = "SingleResultMultiCol"
+    single_result = true
+    not_null_fields = ["text_field_not_null", "varchar_field_not_null"]
+    body = '''
+    SELECT text_field_not_null, varchar_field_not_null FROM type_rainbow LIMIT 1
+    '''
+
+[[query]]
+    name = "SingleResultSingleCol"
+    single_result = true
+    not_null_fields = ["text_field_not_null"]
+    body = '''
+    SELECT text_field_not_null FROM type_rainbow LIMIT 1
+    '''
+
+[[query]]
+    name = "SingleResultSingleColNullable"
+    single_result = true
+    body = '''
+    SELECT text_field_not_null FROM type_rainbow LIMIT 1
+    '''
+
+[[query]]
+    name = "SingleResultNotFound"
+    single_result = true
+    body = '''
+    SELECT text_field_not_null FROM type_rainbow WHERE text_field_not_null = 'this isnt there' LIMIT 1
+    '''
+
+[[query]]
+    name = "AddHourToInterval"
+    single_result = true
+    null_flags = "-"
+    body = "SELECT INTERVAL '1h' + $1"
+
+#
+# Statements
+#
+
+[[statement]]
+    name = "StmtInsertSmallEntity"
+    body = '''
+    INSERT INTO small_entities (anint) VALUES ($1)
+    '''
+
+[[statement]]
+    name = "EnumInsertStmt"
+    body = "INSERT INTO funky_enums (enum_val) VALUES ($1)"
+
+#
+# Tables
+#
+
+[[table]]
+    name = "type_rainbow"
+
+[[table]]
+    name = "small_entities"
+
+[[table]]
+    name = "attachments"
+
+[[table]]
+    name = "single_attachments"
+
+[[table]]
+    name = "nullable_attachments"
+
+[[table]]
+    name = "nullable_single_attachments"
+
+[[table]]
+    name = "no_infer"
+    no_infer_belongs_to = true
+
+# the foreign key in the database does not actually have a foreign
+# key constraint, so we are going to explicitly configure it.
+[[table]]
+    name = "explicit_belongs_to"
+    [[table.belongs_to]]
+        table = "small_entities"
+        key_field = "small_entity_id"
+        one_to_one = true
+
+[[table]]
+    name = "explicit_belongs_to_many"
+    [[table.belongs_to]]
+        table = "small_entities"
+        key_field = "small_entity_id"
+
+[[table]]
+    name = "Weird NaMeS"
+
+[[table]]
+    name = "Weird?! Kid"
+
+[[table]]
+    name = "array_members"
+
+[[table]]
+    name = "timestamps_both"
+    created_at_field = "created_at"
+    updated_at_field = "updated_at"
+
+[[table]]
+    name = "timestamps_just_created"
+    created_at_field = "made_at"
+
+[[table]]
+    name = "timestamps_just_updated"
+    updated_at_field = "last_touched"
+
+[[table]]
+    name = "col_order"
+
+[[table]]
+    name = "constraints"
+
+[[table]]
+    name = "text_array"
+
+[[table]]
+    name = "enum_blanks"
+
+[[table]]
+    name = "cycle1"
+[[table]]
+    name = "cycle2"
+
+[[table]]
+    name = "cycle_tree_root"
+[[table]]
+    name = "cycle_tree_branch1"
+[[table]]
+    name = "cycle_tree_branch2"
+[[table]]
+    name = "cycle_tree_cycle1"
+[[table]]
+    name = "cycle_tree_cycle2"
+[[table]]
+    name = "cycle_tree_cycle3"
+
+[[table]]
+    name = "will_get_new_column"
+
+[[table]]
+    name = "non_default_pkey"
+
+[[table]]
+    name = "alternative_reference_name"
+    [[table.belongs_to]]
+        table = "small_entities"
+        key_field = "small_entity_id"
+        parent_field_name = "custom_reference_name"
+
+[[table]]
+    name = "alternative_reference_name_1to1"
+    [[table.belongs_to]]
+        table = "small_entities"
+        key_field = "small_entity_id"
+        one_to_one = true
+        parent_field_name = "custom_1to1_reference_name"
+
+[[table]]
+    name = "custom_default_uuids"
+    [[table.field_tags]]
+        column_name = "uuid"
+        tags = "customtag:\"my-custom-tag\""
+
+[[table]]
+    name = "wacky_roots"
+[[table]]
+    name = "wacky_attachments"
+[[table]]
+    name = "wacky_single_attachments"
+
+[[table]]
+    name = "gorm_defaults"
+    [[table.field_tags]]
+        column_name = "uuid"
+        tags = "gorm:\"default:'uuid_generate_v4()'\""
+
+[[table]]
+    name = "drop_cols"
+
+[[table]]
+    name = "soft_deletables"
+    # choose a slightly wacky name to prove we have not baked "deleted_at" in
+    deleted_at_field = "deleted_ts"
+# lets us fetch even soft-deleted records
+[[query]]
+    name = "GetSoftDeletableAnyway"
+    return_type = "soft_deletable"
+    body = "SELECT * FROM soft_deletables WHERE id = $1"
+[[table]]
+    name = "deletable_leafs"
+    deleted_at_field = "deleted_at"
+
+[[table]]
+    name = "funky_enums"
+
+[[table]]
+    name = "offset_table_fillings"
+
+[[table]]
+    name = "default_values"
+
+[[table]]
+    name = "json_values"
+    [[table.json_type]]
+        column_name = "json_field"
+        type_name = "jsontypes.SomeData"
+        pkg = '"github.com/tkcrm/pgxgen/cmd/pgxgen/test/jsontypes"'
+    [[table.json_type]]
+        column_name = "json_field_not_null"
+        type_name = "JsonData"
+        # if the type is defined in the `models` package, we don't need to provide a
+        # package config key
+    [[table.json_type]]
+        column_name = "jsonb_field"
+        type_name = "jsontypes.SomeData"
+        pkg = '"github.com/tkcrm/pgxgen/cmd/pgxgen/test/jsontypes"'
+    [[table.json_type]]
+        column_name = "jsonb_field_not_null"
+        type_name = "jsontypes.SomeData"
+        pkg = '"github.com/tkcrm/pgxgen/cmd/pgxgen/test/jsontypes"'
+
+[[table]]
+    name = "simple_enums"
+
+[[table]]
+    name = "double_references"
+
+####################################################################################
+#                                                                                  #
+#                                     otherschema                                  #
+#                                                                                  #
+####################################################################################
+
+# stuff for the basic smoke test
+[[table]]
+    name = "otherschema.foos"
+[[statement]]
+    name = "ClobberAllOtherschemaFooValues"
+    body = "UPDATE otherschema.foos SET value = ''"
+[[query]]
+    name = "GetAllOtherschemaFoos"
+    return_type = "Otherschema_Foo"
+    body = "SELECT * FROM otherschema.foos"
+
+# for associations within a non-public schema
+[[table]]
+    name = "otherschema.parents"
+[[table]]
+    name = "otherschema.children"
+[[table]]
+    name = "otherschema.unconstrained_children"
+    [[table.belongs_to]]
+        table = "otherschema.parents"
+        key_field = "parent_id"
+        one_to_one = true # just to mix things up
+
+# for associations between schemas
+[[table]]
+    name = "otherschema.small_entity_children"
+[[table]]
+    name = "children_of_otherschema"
+
+[[table]]
+    name = 'otherschema."funky ""name"'
