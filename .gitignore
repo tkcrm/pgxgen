@@ -1,6 +1,41 @@
-*.test
-main
+# Mac OS X files
+.DS_Store
 
-# IntelliJ
-.idea/
-*.iml
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.prof
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+# Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
+.glide/
+
+# Dependency directories (remove the comment below to include it)
+vendor/
+
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+
+# Folders
+_obj
+_test
+
+*.log
+
+# Visual Studio Code
+.vscode
+
+#protos/*.go
+build
+.env
+Dockerfile-dev
+sqlc.yaml

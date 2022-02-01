@@ -1,9 +1,0 @@
-[[table]]
-    name = "foos"
-
-[[query]]
-    name = "MyGetFooValue"
-    single_result = true
-    body = '''
-    SELECT value FROM foos WHERE id = $1
-    '''
