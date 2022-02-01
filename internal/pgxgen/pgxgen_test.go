@@ -7,7 +7,7 @@ import (
 	"github.com/tkcrm/pgxgen/internal/pgxgen"
 )
 
-var connString = "postgres://postgres:postgres@localhost:5432/tracker?sslmode=disable"
+var connString = "postgres://postgres:postgres@localhost:5432/testtable?sslmode=disable"
 
 func Test_Start(t *testing.T) {
 

@@ -1,15 +1,15 @@
 # pgxgen
 
-Pgxgen use `sqlc` tool with additional improvements.
+pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional improvements.
 
-- Instead of `database/sql` used pool `pgxgen/v4`
+- Instead of `database/sql` used [`pgx/v4`](https://github.com/jackc/pgx)
 - Instead null types like `sql.NullString` used nil type `*string`
 - Auto generate CRUD for existing tables in postgresql database
 
 ## Install
 
 ```bash
-go install github.com/sxwebdev/pgxgen/cmd/pgxgen@latest
+go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ go install github.com/sxwebdev/pgxgen/cmd/pgxgen@latest
 ### Generate `CRUD` queries for existing tables
 
 ```bash
-pgxgen gencrud -c postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=disable
+pgxgen gencrud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=disable
 ```
 
 ### Configure `sqlc`
@@ -48,7 +48,7 @@ packages:
 
 > **NOTICE!** Option `sql_package: "pgx/v4"` is required in configuration file
 
-### Generate `db` and `models`
+### Generate `db`, `models` and `interface`
 
 ```bash
 pgxgen generate

@@ -225,7 +225,7 @@ func processFind(b *strings.Builder, table string, columns []string) {
 
 	methodName := stringy.New(fmt.Sprintf("find %s", table)).CamelCase()
 
-	b.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	b.WriteString(fmt.Sprintf("-- name: %s :many\n", methodName))
 	b.WriteString("SELECT * FROM ")
 	b.WriteString(table)
 	b.WriteString(" ORDER BY id DESC LIMIT $1 OFFSET $2;\n\n")
