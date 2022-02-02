@@ -2,7 +2,6 @@
 
 pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional improvements.
 
-- Prefere using [`pgx/v4`](https://github.com/jackc/pgx) instead of `database/sql`
 - Instead null types like `sql.NullString` used nil type `*string`
 - Auto generate CRUD for existing tables in postgresql database
 
