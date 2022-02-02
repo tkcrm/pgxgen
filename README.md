@@ -8,6 +8,10 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 
 ## Install
 
+### Requirements
+
+- `Go 1.18+`
+
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 ```
