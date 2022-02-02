@@ -33,7 +33,7 @@ crud_params:
     - by: id
       order: desc
       tables:
-        # List tables or all (*)
+        # List of tables or all (*)
         - "*"
   where:
     # g - get
@@ -41,8 +41,9 @@ crud_params:
     # u - update
     # d - delete
     # t - total
-    - methods: "fgtud"
-      # List tables or all (*)
+    # available asterisk (*) for all methods (gfudt) expect create
+    - methods: "gfudt"
+      # List of tables or all (*)
       tables:
         - users
       params:
