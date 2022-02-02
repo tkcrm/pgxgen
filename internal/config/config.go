@@ -53,7 +53,7 @@ type OrderBy struct {
 	Tables []string `yaml:"tables"`
 }
 
-// `Where` used for all method expect `create`. Instead of listing all methods, you can use an asterisk: *
+// `Where` used for all method except `create`. Instead of listing all methods, you can use an asterisk: *
 type Where struct {
 	Methods string   `yaml:"methods"`
 	Tables  []string `yaml:"tables"`

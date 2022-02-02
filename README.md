@@ -45,7 +45,7 @@ crud_params:
     # u - update
     # d - delete
     # t - total
-    # available asterisk (*) for all methods (gfudt) expect create
+    # available asterisk (*) for all methods (gfudt) except create
     - methods: "gfudt"
       # List of tables or asterisk (*)
       tables:
