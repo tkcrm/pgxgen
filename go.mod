@@ -1,8 +1,11 @@
 module github.com/tkcrm/pgxgen
 
-go 1.17
+go 1.18
 
-require github.com/kyleconroy/sqlc v1.11.0
+require (
+	github.com/jackc/pgx/v4 v4.14.1
+	github.com/kyleconroy/sqlc v1.11.0
+)
 
 require (
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -12,7 +15,6 @@ require (
 	github.com/jackc/pgproto3/v2 v2.2.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.9.1 // indirect
-	github.com/jackc/pgx/v4 v4.14.1 // indirect
 	golang.org/x/crypto v0.0.0-20210711020723-a769d52b0f97 // indirect
 	golang.org/x/mod v0.5.1 // indirect
 	golang.org/x/sys v0.0.0-20211019181941-9d821ace8654 // indirect
@@ -39,5 +41,5 @@ require (
 	golang.org/x/tools v0.1.9
 	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 )

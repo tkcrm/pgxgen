@@ -7,7 +7,7 @@ var helpMessage = `Available Commands:
   generate    Generate Go code from SQL
   help        Help about any command
   init        Create an empty sqlc.yaml settings file
-  version     Print the sqlc version number
+  version     Print the pgxgen version number
 
 Flags:
   -x, --experimental   enable experimental features (default: false)
@@ -15,7 +15,7 @@ Flags:
   -h, --help           help for sqlc
 `
 
-var replaceTypes map[string]string = map[string]string{
+var types map[string]string = map[string]string{
 	"sql.NullInt32":   "*int32",
 	"sql.NullInt64":   "*int64",
 	"sql.NullInt16":   "*int16",
