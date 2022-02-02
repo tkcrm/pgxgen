@@ -12,6 +12,7 @@ import (
 	"github.com/gobeam/stringy"
 	"github.com/jackc/pgx/v4"
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/utils"
 )
 
 type tableColumns struct {
@@ -19,9 +20,9 @@ type tableColumns struct {
 	ColumnName string
 }
 
-type filteredTables []string
+type stringArr []string
 
-func (s *filteredTables) exist(v string) bool {
+func (s *stringArr) exist(v string) bool {
 	for _, i := range *s {
 		if i == v {
 			return true
@@ -30,12 +31,29 @@ func (s *filteredTables) exist(v string) bool {
 	return false
 }
 
-var skipTables filteredTables = filteredTables{
+var skipTables stringArr = stringArr{
 	"spatial_ref_sys",
 	"schema_migrations",
 }
 
-func processGenCRUD(args []string, c config.SqlcConfig) error {
+var skipCreateColumns stringArr = stringArr{
+	"id",
+	"updated_at",
+}
+
+var skipUpdateColumns stringArr = stringArr{
+	"id",
+	"created_at",
+}
+
+type processCRUDParams struct {
+	config  config.PgxgenConfig
+	builder *strings.Builder
+	table   string
+	columns []string
+}
+
+func genCRUD(args []string, c config.Config) error {
 
 	var connString string
 	mySet := flag.NewFlagSet("", flag.ExitOnError)
@@ -53,16 +71,34 @@ func processGenCRUD(args []string, c config.SqlcConfig) error {
 
 	builder := new(strings.Builder)
 	for table, columns := range groupData {
-		processCreate(builder, table, columns)
-		processUpdate(builder, table, columns)
-		processDelete(builder, table, columns)
-		processGet(builder, table, columns)
-		processFind(builder, table, columns)
-		processCount(builder, table, columns)
+		params := processCRUDParams{c.Pgxgen, builder, table, columns}
+		if err := processCreate(params); err != nil {
+			return err
+		}
+		if err := processUpdate(params); err != nil {
+			return err
+		}
+		if err := processDelete(params); err != nil {
+			return err
+		}
+		if err := processGet(params); err != nil {
+			return err
+		}
+		if err := processFind(params); err != nil {
+			return err
+		}
+		if err := processTotal(params); err != nil {
+			return err
+		}
 	}
 
-	for _, p := range c.Packages {
-		if err := os.WriteFile(filepath.Join(p.Queries, "crud_queries.sql"), []byte(builder.String()), 0644); err != nil {
+	for _, p := range c.Sqlc.Packages {
+		file_name := c.Pgxgen.OutputCrudSqlFileName
+		if file_name == "" {
+			file_name = "crud_queries.sql"
+		}
+
+		if err := os.WriteFile(filepath.Join(p.Queries, file_name), []byte(builder.String()), 0644); err != nil {
 			return err
 		}
 	}
@@ -130,113 +166,195 @@ func getTableMeta(connString string) (map[string][]string, error) {
 	return groupData, nil
 }
 
-func processCreate(b *strings.Builder, table string, columns []string) {
+func processCreate(p processCRUDParams) error {
 
-	methodName := stringy.New(fmt.Sprintf("create %s", table)).CamelCase()
+	methodName := stringy.New(fmt.Sprintf("create %s", p.table)).CamelCase()
 
 	if strings.HasSuffix(methodName, "s") {
 		methodName = string(methodName[:len(methodName)-1])
 	}
 
-	b.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
-	b.WriteString("INSERT INTO ")
-	b.WriteString(table)
-	b.WriteString(" (")
-	b.WriteString(strings.Join(columns, ", "))
-	b.WriteString(")\n\tVALUES (")
-
-	lastIndex := 1
-	for index, name := range columns {
-		if name == "created_at" {
-			b.WriteString("now()")
-		} else {
-			b.WriteString(fmt.Sprintf("$%d", lastIndex))
-			lastIndex++
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	p.builder.WriteString("INSERT INTO ")
+	p.builder.WriteString(p.table)
+	p.builder.WriteString(" (")
+	for index, name := range p.columns {
+		if index > 1 && index != len(p.columns)-1 {
+			p.builder.WriteString(", ")
 		}
-		if index != len(columns)-1 {
-			b.WriteString(", ")
+
+		if skipCreateColumns.exist(name) {
+			continue
+		} else {
+			p.builder.WriteString(fmt.Sprintf("\"%s\"", name))
 		}
 	}
-	b.WriteString(")\n\tRETURNING *;\n\n")
+	p.builder.WriteString(")\n\tVALUES (")
+
+	lastIndex := 1
+	for index, name := range p.columns {
+		if lastIndex > 1 && index != len(p.columns)-1 {
+			p.builder.WriteString(", ")
+		}
+
+		if name == "created_at" {
+			p.builder.WriteString("now()")
+		} else if skipCreateColumns.exist(name) {
+			continue
+		} else {
+			p.builder.WriteString(fmt.Sprintf("$%d", lastIndex))
+			lastIndex++
+		}
+	}
+	p.builder.WriteString(")\n\tRETURNING *;\n\n")
+
+	return nil
 }
 
-func processUpdate(b *strings.Builder, table string, columns []string) {
+func processUpdate(p processCRUDParams) error {
 
-	methodName := stringy.New(fmt.Sprintf("update %s", table)).CamelCase()
+	methodName := stringy.New(fmt.Sprintf("update %s", p.table)).CamelCase()
 
 	if strings.HasSuffix(methodName, "s") {
 		methodName = string(methodName[:len(methodName)-1])
 	}
 
-	b.WriteString(fmt.Sprintf("-- name: %s :exec\n", methodName))
-	b.WriteString("UPDATE ")
-	b.WriteString(table)
-	b.WriteString("\n\tSET ")
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :exec\n", methodName))
+	p.builder.WriteString("UPDATE ")
+	p.builder.WriteString(p.table)
+	p.builder.WriteString("\n\tSET ")
 
 	lastIndex := 1
-	for index, name := range columns {
-		if name == "updated_at" {
-			b.WriteString("updated_at = now()")
-		} else {
-			b.WriteString(fmt.Sprintf("%s = $%d", name, lastIndex))
-			lastIndex++
-		}
-
-		if index != len(columns)-1 {
-			b.WriteString(", ")
-			if len(columns) > 6 && lastIndex%6 == 0 {
-				b.WriteString("\n\t\t")
+	for index, name := range p.columns {
+		if lastIndex > 1 && index != len(p.columns)-1 {
+			p.builder.WriteString(", ")
+			if len(p.columns) > 6 && lastIndex%6 == 0 {
+				p.builder.WriteString("\n\t\t")
 			}
 		}
+
+		if name == "updated_at" {
+			p.builder.WriteString("\"updated_at\" = now()")
+		} else if skipUpdateColumns.exist(name) {
+			continue
+		} else {
+			p.builder.WriteString(fmt.Sprintf("\"%s\"=$%d", name, lastIndex))
+			lastIndex++
+		}
 	}
 
-	b.WriteString(fmt.Sprintf("\n\tWHERE id=$%d;\n\n", lastIndex))
+	p.builder.WriteString("\n\t")
+	if err := processWhereParam(p, "f", &lastIndex); err != nil {
+		return err
+	}
+	if lastIndex == 1 {
+		p.builder.WriteString(fmt.Sprintf("WHERE id=$%d;\n\n", lastIndex))
+	} else {
+		p.builder.WriteString(fmt.Sprintf(" AND id=$%d;\n\n", lastIndex))
+	}
+
+	return nil
 }
 
-func processDelete(b *strings.Builder, table string, columns []string) {
+func processDelete(p processCRUDParams) error {
 
-	methodName := stringy.New(fmt.Sprintf("delete %s", table)).CamelCase()
+	methodName := stringy.New(fmt.Sprintf("delete %s", p.table)).CamelCase()
 
 	if strings.HasSuffix(methodName, "s") {
 		methodName = string(methodName[:len(methodName)-1])
 	}
 
-	b.WriteString(fmt.Sprintf("-- name: %s :exec\n", methodName))
-	b.WriteString("DELETE FROM ")
-	b.WriteString(table)
-	b.WriteString(" WHERE id=$1;\n\n")
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :exec\n", methodName))
+	p.builder.WriteString("DELETE FROM ")
+	p.builder.WriteString(p.table)
+	lastIndex := 1
+	if err := processWhereParam(p, "f", &lastIndex); err != nil {
+		return err
+	}
+	if lastIndex == 1 {
+		p.builder.WriteString(fmt.Sprintf(" WHERE id=$%d;\n\n", lastIndex))
+	} else {
+		p.builder.WriteString(fmt.Sprintf(" AND id=$%d;\n\n", lastIndex))
+	}
+
+	return nil
 }
 
-func processGet(b *strings.Builder, table string, columns []string) {
+func processGet(p processCRUDParams) error {
 
-	methodName := stringy.New(fmt.Sprintf("get %s", table)).CamelCase()
+	methodName := stringy.New(fmt.Sprintf("get %s", p.table)).CamelCase()
 
 	if strings.HasSuffix(methodName, "s") {
 		methodName = string(methodName[:len(methodName)-1])
 	}
 
-	b.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
-	b.WriteString("SELECT * FROM ")
-	b.WriteString(table)
-	b.WriteString(" WHERE id=$1;\n\n")
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	p.builder.WriteString("SELECT * FROM ")
+	p.builder.WriteString(p.table)
+	lastIndex := 1
+	if err := processWhereParam(p, "f", &lastIndex); err != nil {
+		return err
+	}
+	if lastIndex == 1 {
+		p.builder.WriteString(fmt.Sprintf(" WHERE id=$%d;\n\n", lastIndex))
+	} else {
+		p.builder.WriteString(fmt.Sprintf(" AND id=$%d;\n\n", lastIndex))
+	}
+
+	return nil
 }
 
-func processFind(b *strings.Builder, table string, columns []string) {
+func processFind(p processCRUDParams) error {
 
-	methodName := stringy.New(fmt.Sprintf("find %s", table)).CamelCase()
+	methodName := stringy.New(fmt.Sprintf("find %s", p.table)).CamelCase()
 
-	b.WriteString(fmt.Sprintf("-- name: %s :many\n", methodName))
-	b.WriteString("SELECT * FROM ")
-	b.WriteString(table)
-	b.WriteString(" ORDER BY id DESC LIMIT $1 OFFSET $2;\n\n")
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :many\n", methodName))
+	p.builder.WriteString("SELECT * FROM ")
+	p.builder.WriteString(p.table)
+	lastIndex := 1
+	if err := processWhereParam(p, "f", &lastIndex); err != nil {
+		return err
+	}
+	if orderBy := p.config.GetOrderByParams(p.table); orderBy != nil {
+		p.builder.WriteString(fmt.Sprintf(" ORDER BY %s %s", orderBy.By, orderBy.Order))
+	}
+	if p.config.GetLimitParam(p.table) {
+		p.builder.WriteString(fmt.Sprintf(" LIMIT $%d OFFSET $%d", lastIndex, lastIndex+1))
+	}
+	p.builder.WriteString(";\n\n")
+	return nil
 }
 
-func processCount(b *strings.Builder, table string, columns []string) {
+func processTotal(p processCRUDParams) error {
 
-	methodName := stringy.New(fmt.Sprintf("count %s", table)).CamelCase()
+	methodName := stringy.New(fmt.Sprintf("total %s", p.table)).CamelCase()
 
-	b.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
-	b.WriteString("SELECT count(*) as count FROM ")
-	b.WriteString(table)
-	b.WriteString(";\n\n")
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	p.builder.WriteString("SELECT count(*) as total FROM ")
+	p.builder.WriteString(p.table)
+	lastIndex := 1
+	if err := processWhereParam(p, "t", &lastIndex); err != nil {
+		return err
+	}
+	p.builder.WriteString(";\n\n")
+
+	return nil
+}
+
+func processWhereParam(p processCRUDParams, method string, lastIndex *int) error {
+	if params := p.config.GetWhereParams(p.table, method); len(params) > 0 {
+		for index, param := range params {
+			if !utils.ExistInArray(p.columns, param) {
+				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
+			}
+			if index == 0 {
+				p.builder.WriteString(" WHERE ")
+			} else {
+				p.builder.WriteString(" AND ")
+			}
+			p.builder.WriteString(fmt.Sprintf("%s=$%d", param, *lastIndex))
+			*lastIndex++
+		}
+	}
+	return nil
 }
