@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var version = "0.0.3"
+var version = "0.0.4"
 
 func Start(args []string) error {
 
@@ -59,17 +59,19 @@ func Start(args []string) error {
 
 	switch args[0] {
 	case "version":
-		fmt.Printf("App version: %s;\nGo version: %s\n", version, runtime.Version())
+		fmt.Printf("Tool version: %s;\nGo version: %s\n", version, runtime.Version())
 	case "gencrud":
 		if err := genCRUD(args, c); err != nil {
 			return err
 		}
 		fmt.Println("crud successfully generated")
-	default:
-		if err := processSqlc(args, c); err != nil {
+	case "sqlc":
+		if err := processSqlc(args[1:], c); err != nil {
 			return err
 		}
 		fmt.Println("sqlc successfully generated")
+	default:
+		return fmt.Errorf("undefined command %s", args[0])
 	}
 
 	return nil

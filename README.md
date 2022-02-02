@@ -74,8 +74,8 @@ packages:
   - path: "./internal/store"
     name: "store"
     engine: "postgresql"
-    schema: "migrations"
-    queries: "sql"
+    schema: "sql/migrations"
+    queries: "sql/queries"
     sql_package: "pgx/v4"
     emit_prepared_queries: false
     emit_json_tags: true
@@ -88,8 +88,14 @@ packages:
     emit_params_struct_pointers: false
 ```
 
-### Generate `db`, `models` and `interface`
+### Generate `sqlc`
 
 ```bash
-pgxgen generate
+pgxgen sqlc generate
 ```
+
+## Roadmap
+
+- Hooks for `Create` and `Update`. Example: `model.Validate()`
+- Implement pagination hook for `Find`
+- Generate custom fields for `Create`, `Update`, `Get`, `Find` instead of `*`
