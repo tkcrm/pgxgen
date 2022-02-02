@@ -318,7 +318,10 @@ func processFind(p processCRUDParams) error {
 	if orderBy := p.config.GetOrderByParams(p.table); orderBy != nil {
 		p.builder.WriteString(fmt.Sprintf(" ORDER BY %s %s", orderBy.By, orderBy.Order))
 	}
-	p.builder.WriteString(fmt.Sprintf(" LIMIT $%d OFFSET $%d;\n\n", lastIndex, lastIndex+1))
+	if p.config.GetLimitParam(p.table) {
+		p.builder.WriteString(fmt.Sprintf(" LIMIT $%d OFFSET $%d", lastIndex, lastIndex+1))
+	}
+	p.builder.WriteString(";\n\n")
 	return nil
 }
 

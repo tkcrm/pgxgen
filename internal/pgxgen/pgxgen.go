@@ -90,7 +90,7 @@ func processSqlc(args []string, c config.Config) error {
 		}
 
 		for _, file := range files {
-			r := regexp.MustCompile(`(models\.go|.+\.sql.go)`)
+			r := regexp.MustCompile(`(\.go)`)
 			if r.MatchString(file.Name()) {
 				if err := replaceStructTypes(filepath.Join(p.Path, file.Name())); err != nil {
 					return err

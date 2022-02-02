@@ -41,7 +41,7 @@ type PgxgenConfig struct {
 }
 
 type CrudParams struct {
-	Limit   bool      `yaml:"limit"`
+	Limit   []string  `yaml:"limit"`
 	OrderBy []OrderBy `yaml:"order_by"`
 	Where   []Where   `yaml:"where"`
 }
@@ -68,7 +68,7 @@ func (p *PgxgenConfig) GetWhereParams(table, method string) []string {
 		if method == "c" || (method != "*" && !strings.Contains(strings.ToLower(item.Methods), method)) {
 			continue
 		}
-		if !utils.ExistInArray(item.Tables, table) {
+		if !utils.ExistInArray(item.Tables, "*") && !utils.ExistInArray(item.Tables, table) {
 			continue
 		}
 		for _, param := range item.Params {
@@ -85,7 +85,7 @@ func (p *PgxgenConfig) GetWhereParams(table, method string) []string {
 func (p *PgxgenConfig) GetOrderByParams(table string) *OrderBy {
 
 	for _, item := range p.CrudParams.OrderBy {
-		if table != "*" && !utils.ExistInArray(item.Tables, table) {
+		if !utils.ExistInArray(item.Tables, "*") && !utils.ExistInArray(item.Tables, table) {
 			continue
 		}
 		if item.By == "" {
@@ -98,4 +98,11 @@ func (p *PgxgenConfig) GetOrderByParams(table string) *OrderBy {
 	}
 
 	return nil
+}
+
+func (p *PgxgenConfig) GetLimitParam(table string) bool {
+	if utils.ExistInArray(p.CrudParams.Limit, "*") {
+		return true
+	}
+	return utils.ExistInArray(p.CrudParams.Limit, table)
 }

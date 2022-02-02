@@ -20,32 +20,33 @@ At root of your project create a `pgxgen.yaml`. Example of configuration below.
 
 ```yaml
 version: 1
-pgxgen:
-  # Result SQL file name; default: crud_queries.sql
-  # Will save to `queries` path from `sqlc.yaml` config
-  output_crud_sql_file_name: "crud_queries.sql"
-  crud_params:
-    # Limit and offset for `Find` method
-    limit: true
-    # Order by for `Find` method
-    order_by:
-      - by: id
-        order: desc
-        tables:
-          # List tables or all (*)
-          - "*"
-    where:
-      # g - get
-      # f - find
-      # u - update
-      # d - delete
-      # t - total
-      - methods: "fgtud"
+# Result SQL file name; default: crud_queries.sql
+# Will save to `queries` path from `sqlc.yaml` config
+output_crud_sql_file_name: "crud_queries.sql"
+crud_params:
+  # Limit and offset for `Find` method
+  limit:
+    # List tables or all (*)
+    - "*"
+  # Order by for `Find` method
+  order_by:
+    - by: id
+      order: desc
+      tables:
         # List tables or all (*)
-        tables:
-          - users
-        params:
-          - organization_id
+        - "*"
+  where:
+    # g - get
+    # f - find
+    # u - update
+    # d - delete
+    # t - total
+    - methods: "fgtud"
+      # List tables or all (*)
+      tables:
+        - users
+      params:
+        - organization_id
 ```
 
 ### Generate `CRUD` queries for existing tables
