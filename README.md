@@ -26,14 +26,14 @@ output_crud_sql_file_name: "crud_queries.sql"
 crud_params:
   # Limit and offset for `Find` method
   limit:
-    # List tables or all (*)
+    # List tables or asterisk (*)
     - "*"
   # Order by for `Find` method
   order_by:
     - by: id
       order: desc
       tables:
-        # List of tables or all (*)
+        # List of tables or asterisk (*)
         - "*"
   where:
     # g - get
@@ -43,7 +43,7 @@ crud_params:
     # t - total
     # available asterisk (*) for all methods (gfudt) expect create
     - methods: "gfudt"
-      # List of tables or all (*)
+      # List of tables or asterisk (*)
       tables:
         - users
       params:
