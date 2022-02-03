@@ -65,7 +65,7 @@ func (p *PgxgenConfig) GetWhereParams(table, method string) []string {
 
 	for _, item := range p.CrudParams.Where {
 		method = strings.ToLower(method)
-		if method == "c" || (method != "*" && !strings.Contains(strings.ToLower(item.Methods), method)) {
+		if method == "c" || (item.Methods != "*" && !strings.Contains(strings.ToLower(item.Methods), method)) {
 			continue
 		}
 		if !utils.ExistInArray(item.Tables, "*") && !utils.ExistInArray(item.Tables, table) {
