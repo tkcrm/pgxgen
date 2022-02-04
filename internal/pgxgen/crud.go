@@ -219,7 +219,7 @@ func processUpdate(p processCRUDParams) error {
 		methodName = string(methodName[:len(methodName)-1])
 	}
 
-	p.builder.WriteString(fmt.Sprintf("-- name: %s :exec\n", methodName))
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
 	p.builder.WriteString("UPDATE ")
 	p.builder.WriteString(p.table)
 	p.builder.WriteString("\n\tSET ")
@@ -248,10 +248,12 @@ func processUpdate(p processCRUDParams) error {
 		return err
 	}
 	if lastIndex == 1 {
-		p.builder.WriteString(fmt.Sprintf("WHERE id=$%d;\n\n", lastIndex))
+		p.builder.WriteString(fmt.Sprintf("WHERE id=$%d", lastIndex))
 	} else {
-		p.builder.WriteString(fmt.Sprintf(" AND id=$%d;\n\n", lastIndex))
+		p.builder.WriteString(fmt.Sprintf(" AND id=$%d", lastIndex))
 	}
+
+	p.builder.WriteString("\n\tRETURNING *;\n\n")
 
 	return nil
 }

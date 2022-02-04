@@ -17,27 +17,36 @@ type SqlcConfig struct {
 }
 
 type Package struct {
-	EmitPreparedQueries      bool   `yaml:"emit_prepared_queries"`
-	Path                     string `yaml:"path"`
-	Engine                   string `yaml:"engine"`
-	EmitDbTags               bool   `yaml:"emit_db_tags"`
-	Name                     string `yaml:"name"`
-	EmitJsonTags             bool   `yaml:"emit_json_tags"`
-	EmitExactTableNames      bool   `yaml:"emit_exact_table_names"`
-	EmitEmptySlices          bool   `yaml:"emit_empty_slices"`
-	EmitResultStructPointers bool   `yaml:"emit_result_struct_pointers"`
-	EmitParamsStructPointers bool   `yaml:"emit_params_struct_pointers"`
-	Schema                   string `yaml:"schema"`
-	Queries                  string `yaml:"queries"`
-	SqlPackage               string `yaml:"sql_package"`
-	EmitExportedQueries      bool   `yaml:"emit_exported_queries"`
-	EmitInterface            bool   `yaml:"emit_interface"`
+	Name                      string `yaml:"name"`
+	Path                      string `yaml:"path"`
+	Queries                   string `yaml:"queries"`
+	Schema                    string `yaml:"schema"`
+	Engine                    string `yaml:"engine"`
+	EmitPreparedQueries       bool   `yaml:"emit_prepared_queries"`
+	EmitInterface             bool   `yaml:"emit_interface"`
+	EmitExactTableNames       bool   `yaml:"emit_exact_table_names"`
+	EmitEmptySlices           bool   `yaml:"emit_empty_slices"`
+	EmitExportedQueries       bool   `yaml:"emit_exported_queries"`
+	EmitJsonTags              bool   `yaml:"emit_json_tags"`
+	EmitResultStructPointers  bool   `yaml:"emit_result_struct_pointers"`
+	EmitParamsStructPointers  bool   `yaml:"emit_params_struct_pointers"`
+	EmitMethodsWithDbArgument bool   `yaml:"emit_methods_with_db_argument"`
+	JsonTagsCaseStyle         string `yaml:"json_tags_case_style"`
+	OutputDbFileName          string `yaml:"output_db_file_name"`
+	OutputModelsFileName      string `yaml:"output_models_file_name"`
+	OutputQuerierFileName     string `yaml:"output_querier_file_name"`
 }
 
 type PgxgenConfig struct {
 	Version               int        `yaml:"version"`
 	OutputCrudSqlFileName string     `yaml:"output_crud_sql_file_name"`
+	JsonTags              JsonTags   `yaml:"json_tags"`
 	CrudParams            CrudParams `yaml:"crud_params"`
+}
+
+type JsonTags struct {
+	Omitempty []string `yaml:"omitempty"`
+	Hide      []string `yaml:"hide"`
 }
 
 type CrudParams struct {
@@ -53,7 +62,7 @@ type OrderBy struct {
 	Tables []string `yaml:"tables"`
 }
 
-// `Where` used for all method expect `create`. Instead of listing all methods, you can use an asterisk: *
+// `Where` used for all method except `create`. Instead of listing all methods, you can use an asterisk: *
 type Where struct {
 	Methods string   `yaml:"methods"`
 	Tables  []string `yaml:"tables"`
@@ -65,7 +74,7 @@ func (p *PgxgenConfig) GetWhereParams(table, method string) []string {
 
 	for _, item := range p.CrudParams.Where {
 		method = strings.ToLower(method)
-		if method == "c" || (method != "*" && !strings.Contains(strings.ToLower(item.Methods), method)) {
+		if method == "c" || (item.Methods != "*" && !strings.Contains(strings.ToLower(item.Methods), method)) {
 			continue
 		}
 		if !utils.ExistInArray(item.Tables, "*") && !utils.ExistInArray(item.Tables, table) {
