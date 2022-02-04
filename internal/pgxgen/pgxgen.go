@@ -91,10 +91,21 @@ func processSqlc(args []string, c config.Config) error {
 			return err
 		}
 
+		modelFileName := p.OutputModelsFileName
+		if modelFileName == "" {
+			modelFileName = "models.go"
+		}
+
 		for _, file := range files {
 			r := regexp.MustCompile(`(\.go)`)
 			if r.MatchString(file.Name()) {
-				if err := replaceStructTypes(filepath.Join(p.Path, file.Name())); err != nil {
+				if err := replace(c, filepath.Join(p.Path, file.Name()), replaceStructTypes); err != nil {
+					return err
+				}
+			}
+
+			if file.Name() == modelFileName {
+				if err := replace(c, filepath.Join(p.Path, file.Name()), replaceJsonTags); err != nil {
 					return err
 				}
 			}
@@ -104,17 +115,33 @@ func processSqlc(args []string, c config.Config) error {
 	return nil
 }
 
-func replaceStructTypes(path string) error {
+func replaceStructTypes(c config.Config, str string) string {
+	res := str
+	for old, new := range types {
+		res = strings.ReplaceAll(res, old, new)
+	}
+	return res
+}
 
-	models, err := os.ReadFile(path)
+func replaceJsonTags(c config.Config, str string) string {
+	res := str
+	for _, field := range c.Pgxgen.JsonTags.Omitempty {
+		res = strings.ReplaceAll(res, fmt.Sprintf("json:\"%s\"", field), fmt.Sprintf("json:\"%s,omitempty\"", field))
+	}
+	for _, field := range c.Pgxgen.JsonTags.Hide {
+		res = strings.ReplaceAll(res, fmt.Sprintf("json:\"%s\"", field), "json:\"-\"")
+	}
+	return res
+}
+
+func replace(c config.Config, path string, fn func(c config.Config, str string) string) error {
+
+	file, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
 
-	result := string(models)
-	for old, new := range types {
-		result = strings.ReplaceAll(result, old, new)
-	}
+	result := fn(c, string(file))
 
 	formated, err := imports.Process(path, []byte(result), nil)
 	if err != nil {

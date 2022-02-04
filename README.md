@@ -4,6 +4,7 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 
 - Instead null types like `sql.NullString` used nil type `*string`
 - Auto generate CRUD for existing tables in postgresql database
+- Json tags: Omit empty and hide
 
 ## Install
 
@@ -26,10 +27,19 @@ version: 1
 # Result SQL file name; default: crud_queries.sql
 # Will save to `queries` path from `sqlc.yaml` config
 output_crud_sql_file_name: "crud_queries.sql"
+json_tags:
+  # List of struct fields
+  # Convert: `json:"field_name"` => `json:"field_name,omitempty"`
+  omitempty:
+    - created_at
+  # List of struct fields
+  # Convert: `json:"field_name"` => `json:"-"`
+  hide:
+    - password
 crud_params:
   # Limit and offset for `Find` method
   limit:
-    # List tables or asterisk (*)
+    # List of tables or asterisk (*)
     - "*"
   # Order by for `Find` method
   order_by:
