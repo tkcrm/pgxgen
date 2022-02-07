@@ -5,12 +5,14 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 - Instead null types like `sql.NullString` used nil type `*string`
 - Auto generate CRUD for existing tables in postgresql database
 - Json tags: Omit empty and hide
+- Use Sqlc only for generating models
+- Update generated models with additinal parameters: add / update fields and tags
 
 ## Install
 
 ### Requirements
 
-- `Go 1.18+`
+- `Go 1.17+`
 
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
@@ -27,6 +29,40 @@ version: 1
 # Result SQL file name; default: crud_queries.sql
 # Will save to `queries` path from `sqlc.yaml` config
 output_crud_sql_file_name: "crud_queries.sql"
+# Generate models parameters. Not required
+gen_models:
+  # default: false
+  - delete_sqlc_data: true
+    # required
+    models_output_dir: "internal/model"
+    # default: models.go
+    models_output_filename: "models.go"
+    # default: last item in models_output_dir
+    models_package_name: "model"
+    models_imports:
+      - "github.com/uptrace/bun"
+    add_fields:
+      - struct_name: "users"
+        # default: start
+        # available values: start, end, after FieldName
+        position: "start"
+        field_name: "bun.BaseModel"
+        type: ""
+        tags:
+          - name: "bun"
+            value: "table:users,alias:u"
+    update_fields:
+      - struct_name: "users"
+        field_name: "Password"
+        new_parameters:
+          name: "Password"
+          type: "string"
+          # default: false
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "-"
+# Update json tag. Not required
 json_tags:
   # List of struct fields
   # Convert: `json:"field_name"` => `json:"field_name,omitempty"`
@@ -67,6 +103,12 @@ crud_params:
 
 ```bash
 pgxgen gencrud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=disable
+```
+
+### Generate models based on sqlc models
+
+```bash
+pgxgen genmodels
 ```
 
 ### Configure `sqlc`

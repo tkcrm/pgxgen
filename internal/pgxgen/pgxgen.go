@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strings"
 
 	sqlc "github.com/kyleconroy/sqlc/pkg/cli"
@@ -59,12 +58,17 @@ func Start(args []string) error {
 
 	switch args[0] {
 	case "version":
-		fmt.Printf("Tool version: %s;\nGo version: %s\n", version, runtime.Version())
+		fmt.Printf("%s\n", version)
 	case "gencrud":
-		if err := genCRUD(args, c); err != nil {
+		if err := generateCRUD(args, c); err != nil {
 			return err
 		}
 		fmt.Println("crud successfully generated")
+	case "genmodels":
+		if err := generateModels(args, c); err != nil {
+			return err
+		}
+		fmt.Println("models successfully generated")
 	case "sqlc":
 		if err := processSqlc(args[1:], c); err != nil {
 			return err
