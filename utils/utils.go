@@ -1,6 +1,6 @@
 package utils
 
-func ExistInArray[V comparable](values []V, item V) bool {
+func ExistInStringArray(values []string, item string) bool {
 	for _, value := range values {
 		if value == item {
 			return true

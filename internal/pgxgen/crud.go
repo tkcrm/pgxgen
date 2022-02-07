@@ -53,7 +53,7 @@ type processCRUDParams struct {
 	columns []string
 }
 
-func genCRUD(args []string, c config.Config) error {
+func generateCRUD(args []string, c config.Config) error {
 
 	var connString string
 	mySet := flag.NewFlagSet("", flag.ExitOnError)
@@ -346,7 +346,7 @@ func processTotal(p processCRUDParams) error {
 func processWhereParam(p processCRUDParams, method string, lastIndex *int) error {
 	if params := p.config.GetWhereParams(p.table, method); len(params) > 0 {
 		for index, param := range params {
-			if !utils.ExistInArray(p.columns, param) {
+			if !utils.ExistInStringArray(p.columns, param) {
 				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
 			}
 			if index == 0 {

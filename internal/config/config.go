@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/tkcrm/pgxgen/utils"
@@ -37,11 +38,57 @@ type Package struct {
 	OutputQuerierFileName     string `yaml:"output_querier_file_name"`
 }
 
+func (p *Package) GetModelPath() string {
+	modelFileName := p.OutputModelsFileName
+	if modelFileName == "" {
+		modelFileName = "models.go"
+	}
+	return filepath.Join(p.Path, modelFileName)
+}
+
 type PgxgenConfig struct {
-	Version               int        `yaml:"version"`
-	OutputCrudSqlFileName string     `yaml:"output_crud_sql_file_name"`
-	JsonTags              JsonTags   `yaml:"json_tags"`
-	CrudParams            CrudParams `yaml:"crud_params"`
+	Version               int         `yaml:"version"`
+	OutputCrudSqlFileName string      `yaml:"output_crud_sql_file_name"`
+	GenModels             []GenModels `yaml:"gen_models"`
+	JsonTags              JsonTags    `yaml:"json_tags"`
+	CrudParams            CrudParams  `yaml:"crud_params"`
+}
+
+type GenModels struct {
+	DeleteSqlcData       bool           `yaml:"delete_sqlc_data"`
+	ModelsOutputDir      string         `yaml:"models_output_dir"`
+	ModelsOutputFilename string         `yaml:"models_output_filename"`
+	ModelsPackageName    string         `yaml:"models_package_name"`
+	ModelsImports        []string       `yaml:"models_imports"`
+	AddFields            []AddFields    `yaml:"add_fields"`
+	UpdateFields         []UpdateFields `yaml:"update_fields"`
+	DeleteFields         []string       `yaml:"delete_fields"`
+}
+
+type AddFields struct {
+	StructName string `yaml:"struct_name"`
+	FieldName  string `yaml:"field_name"`
+	Position   string `yaml:"position"`
+	Type       string `yaml:"type"`
+	Tags       []Tag  `yaml:"tags"`
+}
+
+type UpdateFields struct {
+	StructName    string             `yaml:"struct_name"`
+	FieldName     string             `yaml:"field_name"`
+	NewParameters NewFieldParameters `yaml:"new_parameters"`
+}
+
+type NewFieldParameters struct {
+	Name                 string `yaml:"name"`
+	Type                 string `yaml:"type"`
+	MatchWithCurrentTags bool   `yaml:"match_with_current_tags"`
+	Tags                 []Tag  `yaml:"tags"`
+}
+
+type Tag struct {
+	Name  string `yaml:"name"`
+	Value string `yaml:"value"`
 }
 
 type JsonTags struct {
@@ -77,11 +124,11 @@ func (p *PgxgenConfig) GetWhereParams(table, method string) []string {
 		if method == "c" || (item.Methods != "*" && !strings.Contains(strings.ToLower(item.Methods), method)) {
 			continue
 		}
-		if !utils.ExistInArray(item.Tables, "*") && !utils.ExistInArray(item.Tables, table) {
+		if !utils.ExistInStringArray(item.Tables, "*") && !utils.ExistInStringArray(item.Tables, table) {
 			continue
 		}
 		for _, param := range item.Params {
-			if utils.ExistInArray(params, param) {
+			if utils.ExistInStringArray(params, param) {
 				continue
 			}
 			params = append(params, param)
@@ -94,7 +141,7 @@ func (p *PgxgenConfig) GetWhereParams(table, method string) []string {
 func (p *PgxgenConfig) GetOrderByParams(table string) *OrderBy {
 
 	for _, item := range p.CrudParams.OrderBy {
-		if !utils.ExistInArray(item.Tables, "*") && !utils.ExistInArray(item.Tables, table) {
+		if !utils.ExistInStringArray(item.Tables, "*") && !utils.ExistInStringArray(item.Tables, table) {
 			continue
 		}
 		if item.By == "" {
@@ -110,8 +157,8 @@ func (p *PgxgenConfig) GetOrderByParams(table string) *OrderBy {
 }
 
 func (p *PgxgenConfig) GetLimitParam(table string) bool {
-	if utils.ExistInArray(p.CrudParams.Limit, "*") {
+	if utils.ExistInStringArray(p.CrudParams.Limit, "*") {
 		return true
 	}
-	return utils.ExistInArray(p.CrudParams.Limit, table)
+	return utils.ExistInStringArray(p.CrudParams.Limit, table)
 }
