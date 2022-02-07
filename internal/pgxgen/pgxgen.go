@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var version = "0.0.4"
+var version = "0.0.5"
 
 func Start(args []string) error {
 
