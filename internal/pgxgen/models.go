@@ -14,6 +14,7 @@ import (
 	"text/template"
 
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/utils"
 	"golang.org/x/tools/imports"
 )
 
@@ -166,6 +167,40 @@ func getStructs(file_models_str string) Structs {
 
 func processStructs(c config.GenModels, st *Structs) error {
 
+	if c.PrefereUintForIds {
+		for _, s := range *st {
+			for _, f := range s.Fields {
+				if !strings.HasSuffix(f.Name, "ID") {
+					continue
+				}
+
+				if c.ExistPrefereExceptionsField(s.Name, f.Name) {
+					continue
+				}
+
+				pointer := strings.HasPrefix(f.Type, "*")
+				ftype := strings.ReplaceAll(f.Type, "*", "")
+				if !utils.ExistInStringArray([]string{"int16", "int32", "int64"}, ftype) {
+					continue
+				}
+
+				switch ftype {
+				case "int16":
+					f.Type = "uint16"
+				case "int32":
+					f.Type = "uint32"
+				case "int64":
+					f.Type = "uint64"
+				}
+
+				if pointer {
+					f.Type = "*" + f.Type
+				}
+			}
+			(*st)[s.Name] = s
+		}
+	}
+
 	// process add fields
 	for _, f := range c.AddFields {
 		s, ok := (*st)[f.StructName]
@@ -241,6 +276,25 @@ func processStructs(c config.GenModels, st *Structs) error {
 		}
 
 		(*st)[f.StructName] = s
+	}
+
+	// process delete fields
+	for _, item := range c.DeleteFields {
+		s, ok := (*st)[item.StructName]
+		if !ok {
+			return fmt.Errorf("struct %s not found in models. use case sensitive names", item.StructName)
+		}
+
+		for _, name := range item.FieldNames {
+			existFieldIndex := s.existFieldIndex(name)
+			if existFieldIndex == -1 {
+				return fmt.Errorf("field %s does not exist in struct %s", name, item.StructName)
+			} else {
+				s.Fields = append(s.Fields[:existFieldIndex], s.Fields[existFieldIndex+1:]...)
+			}
+		}
+
+		(*st)[item.StructName] = s
 	}
 
 	return nil

@@ -47,7 +47,7 @@ var skipUpdateColumns stringArr = stringArr{
 }
 
 type processCRUDParams struct {
-	config  config.PgxgenConfig
+	config  config.Pgxgen
 	builder *strings.Builder
 	table   string
 	columns []string

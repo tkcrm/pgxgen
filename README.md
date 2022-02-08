@@ -41,6 +41,13 @@ gen_models:
     models_package_name: "model"
     models_imports:
       - "github.com/uptrace/bun"
+    # Use uint64 instead int64 for all fields ends with ID
+    prefere_uint_for_ids: true
+    prefere_uint_for_ids_exceptions:
+      - struct_name: "users"
+        field_names:
+          - OrganizationID
+          - UserID
     add_fields:
       - struct_name: "users"
         # default: start
@@ -62,6 +69,11 @@ gen_models:
           tags:
             - name: "json"
               value: "-"
+    delete_fields:
+      - struct_name: "users"
+        field_names:
+          - CreatedAt
+          - UpdatedAt
 # Update json tag. Not required
 json_tags:
   # List of struct fields

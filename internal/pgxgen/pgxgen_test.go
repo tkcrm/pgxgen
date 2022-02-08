@@ -43,7 +43,7 @@ func Test_Start(t *testing.T) {
 }
 
 func Test_Config(t *testing.T) {
-	var c config.PgxgenConfig
+	var c config.Pgxgen
 
 	configFile, err := os.ReadFile("../../pgxgen.yaml")
 	if err != nil {
