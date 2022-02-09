@@ -2,8 +2,8 @@
 
 pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional improvements.
 
-- Instead null types like `sql.NullString` used nil type `*string`
-- Auto generate CRUD for existing tables in postgresql database
+- Instead null types like `sql.NullString` used nil type `*string` by default
+- Generate CRUD for existing tables in postgresql database
 - Json tags: Omit empty and hide
 - Use Sqlc only for generating models
 - Update generated models with additinal parameters: add / update fields and tags
@@ -182,6 +182,4 @@ pgxgen sqlc generate
 
 ## Roadmap
 
-- Hooks for `Create` and `Update`. Example: `model.Validate()`
-- Implement pagination hook for `Find`
-- Generate custom fields for `Create`, `Update`, `Get`, `Find` instead of `*`
+- Generate `.proto` files with CRUD services
