@@ -2,11 +2,12 @@
 
 pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional improvements.
 
-- Instead null types like `sql.NullString` used nil type `*string`
-- Auto generate CRUD for existing tables in postgresql database
+- Instead null types like `sql.NullString` used nil type `*string` by default
+- Generate CRUD for existing tables in postgresql database
 - Json tags: Omit empty and hide
 - Use Sqlc only for generating models
 - Update generated models with additinal parameters: add / update fields and tags
+- Generate models for [`Mobx Keystone`](https://github.com/xaviergonz/mobx-keystone)
 
 ## Install
 
@@ -41,6 +42,13 @@ gen_models:
     models_package_name: "model"
     models_imports:
       - "github.com/uptrace/bun"
+    # Use uint64 instead int64 for all fields ends with ID
+    prefere_uint_for_ids: true
+    prefere_uint_for_ids_exceptions:
+      - struct_name: "users"
+        field_names:
+          - OrganizationID
+          - UserID
     add_fields:
       - struct_name: "users"
         # default: start
@@ -62,6 +70,33 @@ gen_models:
           tags:
             - name: "json"
               value: "-"
+    delete_fields:
+      - struct_name: "users"
+        field_names:
+          - CreatedAt
+          - UpdatedAt
+    external_models:
+      keystone:
+        # required
+        output_dir: "frontend/src/stores/models"
+        # default: models.ts
+        output_file_name: "models.ts"
+        # default: empty
+        decorator_model_name_prefix: "frontend/"
+        # set method .withSetter() for all fields
+        with_setter: true
+        # prettier code. nodejs must be installed on your pc
+        prettier_code: true
+        # sort output models
+        # you can specify only those structures that need to be generated
+        # in the first place and omit all the rest
+        sort: "UserRole,Users"
+        # params are currently unavailable
+        params:
+          - struct_name: "users"
+            field_name: "organization"
+            field_params:
+              - with_setter: false
 # Update json tag. Not required
 json_tags:
   # List of struct fields
@@ -147,6 +182,4 @@ pgxgen sqlc generate
 
 ## Roadmap
 
-- Hooks for `Create` and `Update`. Example: `model.Validate()`
-- Implement pagination hook for `Find`
-- Generate custom fields for `Create`, `Update`, `Get`, `Find` instead of `*`
+- Generate `.proto` files with CRUD services

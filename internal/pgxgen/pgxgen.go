@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var version = "0.0.5"
+var version = "0.0.6"
 
 func Start(args []string) error {
 
@@ -22,7 +22,7 @@ func Start(args []string) error {
 		return nil
 	}
 
-	var sqlcConfig config.SqlcConfig
+	var sqlcConfig config.Sqlc
 	sqlcConfigFile, err := os.ReadFile("sqlc.yaml")
 	if err != nil {
 		return err
@@ -41,7 +41,7 @@ func Start(args []string) error {
 		}
 	}
 
-	var pgxgenConfig config.PgxgenConfig
+	var pgxgenConfig config.Pgxgen
 	pgxgenConfigFile, err := os.ReadFile("pgxgen.yaml")
 	if err != nil {
 		return err
@@ -152,7 +152,7 @@ func replace(c config.Config, path string, fn func(c config.Config, str string) 
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(path), formated, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(path), formated, os.ModePerm); err != nil {
 		return err
 	}
 
