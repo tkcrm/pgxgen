@@ -7,6 +7,7 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 - Json tags: Omit empty and hide
 - Use Sqlc only for generating models
 - Update generated models with additinal parameters: add / update fields and tags
+- Generate models for [`Mobx Keystone`](https://github.com/xaviergonz/mobx-keystone)
 
 ## Install
 
