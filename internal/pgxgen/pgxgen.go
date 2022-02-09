@@ -152,7 +152,7 @@ func replace(c config.Config, path string, fn func(c config.Config, str string) 
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(path), formated, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(path), formated, os.ModePerm); err != nil {
 		return err
 	}
 

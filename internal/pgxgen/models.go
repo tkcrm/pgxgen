@@ -18,9 +18,16 @@ import (
 	"golang.org/x/tools/imports"
 )
 
+type tmplGoModelsCtx struct {
+	Package string
+	Structs Structs
+	Imports string
+}
+
 type structParameters struct {
-	Name   string
-	Fields []*structField
+	Name    string
+	Imports []string
+	Fields  []*structField
 }
 
 func (s *structParameters) existFieldIndex(name string) int {
@@ -35,12 +42,11 @@ func (s *structParameters) existFieldIndex(name string) int {
 type structField struct {
 	Name string
 	Type string
-	Tag  string
 	tags map[string]string
 }
 
-func (s *structField) convertTags() {
-	s.Tag = ""
+func (s *structField) GetGoTag() string {
+	tag := ""
 
 	keys := make([]string, 0, len(s.tags))
 	for k := range s.tags {
@@ -49,14 +55,29 @@ func (s *structField) convertTags() {
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		if s.Tag != "" {
-			s.Tag += " "
+		if tag != "" {
+			tag += " "
 		}
-		s.Tag += fmt.Sprintf("%s:\"%s\"", k, s.tags[k])
+		tag += fmt.Sprintf("%s:\"%s\"", k, s.tags[k])
 	}
+
+	return tag
 }
 
+type typesParameters struct {
+	Name string
+	Type string
+}
+
+type Types map[string]typesParameters
 type Structs map[string]structParameters
+
+type compileData struct {
+	data           []byte
+	outputDir      string
+	outputFileName string
+	afterHook      func() error
+}
 
 func generateModels(args []string, c config.Config) error {
 
@@ -65,6 +86,8 @@ func generateModels(args []string, c config.Config) error {
 	}
 
 	for index, p := range c.Sqlc.Packages {
+
+		// get models.go from sqlc
 		file, err := os.ReadFile(p.GetModelPath())
 		if err != nil {
 			return err
@@ -77,9 +100,41 @@ func generateModels(args []string, c config.Config) error {
 			return err
 		}
 
-		imports := getImports(string(file))
+		goModels, err := compileGoModels(config, structs, p.GetModelPath())
+		if err != nil {
+			return err
+		}
+		if err := compileTemplate(goModels); err != nil {
+			return err
+		}
 
-		if err := compileTemplate(config, structs, imports, p.GetModelPath()); err != nil {
+		// get all types from ModelsOutputDir
+		scalarTypes := make(Types)
+		files, err := os.ReadDir(config.GetModelsOutputDir())
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			path := filepath.Join(config.GetModelsOutputDir(), f.Name())
+
+			file, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+
+			for key, value := range getStructs(string(file)) {
+				structs[key] = value
+			}
+			for key, value := range getScalarTypes(string(file)) {
+				scalarTypes[key] = value
+			}
+		}
+
+		mobxKeystoneModels, err := compileMobxKeystoneModels(config, structs, scalarTypes)
+		if err != nil {
+			return err
+		}
+		if err := compileTemplate(mobxKeystoneModels); err != nil {
 			return err
 		}
 
@@ -93,14 +148,44 @@ func generateModels(args []string, c config.Config) error {
 	return nil
 }
 
-func getImports(file_models_str string) string {
+func getImports(file_models_str string) []string {
 	res := ""
 	r := regexp.MustCompile(`(?s)import \(?([^)]+)\)?`)
 	match := r.FindAllStringSubmatch(file_models_str, -1)
 	if len(match) == 1 {
 		res = match[0][1]
 	}
-	return res
+	return strings.Split(strings.ReplaceAll(res, "\r\n", "\n"), "\n")
+}
+
+func getScalarTypes(file_models_str string) Types {
+	types := make(Types)
+	r := bufio.NewReader(strings.NewReader(file_models_str))
+
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			log.Fatal(err)
+		}
+
+		if strings.Contains(line, "struct {") {
+			continue
+		}
+		r := regexp.MustCompile(`^type (\w+) ([^\s]+)`)
+		match := r.FindStringSubmatch(line)
+
+		if len(match) == 3 {
+			types[match[1]] = typesParameters{
+				Name: match[1],
+				Type: match[2],
+			}
+		}
+	}
+
+	return types
 }
 
 func getStructs(file_models_str string) Structs {
@@ -108,7 +193,9 @@ func getStructs(file_models_str string) Structs {
 
 	structs := make(Structs)
 
-	currentStruct := structParameters{}
+	currentStruct := structParameters{
+		Imports: getImports(file_models_str),
+	}
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
@@ -300,18 +387,14 @@ func processStructs(c config.GenModels, st *Structs) error {
 	return nil
 }
 
-func compileTemplate(c config.GenModels, st Structs, importstr, path string) error {
-
+func compileGoModels(c config.GenModels, st Structs, path string) (*compileData, error) {
 	if c.ModelsOutputDir == "" {
-		return fmt.Errorf("config error: undefined models_output_dir")
+		return nil, fmt.Errorf("config error: undefined models_output_dir")
 	}
 
-	if c.ModelsOutputFilename != "" && !strings.HasSuffix(c.ModelsOutputFilename, ".go") {
-		c.ModelsOutputFilename += ".go"
-	}
-
-	if string(c.ModelsOutputDir[len(c.ModelsOutputDir)-1]) == "/" {
-		c.ModelsOutputDir = c.ModelsOutputDir[:len(c.ModelsOutputDir)]
+	cdata := compileData{
+		outputDir:      c.GetModelsOutputDir(),
+		outputFileName: c.GetModelsOutputFileName(),
 	}
 
 	pnsplit := strings.Split(c.ModelsOutputDir, "/")
@@ -322,23 +405,26 @@ func compileTemplate(c config.GenModels, st Structs, importstr, path string) err
 	}
 
 	tmpl := template.Must(
-		template.New("table").
+		template.New("goModels").
 			ParseFS(
 				templates,
-				"templates/*.tmpl",
+				"templates/models.go.tmpl",
 			),
 	)
 
+	allImports := []string{}
 	for _, s := range st {
-		for _, f := range s.Fields {
-			f.convertTags()
+		for _, i := range s.Imports {
+			if !utils.ExistInStringArray(allImports, i) {
+				allImports = append(allImports, i)
+			}
 		}
 	}
 
-	tctx := tmplCtx{
+	tctx := tmplGoModelsCtx{
 		Package: packageName,
 		Structs: st,
-		Imports: importstr,
+		Imports: strings.Join(allImports, "\n"),
 	}
 
 	var b bytes.Buffer
@@ -346,21 +432,46 @@ func compileTemplate(c config.GenModels, st Structs, importstr, path string) err
 	err := tmpl.ExecuteTemplate(w, "modelsFile", &tctx)
 	w.Flush()
 	if err != nil {
-		return fmt.Errorf("execte template error: %s", err.Error())
+		return nil, fmt.Errorf("execte template error: %s", err.Error())
 	}
 
-	formated, err := imports.Process("", b.Bytes(), nil)
+	cdata.data, err = imports.Process("", b.Bytes(), nil)
 	if err != nil {
 		fmt.Println(b.String())
-		return fmt.Errorf("formate data error: %s", err.Error())
+		return nil, fmt.Errorf("formate data error: %s", err.Error())
 	}
 
-	if err := os.MkdirAll(c.ModelsOutputDir, os.ModePerm); err != nil {
+	return &cdata, nil
+}
+
+func compileTemplate(d *compileData) error {
+
+	if d.data == nil && len(d.data) == 0 {
+		return fmt.Errorf("compile template error: data is undefined")
+	}
+
+	if d.outputDir == "" {
+		return fmt.Errorf("compile template error: output dir is empty")
+	}
+
+	if d.outputFileName == "" {
+		return fmt.Errorf("compile template error: output file name is empty")
+	}
+
+	if err := os.MkdirAll(d.outputDir, os.ModePerm); err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(c.ModelsOutputDir, c.ModelsOutputFilename), formated, 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(d.outputDir, d.outputFileName), d.data, os.ModePerm); err != nil {
 		return fmt.Errorf("write error: %s", err.Error())
+	}
+
+	fmt.Println("successfully generated in:", filepath.Join(d.outputDir, d.outputFileName))
+
+	if d.afterHook != nil {
+		if err := d.afterHook(); err != nil {
+			return err
+		}
 	}
 
 	return nil

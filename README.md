@@ -74,6 +74,28 @@ gen_models:
         field_names:
           - CreatedAt
           - UpdatedAt
+    external_models:
+      keystone:
+        # required
+        output_dir: "frontend/src/stores/models"
+        # default: models.ts
+        output_file_name: "models.ts"
+        # default: empty
+        decorator_model_name_prefix: "frontend/"
+        # set method .withSetter() for all fields
+        with_setter: true
+        # prettier code. nodejs must be installed on your pc
+        prettier_code: true
+        # sort output models
+        # you can specify only those structures that need to be generated
+        # in the first place and omit all the rest
+        sort: "UserRole,Users"
+        # params are currently unavailable
+        params:
+          - struct_name: "users"
+            field_name: "organization"
+            field_params:
+              - with_setter: false
 # Update json tag. Not required
 json_tags:
   # List of struct fields

@@ -25,11 +25,32 @@ type GenModels struct {
 	AddFields                   []AddFields                   `yaml:"add_fields"`
 	UpdateFields                []UpdateFields                `yaml:"update_fields"`
 	DeleteFields                []DeleteFields                `yaml:"delete_fields"`
+	ExternalModels              ExternalModels                `yaml:"external_models"`
 }
 
 type PrefereUintForIdsExceptions struct {
 	StructName string   `yaml:"struct_name"`
 	FieldNames []string `yaml:"field_names"`
+}
+
+func (s *GenModels) GetModelsOutputDir() string {
+	res := s.ModelsOutputDir
+
+	if string(res[len(res)-1]) == "/" {
+		res = res[:len(res)-1]
+	}
+	return res
+}
+
+func (s *GenModels) GetModelsOutputFileName() string {
+	res := s.ModelsOutputFilename
+	if res == "" {
+		res = "models.go"
+	}
+	if res != "" && !strings.HasSuffix(res, ".go") {
+		res += ".go"
+	}
+	return res
 }
 
 func (s *GenModels) ExistPrefereExceptionsField(st_name, field_name string) bool {
@@ -142,4 +163,24 @@ func (p *Pgxgen) GetLimitParam(table string) bool {
 		return true
 	}
 	return utils.ExistInStringArray(p.CrudParams.Limit, table)
+}
+
+type ExternalModels struct {
+	Keystone struct {
+		DecoratorModelNamePrefix string           `yaml:"decorator_model_name_prefix"`
+		OutputDir                string           `yaml:"output_dir"`
+		OutputFileName           string           `yaml:"output_file_name"`
+		Sort                     string           `yaml:"sort"`
+		WithSetter               bool             `yaml:"with_setter"`
+		PrettierCode             bool             `yaml:"prettier_code"`
+		Params                   []KeystoneParams `yaml:"params"`
+	} `yaml:"keystone"`
+}
+
+type KeystoneParams struct {
+	StructName  string `yaml:"struct_name"`
+	FieldName   string `yaml:"field_name"`
+	FieldParams []struct {
+		WithSetter bool `yaml:"with_setter"`
+	} `yaml:"field_params"`
 }
