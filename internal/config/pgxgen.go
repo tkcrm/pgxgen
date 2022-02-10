@@ -15,20 +15,20 @@ type Pgxgen struct {
 }
 
 type GenModels struct {
-	DeleteSqlcData              bool                          `yaml:"delete_sqlc_data"`
-	ModelsOutputDir             string                        `yaml:"models_output_dir"`
-	ModelsOutputFilename        string                        `yaml:"models_output_filename"`
-	ModelsPackageName           string                        `yaml:"models_package_name"`
-	ModelsImports               []string                      `yaml:"models_imports"`
-	PrefereUintForIds           bool                          `yaml:"prefere_uint_for_ids"`
-	PrefereUintForIdsExceptions []PrefereUintForIdsExceptions `yaml:"prefere_uint_for_ids_exceptions"`
-	AddFields                   []AddFields                   `yaml:"add_fields"`
-	UpdateFields                []UpdateFields                `yaml:"update_fields"`
-	DeleteFields                []DeleteFields                `yaml:"delete_fields"`
-	ExternalModels              ExternalModels                `yaml:"external_models"`
+	DeleteSqlcData          bool                      `yaml:"delete_sqlc_data"`
+	ModelsOutputDir         string                    `yaml:"models_output_dir"`
+	ModelsOutputFilename    string                    `yaml:"models_output_filename"`
+	ModelsPackageName       string                    `yaml:"models_package_name"`
+	ModelsImports           []string                  `yaml:"models_imports"`
+	UseUintForIds           bool                      `yaml:"use_uint_for_ids"`
+	UseUintForIdsExceptions []UseUintForIdsExceptions `yaml:"use_uint_for_ids_exceptions"`
+	AddFields               []AddFields               `yaml:"add_fields"`
+	UpdateFields            []UpdateFields            `yaml:"update_fields"`
+	DeleteFields            []DeleteFields            `yaml:"delete_fields"`
+	ExternalModels          ExternalModels            `yaml:"external_models"`
 }
 
-type PrefereUintForIdsExceptions struct {
+type UseUintForIdsExceptions struct {
 	StructName string   `yaml:"struct_name"`
 	FieldNames []string `yaml:"field_names"`
 }
@@ -54,7 +54,7 @@ func (s *GenModels) GetModelsOutputFileName() string {
 }
 
 func (s *GenModels) ExistPrefereExceptionsField(st_name, field_name string) bool {
-	for _, item := range s.PrefereUintForIdsExceptions {
+	for _, item := range s.UseUintForIdsExceptions {
 		if item.StructName == st_name && utils.ExistInStringArray(item.FieldNames, field_name) {
 			return true
 		}
@@ -172,6 +172,7 @@ type ExternalModels struct {
 		OutputFileName           string           `yaml:"output_file_name"`
 		Sort                     string           `yaml:"sort"`
 		WithSetter               bool             `yaml:"with_setter"`
+		ExportModelSuffix        string           `yaml:"export_model_suffix"`
 		PrettierCode             bool             `yaml:"prettier_code"`
 		Params                   []KeystoneParams `yaml:"params"`
 	} `yaml:"keystone"`

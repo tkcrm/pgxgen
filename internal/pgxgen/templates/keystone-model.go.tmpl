@@ -5,7 +5,7 @@ import { {{join $values ","}} } from "{{ $packet }}";
 
 {{ range .Structs }}
 {{if .Name }}@model("{{ $.DecoratorModelNamePrefix }}{{snake_case .Name}}")
-export class {{.Name}} extends Model({
+export class {{.Name}}{{ $.ExportModelSuffix}} extends Model({
 {{- range .Fields}}
   {{if .Type}}{{lcfirst .Name}}: {{ getType .Type }},{{ end }}
 {{- end}}

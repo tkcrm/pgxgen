@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"text/template"
 
@@ -18,6 +19,7 @@ type tmplKeystoneCtx struct {
 	Structs                  []structParameters
 	Imports                  map[string][]string
 	DecoratorModelNamePrefix string
+	ExportModelSuffix        string
 	WithSetter               bool
 }
 
@@ -51,7 +53,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 		"join": strings.Join,
 		"getType": func(t string) string {
 
-			typeWrap, tp := getKeystoneType(st, sct, t)
+			typeWrap, tp := getKeystoneType(c, st, sct, t)
 
 			if config.WithSetter {
 				typeWrap += ".withSetter()"
@@ -83,24 +85,31 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 	}
 
 	structs := []structParameters{}
-	sort := strings.Split(config.Sort, ",")
-	if len(sort) == 0 {
+	sortParam := strings.Split(config.Sort, ",")
+	if len(sortParam) == 0 {
 		for _, v := range st {
 			structs = append(structs, v)
 		}
 	} else {
-		for _, name := range sort {
+		for _, name := range sortParam {
 			v, ok := st[name]
 			if !ok {
 				return nil, fmt.Errorf("sort error: undefined struct %s", name)
 			}
 			structs = append(structs, v)
 		}
-		for _, v := range st {
-			if utils.ExistInStringArray(sort, v.Name) {
+
+		keys := make([]string, 0, len(st))
+		for k := range st {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		for _, k := range keys {
+			if utils.ExistInStringArray(sortParam, st[k].Name) {
 				continue
 			}
-			structs = append(structs, v)
+			structs = append(structs, st[k])
 		}
 	}
 
@@ -110,6 +119,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 			"mobx-keystone": mobxKeystoneImports,
 		},
 		DecoratorModelNamePrefix: config.DecoratorModelNamePrefix,
+		ExportModelSuffix:        config.ExportModelSuffix,
 		WithSetter:               true,
 	}
 
@@ -142,7 +152,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 	return &cdata, nil
 }
 
-func getKeystoneType(st Structs, sct Types, t string) (typeWrap string, tp string) {
+func getKeystoneType(c config.GenModels, st Structs, sct Types, t string) (typeWrap string, tp string) {
 	t = strings.ReplaceAll(t, "*", "")
 
 	typeWrap = "tProp(types.maybe(%s))"
@@ -168,9 +178,9 @@ func getKeystoneType(st Structs, sct Types, t string) (typeWrap string, tp strin
 		_, okst := st[t]
 		existScalarItem, oksct := sct[t]
 		if okst {
-			tp = fmt.Sprintf("types.model(%s)", t)
+			tp = fmt.Sprintf("types.model(%s%s)", t, c.ExternalModels.Keystone.ExportModelSuffix)
 		} else if oksct {
-			typeWrap, tp = getKeystoneType(st, sct, existScalarItem.Type)
+			typeWrap, tp = getKeystoneType(c, st, sct, existScalarItem.Type)
 		} else {
 			tp = "types.unchecked()"
 			fmt.Println("undefined type:", t)

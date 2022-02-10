@@ -254,7 +254,7 @@ func getStructs(file_models_str string) Structs {
 
 func processStructs(c config.GenModels, st *Structs) error {
 
-	if c.PrefereUintForIds {
+	if c.UseUintForIds {
 		for _, s := range *st {
 			for _, f := range s.Fields {
 				if !strings.HasSuffix(f.Name, "ID") {

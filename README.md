@@ -43,8 +43,8 @@ gen_models:
     models_imports:
       - "github.com/uptrace/bun"
     # Use uint64 instead int64 for all fields ends with ID
-    prefere_uint_for_ids: true
-    prefere_uint_for_ids_exceptions:
+    use_uint_for_ids: true
+    use_uint_for_ids_exceptions:
       - struct_name: "users"
         field_names:
           - OrganizationID
@@ -85,6 +85,7 @@ gen_models:
         decorator_model_name_prefix: "frontend/"
         # set method .withSetter() for all fields
         with_setter: true
+        export_model_suffix: "Model"
         # prettier code. nodejs must be installed on your pc
         prettier_code: true
         # sort output models
