@@ -183,4 +183,5 @@ pgxgen sqlc generate
 
 ## Roadmap
 
+- Generate models without sqlc
 - Generate `.proto` files with CRUD services
