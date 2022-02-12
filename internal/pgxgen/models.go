@@ -385,7 +385,7 @@ func processStructs(c config.GenModels, st *Structs) error {
 		}
 	}
 
-	// process update all struct fields by field
+	// process update all struct fields by field name
 	for _, param := range c.UpdateAllStructFields.ByField {
 		for _, s := range *st {
 			for _, field := range s.Fields {
