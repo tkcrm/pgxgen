@@ -70,7 +70,64 @@ type typesParameters struct {
 }
 
 type Types map[string]typesParameters
-type Structs map[string]structParameters
+type Structs map[string]*structParameters
+type StructSlice []*structParameters
+
+func (st *StructSlice) ExistStructIndex(name string) (int, *structParameters) {
+	for index, s := range *st {
+		if s.Name == name {
+			return index, s
+		}
+	}
+	return -1, nil
+}
+
+func (st *StructSlice) Sort(priorityNames ...string) error {
+
+	names := make([]string, 0, len(*st))
+	for _, name := range priorityNames {
+		existStructIndex, _ := st.ExistStructIndex(name)
+		if existStructIndex == -1 {
+			return fmt.Errorf("sort error: undefined struct %s", name)
+		}
+
+		names = append(names, name)
+	}
+
+	notPriorityNames := make([]string, 0, len(*st)-len(priorityNames))
+	for _, v := range *st {
+		if utils.ExistInStringArray(names, v.Name) {
+			continue
+		}
+		notPriorityNames = append(notPriorityNames, v.Name)
+	}
+	sort.Strings(notPriorityNames)
+
+	names = append(names, notPriorityNames...)
+
+	sorted := make(StructSlice, 0, len(names))
+	for _, n := range names {
+		for _, s := range *st {
+			if s.Name == n {
+				sorted = append(sorted, s)
+			}
+		}
+	}
+
+	*st = sorted
+
+	return nil
+}
+
+func ConvertStructsToSlice(st Structs) StructSlice {
+	res := make(StructSlice, 0, len(st))
+
+	for _, s := range st {
+		res = append(res, s)
+	}
+
+	return res
+}
 
 type compileData struct {
 	data           []byte
@@ -110,12 +167,12 @@ func generateModels(args []string, c config.Config) error {
 
 		// get all types from ModelsOutputDir
 		scalarTypes := make(Types)
-		files, err := os.ReadDir(config.GetModelsOutputDir())
-		for _, f := range files {
-			if f.IsDir() {
+		dirItems, err := os.ReadDir(config.GetModelsOutputDir())
+		for _, item := range dirItems {
+			if item.IsDir() {
 				continue
 			}
-			path := filepath.Join(config.GetModelsOutputDir(), f.Name())
+			path := filepath.Join(config.GetModelsOutputDir(), item.Name())
 
 			file, err := os.ReadFile(path)
 			if err != nil {
@@ -193,7 +250,7 @@ func getStructs(file_models_str string) Structs {
 
 	structs := make(Structs)
 
-	currentStruct := structParameters{
+	currentStruct := &structParameters{
 		Imports: getImports(file_models_str),
 	}
 	for {
@@ -208,14 +265,14 @@ func getStructs(file_models_str string) Structs {
 		reCloseStruct := regexp.MustCompile(`^\}`)
 		if reCloseStruct.MatchString(line) {
 			structs[currentStruct.Name] = currentStruct
-			currentStruct = structParameters{}
+			currentStruct = &structParameters{}
 			continue
 		}
 
 		reStartStruct := regexp.MustCompile(`type (\w+) struct {`)
 		matches := reStartStruct.FindAllStringSubmatch(line, -1)
 		if len(matches) == 1 {
-			currentStruct = structParameters{Name: matches[0][1], Fields: make([]*structField, 0)}
+			currentStruct = &structParameters{Name: matches[0][1], Fields: make([]*structField, 0)}
 			continue
 		}
 
@@ -284,7 +341,6 @@ func processStructs(c config.GenModels, st *Structs) error {
 					f.Type = "*" + f.Type
 				}
 			}
-			(*st)[s.Name] = s
 		}
 	}
 
@@ -327,8 +383,6 @@ func processStructs(c config.GenModels, st *Structs) error {
 			}
 			s.Fields = append(s.Fields[:existFieldIndex+1], append([]*structField{&newField}, s.Fields[existFieldIndex+1:]...)...)
 		}
-
-		(*st)[f.StructName] = s
 	}
 
 	// process update all struct fields by field
@@ -355,7 +409,6 @@ func processStructs(c config.GenModels, st *Structs) error {
 					field.tags[tag.Name] = tag.Value
 				}
 			}
-			(*st)[s.Name] = s
 		}
 	}
 
@@ -376,7 +429,6 @@ func processStructs(c config.GenModels, st *Structs) error {
 					field.tags[tag.Name] = tag.Value
 				}
 			}
-			(*st)[s.Name] = s
 		}
 	}
 
@@ -410,8 +462,6 @@ func processStructs(c config.GenModels, st *Structs) error {
 		for _, tag := range params.Tags {
 			existField.tags[tag.Name] = tag.Value
 		}
-
-		(*st)[f.StructName] = s
 	}
 
 	// process delete fields
@@ -429,8 +479,6 @@ func processStructs(c config.GenModels, st *Structs) error {
 				s.Fields = append(s.Fields[:existFieldIndex], s.Fields[existFieldIndex+1:]...)
 			}
 		}
-
-		(*st)[item.StructName] = s
 	}
 
 	return nil

@@ -6,17 +6,15 @@ import (
 	"fmt"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"text/template"
 
-	"github.com/gobeam/stringy"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type tmplKeystoneCtx struct {
-	Structs                  []structParameters
+	Structs                  StructSlice
 	Imports                  map[string][]string
 	DecoratorModelNamePrefix string
 	ExportModelSuffix        string
@@ -39,29 +37,17 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 		outputFileName: config.OutputFileName,
 	}
 
-	funcs := template.FuncMap{
-		"lower": strings.ToLower,
-		"snake_case": func(str string) string {
-			return stringy.New(str).SnakeCase().ToLower()
-		},
-		"lcfirst": func(str string) string {
-			if str == "ID" {
-				return "id"
-			}
-			return stringy.New(str).LcFirst()
-		},
-		"join": strings.Join,
-		"getType": func(t string) string {
+	funcs := defaultTmplFuncs
+	tmplAddFunc(funcs, "getType", func(t string) string {
 
-			typeWrap, tp := getKeystoneType(c, st, sct, t)
+		typeWrap, tp := getKeystoneType(c, st, sct, t)
 
-			if config.WithSetter {
-				typeWrap += ".withSetter()"
-			}
+		if config.WithSetter {
+			typeWrap += ".withSetter()"
+		}
 
-			return fmt.Sprintf(typeWrap, tp)
-		},
-	}
+		return fmt.Sprintf(typeWrap, tp)
+	})
 
 	tmpl := template.Must(
 		template.New("mobxKeystoneModels").
@@ -84,33 +70,9 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 		}
 	}
 
-	structs := []structParameters{}
-	sortParam := strings.Split(config.Sort, ",")
-	if len(sortParam) == 0 {
-		for _, v := range st {
-			structs = append(structs, v)
-		}
-	} else {
-		for _, name := range sortParam {
-			v, ok := st[name]
-			if !ok {
-				return nil, fmt.Errorf("sort error: undefined struct %s", name)
-			}
-			structs = append(structs, v)
-		}
-
-		keys := make([]string, 0, len(st))
-		for k := range st {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-
-		for _, k := range keys {
-			if utils.ExistInStringArray(sortParam, st[k].Name) {
-				continue
-			}
-			structs = append(structs, st[k])
-		}
+	structs := ConvertStructsToSlice(st)
+	if err := structs.Sort(strings.Split(config.Sort, ",")...); err != nil {
+		return nil, err
 	}
 
 	tctx := tmplKeystoneCtx{
@@ -135,7 +97,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 
 	if config.PrettierCode {
 		cdata.afterHook = func() error {
-			fmt.Println("prettier generated typescript code ...")
+			fmt.Println("prettier generated models ...")
 			cmd := exec.Command("npx", "prettier", "--write", filepath.Join(cdata.outputDir, cdata.outputFileName))
 			stdout, err := cmd.Output()
 			if err != nil {

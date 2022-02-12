@@ -8,6 +8,7 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 - Use Sqlc only for generating models
 - Update generated models with additinal parameters: add / update fields and tags
 - Generate models for [`Mobx Keystone`](https://github.com/xaviergonz/mobx-keystone)
+- Generate typescript code based on go structs
 
 ## Install
 
@@ -114,6 +115,19 @@ gen_models:
             field_name: "organization"
             field_params:
               - with_setter: false
+gen_typescript_from_structs:
+  - path: "pb"
+    output_dir: "frontend/src/stores/models"
+    output_file_name: "requests.d.ts"
+    prettier_code: true
+    export_type_prefix: "Store"
+    export_type_suffix: "Gen"
+    include_struct_names_regexp:
+      - "^\\w*Request$"
+      - "^\\w*Response$"
+    exclude_struct_names_regexp:
+      - "GetUserRequest"
+      - "GetOrganizationRequest"
 # Update json tag. Not required
 json_tags:
   # List of struct fields
@@ -161,6 +175,12 @@ pgxgen gencrud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=d
 
 ```bash
 pgxgen genmodels
+```
+
+### Generate typescript types based on go structs
+
+```bash
+pgxgen gents
 ```
 
 ### Configure `sqlc`

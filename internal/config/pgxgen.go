@@ -7,11 +7,12 @@ import (
 )
 
 type Pgxgen struct {
-	Version               int         `yaml:"version"`
-	OutputCrudSqlFileName string      `yaml:"output_crud_sql_file_name"`
-	GenModels             []GenModels `yaml:"gen_models"`
-	JsonTags              JsonTags    `yaml:"json_tags"`
-	CrudParams            CrudParams  `yaml:"crud_params"`
+	Version                  int                        `yaml:"version"`
+	OutputCrudSqlFileName    string                     `yaml:"output_crud_sql_file_name"`
+	GenModels                []GenModels                `yaml:"gen_models"`
+	GenTypescriptFromStructs []GenTypescriptFromStructs `yaml:"gen_typescript_from_structs"`
+	JsonTags                 JsonTags                   `yaml:"json_tags"`
+	CrudParams               CrudParams                 `yaml:"crud_params"`
 }
 
 type GenModels struct {
@@ -205,4 +206,15 @@ type KeystoneParams struct {
 	FieldParams []struct {
 		WithSetter bool `yaml:"with_setter"`
 	} `yaml:"field_params"`
+}
+
+type GenTypescriptFromStructs struct {
+	Path                     string   `yaml:"path"`
+	OutputDir                string   `yaml:"output_dir"`
+	OutputFileName           string   `yaml:"output_file_name"`
+	PrettierCode             bool     `yaml:"prettier_code"`
+	ExportTypePrefix         string   `yaml:"export_type_prefix"`
+	ExportTypeSuffix         string   `yaml:"export_type_suffix"`
+	IncludeStructNamesRegexp []string `yaml:"include_struct_names_regexp"`
+	ExcludeStructNamesRegexp []string `yaml:"exclude_struct_names_regexp"`
 }
