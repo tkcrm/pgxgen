@@ -169,7 +169,7 @@ func getKeystoneType(c config.GenModels, st Structs, sct Types, t string) (typeW
 		tp = "types.string"
 	case "bool":
 		tp = "types.boolean"
-	case "time.Time":
+	case "bun.NullTime", "time.Time":
 		tp = "types.dateString"
 	case "map[string]interface{}", "pgtype.JSONB":
 		tp = "Record<string, any>"

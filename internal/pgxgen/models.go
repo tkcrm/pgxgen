@@ -331,6 +331,55 @@ func processStructs(c config.GenModels, st *Structs) error {
 		(*st)[f.StructName] = s
 	}
 
+	// process update all struct fields by field
+	for _, param := range c.UpdateAllStructFields.ByField {
+		for _, s := range *st {
+			for _, field := range s.Fields {
+				if field.Name != param.FieldName {
+					continue
+				}
+
+				if param.NewFieldName != "" {
+					field.Name = param.NewFieldName
+				}
+
+				if param.NewType != "" {
+					field.Type = param.NewType
+				}
+
+				if !param.MatchWithCurrentTags {
+					field.tags = map[string]string{}
+				}
+
+				for _, tag := range param.Tags {
+					field.tags[tag.Name] = tag.Value
+				}
+			}
+			(*st)[s.Name] = s
+		}
+	}
+
+	// process update all struct fields by type
+	for _, param := range c.UpdateAllStructFields.ByType {
+		for _, s := range *st {
+			for _, field := range s.Fields {
+				if field.Type != param.Type {
+					continue
+				}
+				field.Type = param.NewType
+
+				if !param.MatchWithCurrentTags {
+					field.tags = map[string]string{}
+				}
+
+				for _, tag := range param.Tags {
+					field.tags[tag.Name] = tag.Value
+				}
+			}
+			(*st)[s.Name] = s
+		}
+	}
+
 	// process update fields
 	for _, f := range c.UpdateFields {
 		s, ok := (*st)[f.StructName]

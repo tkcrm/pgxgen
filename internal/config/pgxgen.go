@@ -24,6 +24,7 @@ type GenModels struct {
 	UseUintForIdsExceptions []UseUintForIdsExceptions `yaml:"use_uint_for_ids_exceptions"`
 	AddFields               []AddFields               `yaml:"add_fields"`
 	UpdateFields            []UpdateFields            `yaml:"update_fields"`
+	UpdateAllStructFields   UpdateAllStructFields     `yaml:"update_all_struct_fields"`
 	DeleteFields            []DeleteFields            `yaml:"delete_fields"`
 	ExternalModels          ExternalModels            `yaml:"external_models"`
 }
@@ -74,6 +75,26 @@ type UpdateFields struct {
 	StructName    string             `yaml:"struct_name"`
 	FieldName     string             `yaml:"field_name"`
 	NewParameters NewFieldParameters `yaml:"new_parameters"`
+}
+
+type UpdateAllStructFields struct {
+	ByField []ByField `yaml:"by_field"`
+	ByType  []ByType  `yaml:"by_type"`
+}
+
+type ByField struct {
+	FieldName            string `yaml:"field_name"`
+	NewFieldName         string `yaml:"new_field_name"`
+	NewType              string `yaml:"new_type"`
+	MatchWithCurrentTags bool   `yaml:"match_with_current_tags"`
+	Tags                 []Tag  `yaml:"tags"`
+}
+
+type ByType struct {
+	Type                 string `yaml:"type"`
+	NewType              string `yaml:"new_type"`
+	MatchWithCurrentTags bool   `yaml:"match_with_current_tags"`
+	Tags                 []Tag  `yaml:"tags"`
 }
 
 type DeleteFields struct {
