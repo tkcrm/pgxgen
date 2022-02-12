@@ -59,6 +59,22 @@ gen_models:
         tags:
           - name: "bun"
             value: "table:users,alias:u"
+    update_all_struct_fields:
+      by_field:
+        - field_name: "ID"
+          new_field_name: "bun.NullTime"
+          new_type: "int"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "-"
+      by_type:
+        - type: "*time.Time"
+          new_type: "bun.NullTime"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "-"
     update_fields:
       - struct_name: "users"
         field_name: "Password"
