@@ -9,15 +9,15 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/gobeam/stringy"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type tmplKeystoneCtx struct {
-	Structs                  []structParameters
+	Structs                  StructSlice
 	Imports                  map[string][]string
 	DecoratorModelNamePrefix string
+	ExportModelSuffix        string
 	WithSetter               bool
 }
 
@@ -37,29 +37,17 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 		outputFileName: config.OutputFileName,
 	}
 
-	funcs := template.FuncMap{
-		"lower": strings.ToLower,
-		"snake_case": func(str string) string {
-			return stringy.New(str).SnakeCase().ToLower()
-		},
-		"lcfirst": func(str string) string {
-			if str == "ID" {
-				return "id"
-			}
-			return stringy.New(str).LcFirst()
-		},
-		"join": strings.Join,
-		"getType": func(t string) string {
+	funcs := defaultTmplFuncs
+	tmplAddFunc(funcs, "getType", func(t string) string {
 
-			typeWrap, tp := getKeystoneType(st, sct, t)
+		typeWrap, tp := getKeystoneType(c, st, sct, t)
 
-			if config.WithSetter {
-				typeWrap += ".withSetter()"
-			}
+		if config.WithSetter {
+			typeWrap += ".withSetter()"
+		}
 
-			return fmt.Sprintf(typeWrap, tp)
-		},
-	}
+		return fmt.Sprintf(typeWrap, tp)
+	})
 
 	tmpl := template.Must(
 		template.New("mobxKeystoneModels").
@@ -82,26 +70,9 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 		}
 	}
 
-	structs := []structParameters{}
-	sort := strings.Split(config.Sort, ",")
-	if len(sort) == 0 {
-		for _, v := range st {
-			structs = append(structs, v)
-		}
-	} else {
-		for _, name := range sort {
-			v, ok := st[name]
-			if !ok {
-				return nil, fmt.Errorf("sort error: undefined struct %s", name)
-			}
-			structs = append(structs, v)
-		}
-		for _, v := range st {
-			if utils.ExistInStringArray(sort, v.Name) {
-				continue
-			}
-			structs = append(structs, v)
-		}
+	structs := ConvertStructsToSlice(st)
+	if err := structs.Sort(strings.Split(config.Sort, ",")...); err != nil {
+		return nil, err
 	}
 
 	tctx := tmplKeystoneCtx{
@@ -110,6 +81,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 			"mobx-keystone": mobxKeystoneImports,
 		},
 		DecoratorModelNamePrefix: config.DecoratorModelNamePrefix,
+		ExportModelSuffix:        config.ExportModelSuffix,
 		WithSetter:               true,
 	}
 
@@ -125,7 +97,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 
 	if config.PrettierCode {
 		cdata.afterHook = func() error {
-			fmt.Println("prettier generated typescript code ...")
+			fmt.Println("prettier generated models ...")
 			cmd := exec.Command("npx", "prettier", "--write", filepath.Join(cdata.outputDir, cdata.outputFileName))
 			stdout, err := cmd.Output()
 			if err != nil {
@@ -142,7 +114,7 @@ func compileMobxKeystoneModels(c config.GenModels, st Structs, sct Types) (*comp
 	return &cdata, nil
 }
 
-func getKeystoneType(st Structs, sct Types, t string) (typeWrap string, tp string) {
+func getKeystoneType(c config.GenModels, st Structs, sct Types, t string) (typeWrap string, tp string) {
 	t = strings.ReplaceAll(t, "*", "")
 
 	typeWrap = "tProp(types.maybe(%s))"
@@ -159,7 +131,7 @@ func getKeystoneType(st Structs, sct Types, t string) (typeWrap string, tp strin
 		tp = "types.string"
 	case "bool":
 		tp = "types.boolean"
-	case "time.Time":
+	case "bun.NullTime", "time.Time":
 		tp = "types.dateString"
 	case "map[string]interface{}", "pgtype.JSONB":
 		tp = "Record<string, any>"
@@ -168,9 +140,9 @@ func getKeystoneType(st Structs, sct Types, t string) (typeWrap string, tp strin
 		_, okst := st[t]
 		existScalarItem, oksct := sct[t]
 		if okst {
-			tp = fmt.Sprintf("types.model(%s)", t)
+			tp = fmt.Sprintf("types.model(%s%s)", t, c.ExternalModels.Keystone.ExportModelSuffix)
 		} else if oksct {
-			typeWrap, tp = getKeystoneType(st, sct, existScalarItem.Type)
+			typeWrap, tp = getKeystoneType(c, st, sct, existScalarItem.Type)
 		} else {
 			tp = "types.unchecked()"
 			fmt.Println("undefined type:", t)

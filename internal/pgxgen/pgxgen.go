@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var version = "0.0.6"
+var version = "0.0.7"
 
 func Start(args []string) error {
 
@@ -69,6 +69,11 @@ func Start(args []string) error {
 			return err
 		}
 		fmt.Println("models successfully generated")
+	case "gents":
+		if err := generateTypescript(args, c); err != nil {
+			return err
+		}
+		fmt.Println("ts types successfully generated")
 	case "sqlc":
 		if err := processSqlc(args[1:], c); err != nil {
 			return err

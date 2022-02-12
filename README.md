@@ -8,6 +8,7 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 - Use Sqlc only for generating models
 - Update generated models with additinal parameters: add / update fields and tags
 - Generate models for [`Mobx Keystone`](https://github.com/xaviergonz/mobx-keystone)
+- Generate typescript code based on go structs
 
 ## Install
 
@@ -43,8 +44,8 @@ gen_models:
     models_imports:
       - "github.com/uptrace/bun"
     # Use uint64 instead int64 for all fields ends with ID
-    prefere_uint_for_ids: true
-    prefere_uint_for_ids_exceptions:
+    use_uint_for_ids: true
+    use_uint_for_ids_exceptions:
       - struct_name: "users"
         field_names:
           - OrganizationID
@@ -59,6 +60,22 @@ gen_models:
         tags:
           - name: "bun"
             value: "table:users,alias:u"
+    update_all_struct_fields:
+      by_field:
+        - field_name: "ID"
+          new_field_name: "bun.NullTime"
+          new_type: "int"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "-"
+      by_type:
+        - type: "*time.Time"
+          new_type: "bun.NullTime"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "-"
     update_fields:
       - struct_name: "users"
         field_name: "Password"
@@ -85,6 +102,7 @@ gen_models:
         decorator_model_name_prefix: "frontend/"
         # set method .withSetter() for all fields
         with_setter: true
+        export_model_suffix: "Model"
         # prettier code. nodejs must be installed on your pc
         prettier_code: true
         # sort output models
@@ -97,6 +115,19 @@ gen_models:
             field_name: "organization"
             field_params:
               - with_setter: false
+gen_typescript_from_structs:
+  - path: "pb"
+    output_dir: "frontend/src/stores/models"
+    output_file_name: "requests.d.ts"
+    prettier_code: true
+    export_type_prefix: "Store"
+    export_type_suffix: "Gen"
+    include_struct_names_regexp:
+      - "^\\w*Request$"
+      - "^\\w*Response$"
+    exclude_struct_names_regexp:
+      - "GetUserRequest"
+      - "GetOrganizationRequest"
 # Update json tag. Not required
 json_tags:
   # List of struct fields
@@ -146,6 +177,12 @@ pgxgen gencrud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=d
 pgxgen genmodels
 ```
 
+### Generate typescript types based on go structs
+
+```bash
+pgxgen gents
+```
+
 ### Configure `sqlc`
 
 At root of your project create a `sqlc.yaml` file with the configuration described below.
@@ -182,4 +219,5 @@ pgxgen sqlc generate
 
 ## Roadmap
 
+- Generate models without sqlc
 - Generate `.proto` files with CRUD services
