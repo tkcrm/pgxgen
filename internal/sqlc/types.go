@@ -1,4 +1,4 @@
-package pgxgen
+package sqlc
 
 var types map[string]string = map[string]string{
 	"sql.NullInt32":   "*int32",

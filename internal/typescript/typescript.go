@@ -1,4 +1,4 @@
-package pgxgen
+package typescript
 
 import (
 	"bufio"
@@ -13,16 +13,39 @@ import (
 	"unicode"
 
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/internal/generator"
+	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/internal/templates"
 )
 
+type typescript struct {
+	config config.Config
+}
+
+func New(cfg config.Config) generator.IGenerator {
+	return &typescript{
+		config: cfg,
+	}
+}
+
 type tmplTypescriptCtx struct {
-	Structs          StructSlice
+	Structs          structs.StructSlice
 	ExportTypePrefix string
 	ExportTypeSuffix string
 }
 
-func generateTypescript(args []string, c config.Config) error {
-	for _, config := range c.Pgxgen.GenTypescriptFromStructs {
+func (s *typescript) Generate(args []string) error {
+	if err := s.generateTypescript(args); err != nil {
+		return err
+	}
+
+	fmt.Println("ts types successfully generated")
+
+	return nil
+}
+
+func (s *typescript) generateTypescript(args []string) error {
+	for _, config := range s.config.Pgxgen.GenTypescriptFromStructs {
 		if config.OutputDir == "" {
 			return fmt.Errorf("output dir is empty")
 		}
@@ -36,7 +59,7 @@ func generateTypescript(args []string, c config.Config) error {
 			return err
 		}
 
-		structs := make(Structs)
+		_structs := make(structs.Structs)
 
 		for _, item := range dirItems {
 			if item.IsDir() || !strings.HasSuffix(item.Name(), ".go") {
@@ -48,14 +71,14 @@ func generateTypescript(args []string, c config.Config) error {
 				return err
 			}
 
-			for key, value := range getStructs(string(file)) {
-				structs[key] = value
+			for key, value := range structs.GetStructs(string(file)) {
+				_structs[key] = value
 			}
 
 		}
 
 		// Filter structs
-		for key, value := range structs {
+		for key, value := range _structs {
 			var deleteStruct *bool
 			for _, restring := range config.IncludeStructNamesRegexp {
 				r := regexp.MustCompile(restring)
@@ -79,11 +102,11 @@ func generateTypescript(args []string, c config.Config) error {
 			}
 
 			if deleteStruct != nil && *deleteStruct {
-				delete(structs, key)
+				delete(_structs, key)
 			}
 		}
 
-		structsSlice := ConvertStructsToSlice(structs)
+		structsSlice := structs.ConvertStructsToSlice(_structs)
 		if err := structsSlice.Sort(); err != nil {
 			return err
 		}
@@ -92,7 +115,7 @@ func generateTypescript(args []string, c config.Config) error {
 		if err != nil {
 			return err
 		}
-		if err := compileTemplate(typescriptCompiled); err != nil {
+		if err := templates.CompileTemplate(typescriptCompiled); err != nil {
 			return err
 		}
 
@@ -101,19 +124,19 @@ func generateTypescript(args []string, c config.Config) error {
 	return nil
 }
 
-func compileTypescript(c config.GenTypescriptFromStructs, st StructSlice) (*compileData, error) {
+func compileTypescript(c config.GenTypescriptFromStructs, st structs.StructSlice) (*templates.CompileData, error) {
 
-	cdata := compileData{
-		outputDir:      c.OutputDir,
-		outputFileName: c.OutputFileName,
+	cdata := templates.CompileData{
+		OutputDir:      c.OutputDir,
+		OutputFileName: c.OutputFileName,
 	}
 
-	funcs := defaultTmplFuncs
-	tmplAddFunc(funcs, "isEmptyFields", func(fields []*structField) bool {
+	funcs := templates.DefaultTmplFuncs
+	templates.TmplAddFunc(funcs, "isEmptyFields", func(fields []*structs.StructField) bool {
 		return len(fields) == 0
 	})
-	tmplAddFunc(funcs, "filterFields", func(fields []*structField) []*structField {
-		resFields := make([]*structField, 0)
+	templates.TmplAddFunc(funcs, "filterFields", func(fields []*structs.StructField) []*structs.StructField {
+		resFields := make([]*structs.StructField, 0)
 		for _, f := range fields {
 			if unicode.IsLower(rune(f.Name[0])) {
 				continue
@@ -123,10 +146,10 @@ func compileTypescript(c config.GenTypescriptFromStructs, st StructSlice) (*comp
 
 		return resFields
 	})
-	tmplAddFunc(funcs, "isNullable", func(t string) bool {
+	templates.TmplAddFunc(funcs, "isNullable", func(t string) bool {
 		return strings.Contains(t, "*")
 	})
-	tmplAddFunc(funcs, "getType", func(t string) string {
+	templates.TmplAddFunc(funcs, "getType", func(t string) string {
 		return getTypescriptType(st, t)
 	})
 
@@ -134,7 +157,7 @@ func compileTypescript(c config.GenTypescriptFromStructs, st StructSlice) (*comp
 		template.New("").
 			Funcs(funcs).
 			ParseFS(
-				templates,
+				templates.Templates,
 				"templates/typescript.go.tmpl",
 			),
 	)
@@ -153,12 +176,12 @@ func compileTypescript(c config.GenTypescriptFromStructs, st StructSlice) (*comp
 		return nil, fmt.Errorf("execte template error: %s", err.Error())
 	}
 
-	cdata.data = b.Bytes()
+	cdata.Data = b.Bytes()
 
 	if c.PrettierCode {
-		cdata.afterHook = func() error {
+		cdata.AfterHook = func() error {
 			fmt.Println("prettier generated typescript code ...")
-			cmd := exec.Command("npx", "prettier", "--write", filepath.Join(cdata.outputDir, cdata.outputFileName))
+			cmd := exec.Command("npx", "prettier", "--write", filepath.Join(cdata.OutputDir, cdata.OutputFileName))
 			stdout, err := cmd.Output()
 			if err != nil {
 				fmt.Println(err.Error())
@@ -174,7 +197,7 @@ func compileTypescript(c config.GenTypescriptFromStructs, st StructSlice) (*comp
 	return &cdata, nil
 }
 
-func getTypescriptType(st StructSlice, t string) (tp string) {
+func getTypescriptType(st structs.StructSlice, t string) (tp string) {
 	t = strings.ReplaceAll(t, "*", "")
 
 	tp = ""

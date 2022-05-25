@@ -14,7 +14,7 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 
 ### Requirements
 
-- `Go 1.17+`
+- `Go 1.18+`
 
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
@@ -139,48 +139,62 @@ json_tags:
   hide:
     - password
 crud_params:
-  # Limit and offset for `Find` method
-  limit:
-    # List of tables or asterisk (*)
-    - "*"
-  # Order by for `Find` method
-  order_by:
-    - by: id
-      order: desc
-      tables:
-        # List of tables or asterisk (*)
-        - "*"
-  where:
-    # g - get
-    # f - find
-    # u - update
-    # d - delete
-    # t - total
-    # available asterisk (*) for all methods (gfudt) except create
-    - methods: "gfudt"
-      # List of tables or asterisk (*)
-      tables:
-        - users
-      params:
-        - organization_id
+  tables:
+    user:
+      primary_column: id
+      methods:
+        # get
+        # find
+        # create
+        # update
+        # delete
+        # total
+        create:
+          skip_columns:
+            - id
+            - updated_at
+          returning: "*"
+        update:
+          skip_columns:
+            - id
+            - created_at
+          returning: "*"
+        find:
+          where:
+            user_id:
+              operator: "!="
+            deleted_at:
+              value: "IS NULL"
+          order:
+            by: created_at
+            direction: DESC
+          limit: true
+        get:
+        total:
 ```
 
 ### Generate `CRUD` queries for existing tables
 
 ```bash
-pgxgen gencrud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=disable
+pgxgen crud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=disable
 ```
 
 ### Generate models based on sqlc models
 
 ```bash
-pgxgen genmodels
+pgxgen models
+```
+
+#### Install `@tkcrm/ui` in your frontend
+
+```bash
+npm i @tkcrm/ui --save-dev
 ```
 
 ### Generate typescript types based on go structs
 
 ```bash
-pgxgen gents
+pgxgen ts
 ```
 
 ### Configure `sqlc`
