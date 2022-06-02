@@ -7,7 +7,12 @@ func (m MethodType) String() string {
 }
 
 type CrudParams struct {
-	Tables Table `yaml:"tables"`
+	Default DefaultParams `yaml:"default"`
+	Tables  Table         `yaml:"tables"`
+}
+
+type DefaultParams struct {
+	Methods map[MethodType]Method `yaml:"methods"`
 }
 
 type Table map[string]TableParams
