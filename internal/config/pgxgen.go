@@ -7,12 +7,13 @@ import (
 )
 
 type Pgxgen struct {
-	Version                  int                        `yaml:"version"`
-	OutputCrudSqlFileName    string                     `yaml:"output_crud_sql_file_name"`
-	GenModels                []GenModels                `yaml:"gen_models"`
-	GenTypescriptFromStructs []GenTypescriptFromStructs `yaml:"gen_typescript_from_structs"`
-	JsonTags                 JsonTags                   `yaml:"json_tags"`
-	CrudParams               CrudParams                 `yaml:"crud_params"`
+	Version                             int                        `yaml:"version"`
+	DisableAutoReaplceSqlcNullableTypes bool                       `yaml:"disable_auto_replace_sqlc_nullable_types"`
+	OutputCrudSqlFileName               string                     `yaml:"output_crud_sql_file_name"`
+	GenModels                           []GenModels                `yaml:"gen_models"`
+	GenTypescriptFromStructs            []GenTypescriptFromStructs `yaml:"gen_typescript_from_structs"`
+	JsonTags                            JsonTags                   `yaml:"json_tags"`
+	CrudParams                          CrudParams                 `yaml:"crud_params"`
 }
 
 type GenModels struct {

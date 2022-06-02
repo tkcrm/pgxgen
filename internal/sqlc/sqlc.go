@@ -58,9 +58,12 @@ func (s *sqlc) process(args []string) error {
 
 		for _, file := range files {
 			r := regexp.MustCompile(`(\.go)`)
-			if r.MatchString(file.Name()) {
-				if err := s.replace(filepath.Join(p.Path, file.Name()), replaceStructTypes); err != nil {
-					return err
+
+			if !s.config.Pgxgen.DisableAutoReaplceSqlcNullableTypes {
+				if r.MatchString(file.Name()) {
+					if err := s.replace(filepath.Join(p.Path, file.Name()), replaceStructTypes); err != nil {
+						return err
+					}
 				}
 			}
 

@@ -97,37 +97,24 @@ func (s *crud) process(args []string) error {
 
 			processParams := processParams{builder, tableName, *metaData, methodParams, tableParams}
 
+			var err error
 			switch config.MethodType(methodType) {
 			case METHOD_CREATE:
-				if err := s.processCreate(processParams); err != nil {
-					return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
-				}
-
+				err = s.processCreate(processParams)
 			case METHOD_UPDATE:
-				if err := s.processUpdate(processParams); err != nil {
-					return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
-				}
-
+				err = s.processUpdate(processParams)
 			case METHOD_DELETE:
-				if err := s.processDelete(processParams); err != nil {
-					return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
-				}
-
+				err = s.processDelete(processParams)
 			case METHOD_GET:
-				if err := s.processGet(processParams); err != nil {
-					return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
-				}
-
+				err = s.processGet(processParams)
 			case METHOD_FIND:
-				if err := s.processFind(processParams); err != nil {
-					return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
-				}
-
+				err = s.processFind(processParams)
 			case METHOD_TOTAL:
-				if err := s.processTotal(processParams); err != nil {
-					return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
-				}
+				err = s.processTotal(processParams)
+			}
 
+			if err != nil {
+				return errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
 			}
 
 		}
@@ -204,7 +191,12 @@ func (s *crud) processCreate(p processParams) error {
 		methodName = getMethodName(METHOD_CREATE, p.table)
 	}
 
-	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	operationType := "exec"
+	if p.methodParams.Returning != "" {
+		operationType = "one"
+	}
+
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :%s\n", methodName, operationType))
 	p.builder.WriteString("INSERT INTO ")
 	p.builder.WriteString(p.table)
 	p.builder.WriteString(" (")
@@ -258,7 +250,12 @@ func (s *crud) processUpdate(p processParams) error {
 		methodName = getMethodName(METHOD_UPDATE, p.table)
 	}
 
-	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	operationType := "exec"
+	if p.methodParams.Returning != "" {
+		operationType = "one"
+	}
+
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :%s\n", methodName, operationType))
 	p.builder.WriteString("UPDATE ")
 	p.builder.WriteString(p.table)
 	p.builder.WriteString("\n\tSET ")
@@ -407,8 +404,17 @@ func (s *crud) processTotal(p processParams) error {
 func (s *crud) processWhereParam(p processParams, method config.MethodType, lastIndex *int) error {
 	if params := getWhereParams(p.methodParams, p.table, method); len(params) > 0 {
 
+		// Sort params
+		paramsKeys := make([]string, 0, len(params))
+		for k := range params {
+			paramsKeys = append(paramsKeys, k)
+		}
+		sort.Strings(paramsKeys)
+
 		firstIter := true
-		for param, item := range params {
+		for _, param := range paramsKeys {
+			item := params[param]
+
 			if !utils.ExistInArray(p.metaData.columns, param) {
 				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
 			}
@@ -440,6 +446,11 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 	}
 	return nil
 }
+
+// func (s *crud) getMethodParams(methodType config.MethodType, p processParams) config.Method {
+// 	res := p.methodParams
+// 	return res
+// }
 
 func getMethodName(methodType config.MethodType, tableName string) string {
 	methodName := stringy.New(fmt.Sprintf("%s %s", methodType.String(), tableName)).CamelCase()

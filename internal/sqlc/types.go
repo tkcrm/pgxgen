@@ -6,10 +6,10 @@ var types map[string]string = map[string]string{
 	"sql.NullInt16":   "*int16",
 	"sql.NullFloat64": "*float64",
 	"sql.NullFloat32": "*float32",
-	"pgtype.Numeric":  "*float64",
 	"sql.NullString":  "*string",
 	"sql.NullBool":    "*bool",
 	"sql.NullTime":    "*time.Time",
+	//"pgtype.Numeric":  "decimal.Decimal",
 	//"json.RawMessage":       "map[string]interface{}",
 	//"pqtype.NullRawMessage": "map[string]interface{}",
 }
