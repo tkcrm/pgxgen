@@ -404,8 +404,17 @@ func (s *crud) processTotal(p processParams) error {
 func (s *crud) processWhereParam(p processParams, method config.MethodType, lastIndex *int) error {
 	if params := getWhereParams(p.methodParams, p.table, method); len(params) > 0 {
 
+		// Sort params
+		paramsKeys := make([]string, 0, len(params))
+		for k := range params {
+			paramsKeys = append(paramsKeys, k)
+		}
+		sort.Strings(paramsKeys)
+
 		firstIter := true
-		for param, item := range params {
+		for _, param := range paramsKeys {
+			item := params[param]
+
 			if !utils.ExistInArray(p.metaData.columns, param) {
 				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
 			}
