@@ -28,6 +28,7 @@ At root of your project create a `pgxgen.yaml`. Example of configuration below.
 
 ```yaml
 version: 1
+disable_auto_replace_sqlc_nullable_types: false
 # Result SQL file name; default: crud_queries.sql
 # Will save to `queries` path from `sqlc.yaml` config
 output_crud_sql_file_name: "crud_queries.sql"
