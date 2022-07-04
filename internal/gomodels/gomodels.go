@@ -31,6 +31,7 @@ func New(cfg config.Config) generator.IGenerator {
 }
 
 type tmplGoModelsCtx struct {
+	Version string
 	Package string
 	Structs structs.Structs
 	Imports string
@@ -63,11 +64,11 @@ func (s *gomodels) generateModels(args []string) error {
 		_structs := structs.GetStructs(string(file))
 
 		config := s.config.Pgxgen.GenModels[index]
-		if err := processStructs(config, &_structs); err != nil {
+		if err := s.processStructs(config, &_structs); err != nil {
 			return err
 		}
 
-		goModels, err := compileGoModels(config, _structs, p.GetModelPath())
+		goModels, err := s.compileGoModels(config, _structs, p.GetModelPath())
 		if err != nil {
 			return err
 		}
@@ -95,7 +96,7 @@ func (s *gomodels) generateModels(args []string) error {
 			for key, value := range structs.GetStructs(string(file)) {
 				_structs[key] = value
 			}
-			for key, value := range getScalarTypes(string(file)) {
+			for key, value := range s.getScalarTypes(string(file)) {
 				scalarTypes[key] = value
 			}
 		}
@@ -118,7 +119,7 @@ func (s *gomodels) generateModels(args []string) error {
 	return nil
 }
 
-func getScalarTypes(file_models_str string) structs.Types {
+func (s *gomodels) getScalarTypes(file_models_str string) structs.Types {
 	types := make(structs.Types)
 	r := bufio.NewReader(strings.NewReader(file_models_str))
 
@@ -148,7 +149,7 @@ func getScalarTypes(file_models_str string) structs.Types {
 	return types
 }
 
-func processStructs(c config.GenModels, st *structs.Structs) error {
+func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error {
 
 	if c.UseUintForIds {
 		for _, s := range *st {
@@ -323,7 +324,7 @@ func processStructs(c config.GenModels, st *structs.Structs) error {
 	return nil
 }
 
-func compileGoModels(c config.GenModels, st structs.Structs, path string) (*templates.CompileData, error) {
+func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path string) (*templates.CompileData, error) {
 	if c.ModelsOutputDir == "" {
 		return nil, fmt.Errorf("config error: undefined models_output_dir")
 	}
@@ -358,6 +359,7 @@ func compileGoModels(c config.GenModels, st structs.Structs, path string) (*temp
 	}
 
 	tctx := tmplGoModelsCtx{
+		Version: s.config.Pgxgen.Version,
 		Package: packageName,
 		Structs: st,
 		Imports: strings.Join(allImports, "\n"),

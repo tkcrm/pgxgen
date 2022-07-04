@@ -7,7 +7,7 @@ import (
 )
 
 type Pgxgen struct {
-	Version                             int                        `yaml:"version"`
+	Version                             string                     `yaml:"version"`
 	DisableAutoReaplceSqlcNullableTypes bool                       `yaml:"disable_auto_replace_sqlc_nullable_types"`
 	OutputCrudSqlFileName               string                     `yaml:"output_crud_sql_file_name"`
 	GenModels                           []GenModels                `yaml:"gen_models"`
