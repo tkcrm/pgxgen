@@ -29,6 +29,7 @@ func New(cfg config.Config) generator.IGenerator {
 }
 
 type tmplTypescriptCtx struct {
+	Version          string
 	Structs          structs.StructSlice
 	ExportTypePrefix string
 	ExportTypeSuffix string
@@ -111,7 +112,7 @@ func (s *typescript) generateTypescript(args []string) error {
 			return err
 		}
 
-		typescriptCompiled, err := compileTypescript(config, structsSlice)
+		typescriptCompiled, err := s.compileTypescript(config, structsSlice)
 		if err != nil {
 			return err
 		}
@@ -124,7 +125,7 @@ func (s *typescript) generateTypescript(args []string) error {
 	return nil
 }
 
-func compileTypescript(c config.GenTypescriptFromStructs, st structs.StructSlice) (*templates.CompileData, error) {
+func (s *typescript) compileTypescript(c config.GenTypescriptFromStructs, st structs.StructSlice) (*templates.CompileData, error) {
 
 	cdata := templates.CompileData{
 		OutputDir:      c.OutputDir,
@@ -163,6 +164,7 @@ func compileTypescript(c config.GenTypescriptFromStructs, st structs.StructSlice
 	)
 
 	tctx := tmplTypescriptCtx{
+		Version:          s.config.Pgxgen.Version,
 		Structs:          st,
 		ExportTypePrefix: c.ExportTypePrefix,
 		ExportTypeSuffix: c.ExportTypeSuffix,

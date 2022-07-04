@@ -10,10 +10,11 @@ import (
 	"github.com/tkcrm/pgxgen/internal/gomodels"
 	"github.com/tkcrm/pgxgen/internal/sqlc"
 	"github.com/tkcrm/pgxgen/internal/typescript"
+	"github.com/tkcrm/pgxgen/internal/ver"
 	"gopkg.in/yaml.v3"
 )
 
-var version = "0.0.10"
+var version = "v0.0.11"
 
 func Start(args []string) error {
 
@@ -56,6 +57,8 @@ func Start(args []string) error {
 		Pgxgen: pgxgenConfig,
 	}
 
+	c.Pgxgen.Version = version
+
 	var generator generator.IGenerator
 	switch args[0] {
 	case "version":
@@ -72,5 +75,21 @@ func Start(args []string) error {
 		return fmt.Errorf("undefined command %s", args[0])
 	}
 
-	return generator.Generate(args)
+	if generator != nil {
+		if err := generator.Generate(args); err != nil {
+			return err
+		}
+	}
+
+	// Check latest version
+	versionResponse, err := ver.CheckLastestReleaseVersion(version)
+	if err != nil {
+		fmt.Printf("check latest release version error: %v\n", err)
+	}
+
+	if versionResponse != nil && !versionResponse.IsLatest {
+		fmt.Println(versionResponse.Message)
+	}
+
+	return nil
 }
