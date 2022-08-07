@@ -10,11 +10,10 @@ import (
 	"github.com/tkcrm/pgxgen/internal/gomodels"
 	"github.com/tkcrm/pgxgen/internal/sqlc"
 	"github.com/tkcrm/pgxgen/internal/typescript"
-	"github.com/tkcrm/pgxgen/internal/ver"
 	"gopkg.in/yaml.v3"
 )
 
-var version = "v0.0.11"
+var version = "v0.0.12"
 
 func Start(args []string) error {
 
@@ -82,14 +81,14 @@ func Start(args []string) error {
 	}
 
 	// Check latest version
-	versionResponse, err := ver.CheckLastestReleaseVersion(version)
-	if err != nil {
-		fmt.Printf("check latest release version error: %v\n", err)
-	}
+	// versionResponse, err := ver.CheckLastestReleaseVersion(version)
+	// if err != nil {
+	// 	fmt.Printf("check latest release version error: %v\n", err)
+	// }
 
-	if versionResponse != nil && !versionResponse.IsLatest {
-		fmt.Println(versionResponse.Message)
-	}
+	// if versionResponse != nil && !versionResponse.IsLatest {
+	// 	fmt.Println(versionResponse.Message)
+	// }
 
 	return nil
 }
