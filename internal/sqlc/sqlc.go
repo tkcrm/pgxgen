@@ -44,37 +44,62 @@ func (s *sqlc) process(args []string) error {
 		return nil
 	}
 
-	for _, p := range s.config.Sqlc.Packages {
+	if s.config.Sqlc.Version > 2 && s.config.Sqlc.Version < 1 {
+		return nil
+	}
 
-		files, err := os.ReadDir(p.Path)
-		if err != nil {
-			return err
-		}
-
-		modelFileName := p.OutputModelsFileName
-		if modelFileName == "" {
-			modelFileName = "models.go"
-		}
-
-		for _, file := range files {
-			r := regexp.MustCompile(`(\.go)`)
-
-			if !s.config.Pgxgen.DisableAutoReaplceSqlcNullableTypes {
-				if r.MatchString(file.Name()) {
-					if err := s.replace(filepath.Join(p.Path, file.Name()), replaceStructTypes); err != nil {
-						return err
-					}
-				}
+	if s.config.Sqlc.Version == 1 {
+		for _, p := range s.config.Sqlc.Packages {
+			modelFileName := p.OutputModelsFileName
+			if modelFileName == "" {
+				modelFileName = "models.go"
 			}
 
-			if file.Name() == modelFileName {
-				if err := s.replace(filepath.Join(p.Path, file.Name()), replaceJsonTags); err != nil {
-					return err
-				}
+			if err := s.processFile(p.Path, modelFileName); err != nil {
+				return err
 			}
 		}
 	}
 
+	if s.config.Sqlc.Version == 2 {
+		for _, p := range s.config.Sqlc.SQL {
+			modelFileName := p.Gen.Go.OutputModelsFileName
+			if modelFileName == "" {
+				modelFileName = "models.go"
+			}
+
+			if err := s.processFile(p.Gen.Go.Out, modelFileName); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *sqlc) processFile(path, modelFile string) error {
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		r := regexp.MustCompile(`(\.go)`)
+
+		if !s.config.Pgxgen.DisableAutoReaplceSqlcNullableTypes {
+			if r.MatchString(file.Name()) {
+				if err := s.replace(filepath.Join(path, file.Name()), replaceStructTypes); err != nil {
+					return err
+				}
+			}
+		}
+
+		if file.Name() == modelFile {
+			if err := s.replace(filepath.Join(path, file.Name()), replaceJsonTags); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
