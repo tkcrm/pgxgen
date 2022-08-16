@@ -34,14 +34,19 @@ func (s *crud) Generate(args []string) error {
 		return err
 	}
 
-	for _, p := range s.config.Sqlc.Packages {
-		file_name := s.config.Pgxgen.OutputCrudSqlFileName
-		if file_name == "" {
-			file_name = "crud_queries.sql"
+	if s.config.Sqlc.Version == 1 {
+		for _, p := range s.config.Sqlc.Packages {
+			if err := s.saveFile(p.Queries); err != nil {
+				return err
+			}
 		}
+	}
 
-		if err := os.WriteFile(filepath.Join(p.Queries, file_name), s.result, 0644); err != nil {
-			return err
+	if s.config.Sqlc.Version == 2 {
+		for _, p := range s.config.Sqlc.SQL {
+			if err := s.saveFile(p.Queries); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -446,6 +451,18 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 			}
 			firstIter = false
 		}
+	}
+	return nil
+}
+
+func (s *crud) saveFile(path string) error {
+	file_name := s.config.Pgxgen.OutputCrudSqlFileName
+	if file_name == "" {
+		file_name = "crud_queries.sql"
+	}
+
+	if err := os.WriteFile(filepath.Join(path, file_name), s.result, 0644); err != nil {
+		return err
 	}
 	return nil
 }
