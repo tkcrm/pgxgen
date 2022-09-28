@@ -71,7 +71,6 @@ func (st *StructSlice) ExistStructIndex(name string) (int, *StructParameters) {
 }
 
 func (st *StructSlice) Sort(priorityNames ...string) error {
-
 	names := make([]string, 0, len(*st))
 	for _, name := range priorityNames {
 		existStructIndex, _ := st.ExistStructIndex(name)

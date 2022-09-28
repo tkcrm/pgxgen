@@ -17,7 +17,6 @@ import (
 var connString = "postgres://postgres:postgres@localhost:5432/testtable?sslmode=disable"
 
 func Test_Start(t *testing.T) {
-
 	tests := []struct {
 		name string
 		args []string
@@ -77,7 +76,6 @@ var someStructString = "// Code generated with pgxgen. DO NOT EDIT IT\n\n" +
 	"}\n"
 
 func Test_ParseStruct(t *testing.T) {
-
 	r := bufio.NewReader(strings.NewReader(someStructString))
 
 	structs := make(map[string]structParameters)
@@ -144,6 +142,7 @@ func Test_ParseStruct(t *testing.T) {
 func Test_UpdateStruct(t *testing.T) {
 	r := bufio.NewReader(strings.NewReader(someStructString))
 	w := new(strings.Builder)
+
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {

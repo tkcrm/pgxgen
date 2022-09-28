@@ -29,7 +29,6 @@ func New(cfg config.Config) generator.IGenerator {
 }
 
 func (s *crud) Generate(args []string) error {
-
 	if err := s.process(args); err != nil {
 		return err
 	}
@@ -56,7 +55,6 @@ func (s *crud) Generate(args []string) error {
 }
 
 func (s *crud) process(args []string) error {
-
 	var connString string
 	mySet := flag.NewFlagSet("", flag.ExitOnError)
 	mySet.StringVar(&connString, "c", "", "PostgreSQL connection link")
@@ -193,7 +191,6 @@ func (s *crud) getTableMeta(connString string) (tables, error) {
 }
 
 func (s *crud) processCreate(p processParams) error {
-
 	methodName := p.methodParams.Name
 	if methodName == "" {
 		methodName = getMethodName(METHOD_CREATE, p.table)
@@ -243,7 +240,6 @@ func (s *crud) processCreate(p processParams) error {
 }
 
 func (s *crud) processUpdate(p processParams) error {
-
 	primaryColumn, err := getPrimaryColumn(p.metaData.columns, p.table, p.tableParams.PrimaryColumn)
 	if err != nil {
 		return err
@@ -303,7 +299,6 @@ func (s *crud) processUpdate(p processParams) error {
 }
 
 func (s *crud) processDelete(p processParams) error {
-
 	primaryColumn, err := getPrimaryColumn(p.metaData.columns, p.table, p.tableParams.PrimaryColumn)
 	if err != nil {
 		return err
@@ -335,7 +330,6 @@ func (s *crud) processDelete(p processParams) error {
 }
 
 func (s *crud) processGet(p processParams) error {
-
 	primaryColumn, err := getPrimaryColumn(p.metaData.columns, p.table, p.tableParams.PrimaryColumn)
 	if err != nil {
 		return err
@@ -367,7 +361,6 @@ func (s *crud) processGet(p processParams) error {
 }
 
 func (s *crud) processFind(p processParams) error {
-
 	methodName := p.methodParams.Name
 	if methodName == "" {
 		methodName = getMethodName(METHOD_FIND, p.table)
@@ -391,7 +384,6 @@ func (s *crud) processFind(p processParams) error {
 }
 
 func (s *crud) processTotal(p processParams) error {
-
 	methodName := p.methodParams.Name
 	if methodName == "" {
 		methodName = getMethodName(METHOD_TOTAL, p.table)
@@ -521,12 +513,13 @@ func getWhereParams(method config.Method, table string, methodType config.Method
 }
 
 func getOrderByParams(method config.Method, table string) *config.OrderParam {
-
 	if method.Order.By == "" {
 		return nil
 	}
+
 	if method.Order.Direction == "" {
 		method.Order.Direction = "DESC"
 	}
+
 	return &method.Order
 }
