@@ -140,7 +140,6 @@ func compileMobxKeystoneModels(c config.GenModels, st structs.Structs, sct struc
 }
 
 func getKeystoneType(c config.GenModels, st structs.Structs, sct structs.Types, t string) (typeWrap string, tp string) {
-
 	typeWrap = "tProp(%s)"
 	typeWrapUnchecked := "prop<%s>"
 

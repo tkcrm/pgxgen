@@ -46,7 +46,6 @@ type CompileData struct {
 }
 
 func CompileTemplate(d *CompileData) error {
-
 	if d.Data == nil && len(d.Data) == 0 {
 		return fmt.Errorf("compile template error: data is undefined")
 	}

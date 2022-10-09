@@ -48,7 +48,6 @@ func (s *gomodels) Generate(args []string) error {
 }
 
 func (s *gomodels) generateModels(args []string) error {
-
 	if len(s.config.Sqlc.Packages) < len(s.config.Pgxgen.GenModels) {
 		return fmt.Errorf("sqlc packages should be more or equal pgxgen gen_models")
 	}
@@ -150,7 +149,6 @@ func (s *gomodels) getScalarTypes(file_models_str string) structs.Types {
 }
 
 func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error {
-
 	if c.UseUintForIds {
 		for _, s := range *st {
 			for _, f := range s.Fields {

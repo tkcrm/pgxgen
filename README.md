@@ -166,11 +166,14 @@ crud_params:
               operator: "!="
             deleted_at:
               value: "IS NULL"
+          where_additional:
+            - (NOT @is_is_active::boolean OR "is_active" = @is_active)
           order:
             by: created_at
             direction: DESC
           limit: true
         get:
+        delete:
         total:
 ```
 

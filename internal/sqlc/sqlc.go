@@ -34,7 +34,6 @@ func (s *sqlc) Generate(args []string) error {
 }
 
 func (s *sqlc) process(args []string) error {
-
 	if len(args) > 1 {
 		args = args[1:]
 	}
@@ -100,6 +99,7 @@ func (s *sqlc) processFile(path, modelFile string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -108,6 +108,7 @@ func replaceStructTypes(c config.Config, str string) string {
 	for old, new := range types {
 		res = strings.ReplaceAll(res, old, new)
 	}
+
 	return res
 }
 
@@ -119,11 +120,11 @@ func replaceJsonTags(c config.Config, str string) string {
 	for _, field := range c.Pgxgen.JsonTags.Hide {
 		res = strings.ReplaceAll(res, fmt.Sprintf("json:\"%s\"", field), "json:\"-\"")
 	}
+
 	return res
 }
 
 func (s *sqlc) replace(path string, fn func(c config.Config, str string) string) error {
-
 	file, err := os.ReadFile(path)
 	if err != nil {
 		return err

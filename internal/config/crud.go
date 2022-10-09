@@ -23,10 +23,11 @@ type TableParams struct {
 }
 
 type Method struct {
-	Name        string                     `yaml:"name"`
-	Returning   string                     `yaml:"returning"`
-	Where       map[string]WhereParamsItem `yaml:"where"`
-	SkipColumns []string                   `yaml:"skip_columns"`
+	Name            string                     `yaml:"name"`
+	Returning       string                     `yaml:"returning"`
+	Where           map[string]WhereParamsItem `yaml:"where"`
+	WhereAdditional []string                   `yaml:"where_additional"`
+	SkipColumns     []string                   `yaml:"skip_columns"`
 
 	// For find method
 	Limit bool       `yaml:"limit"`
@@ -42,4 +43,12 @@ type WhereParamsItem struct {
 	Value string `yaml:"value"`
 	// Default is = (equal)
 	Operator string `yaml:"operator"`
+}
+
+func (s *Method) AddWhereParam(key string, params WhereParamsItem) {
+	if s.Where == nil {
+		s.Where = make(map[string]WhereParamsItem)
+	}
+
+	s.Where[key] = params
 }

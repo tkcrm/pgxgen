@@ -11,7 +11,6 @@ import (
 var requestURL = "https://api.github.com/repos/tkcrm/pgxgen/releases/latest"
 
 func CheckLastestReleaseVersion(currentVersion string) (*CheckLastestReleaseVersionResponse, error) {
-
 	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("client: could not create request: %v", err)

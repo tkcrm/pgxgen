@@ -126,7 +126,6 @@ func (s *typescript) generateTypescript(args []string) error {
 }
 
 func (s *typescript) compileTypescript(c config.GenTypescriptFromStructs, st structs.StructSlice) (*templates.CompileData, error) {
-
 	cdata := templates.CompileData{
 		OutputDir:      c.OutputDir,
 		OutputFileName: c.OutputFileName,
