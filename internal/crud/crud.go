@@ -275,7 +275,7 @@ func (s *crud) processUpdate(p processParams) error {
 		}
 
 		if name == "updated_at" {
-			p.builder.WriteString("\"updated_at\" = now()")
+			p.builder.WriteString("\"updated_at\"=now()")
 		} else {
 			p.builder.WriteString(fmt.Sprintf("\"%s\"=$%d", name, lastIndex))
 			lastIndex++
@@ -283,8 +283,7 @@ func (s *crud) processUpdate(p processParams) error {
 	}
 
 	p.builder.WriteString("\n\t")
-	p.builder.WriteString(fmt.Sprintf("WHERE \"%s\"=$%d", primaryColumn, lastIndex))
-	lastIndex++
+	p.methodParams.AddWhereParam(primaryColumn, config.WhereParamsItem{})
 
 	if err := s.processWhereParam(p, METHOD_UPDATE, &lastIndex); err != nil {
 		return err
@@ -318,8 +317,7 @@ func (s *crud) processDelete(p processParams) error {
 	p.builder.WriteString(p.table)
 
 	lastIndex := 1
-	p.builder.WriteString(fmt.Sprintf(" WHERE \"%s\"=$%d", primaryColumn, lastIndex))
-	lastIndex++
+	p.methodParams.AddWhereParam(primaryColumn, config.WhereParamsItem{})
 
 	if err := s.processWhereParam(p, METHOD_DELETE, &lastIndex); err != nil {
 		return err
@@ -349,8 +347,7 @@ func (s *crud) processGet(p processParams) error {
 	p.builder.WriteString(p.table)
 
 	lastIndex := 1
-	p.builder.WriteString(fmt.Sprintf(" WHERE \"%s\"=$%d", primaryColumn, lastIndex))
-	lastIndex++
+	p.methodParams.AddWhereParam(primaryColumn, config.WhereParamsItem{})
 
 	if err := s.processWhereParam(p, METHOD_GET, &lastIndex); err != nil {
 		return err
@@ -402,8 +399,8 @@ func (s *crud) processTotal(p processParams) error {
 }
 
 func (s *crud) processWhereParam(p processParams, method config.MethodType, lastIndex *int) error {
+	// process where params
 	if params := getWhereParams(p.methodParams, p.table, method); len(params) > 0 {
-
 		// Sort params
 		paramsKeys := make([]string, 0, len(params))
 		for k := range params {
@@ -419,9 +416,13 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
 			}
 
-			if utils.ExistInArray([]config.MethodType{METHOD_FIND, METHOD_TOTAL}, method) ||
-				(p.tableParams.PrimaryColumn == "" && firstIter) {
-				p.builder.WriteString(" WHERE ")
+			if firstIter {
+				strPattern := " "
+				if method == METHOD_UPDATE {
+					strPattern = ""
+				}
+
+				p.builder.WriteString(strPattern + "WHERE ")
 			} else {
 				p.builder.WriteString(" AND ")
 			}
@@ -432,7 +433,7 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 					operator = "="
 				}
 
-				p.builder.WriteString(fmt.Sprintf("\"%s\" %s $%d", param, operator, *lastIndex))
+				p.builder.WriteString(fmt.Sprintf("\"%s\"%s$%d", param, operator, *lastIndex))
 				*lastIndex++
 			} else {
 				p.builder.WriteString(fmt.Sprintf("\"%s\"", param))
@@ -444,6 +445,31 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 			firstIter = false
 		}
 	}
+
+	// process where additional params
+	if params := getWhereAddtitionalParams(p.methodParams, p.table, method); len(params) > 0 {
+		whereParamsLen := len(getWhereParams(p.methodParams, p.table, method))
+
+		for paramIndex, param := range params {
+			if paramIndex == 0 && whereParamsLen == 0 {
+				p.builder.WriteString(" WHERE ")
+			} else {
+				strPattern := " "
+				if paramIndex > 0 {
+					strPattern = "\t"
+				}
+				p.builder.WriteString(strPattern + "AND ")
+			}
+
+			strPattern := "%s"
+			if paramIndex < len(params)-1 {
+				strPattern += "\n"
+			}
+
+			p.builder.WriteString(fmt.Sprintf(strPattern, param))
+		}
+	}
+
 	return nil
 }
 
@@ -507,6 +533,23 @@ func getWhereParams(method config.Method, table string, methodType config.Method
 
 	for _, param := range keys {
 		params[param] = method.Where[param]
+	}
+
+	return params
+}
+
+func getWhereAddtitionalParams(method config.Method, table string, methodType config.MethodType) []string {
+	params := make([]string, len(method.WhereAdditional))
+
+	methodLower := strings.ToLower(methodType.String())
+
+	// Skip create method
+	if methodLower == "create" {
+		return params
+	}
+
+	if len(method.WhereAdditional) > 0 {
+		return method.WhereAdditional
 	}
 
 	return params

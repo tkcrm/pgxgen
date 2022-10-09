@@ -6,6 +6,7 @@ func ExistInArray[T comparable](values []T, item T) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
