@@ -13,7 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var version = "v0.0.15"
+var version = "v0.0.16"
 
 func Start(args []string) error {
 	if len(args) == 0 {
