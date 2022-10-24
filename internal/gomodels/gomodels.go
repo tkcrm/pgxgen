@@ -53,7 +53,6 @@ func (s *gomodels) generateModels(args []string) error {
 	}
 
 	for index, p := range s.config.Sqlc.Packages {
-
 		// get models.go from sqlc
 		file, err := os.ReadFile(p.GetModelPath())
 		if err != nil {
@@ -100,7 +99,7 @@ func (s *gomodels) generateModels(args []string) error {
 			}
 		}
 
-		mobxKeystoneModels, err := compileMobxKeystoneModels(config, _structs, scalarTypes)
+		mobxKeystoneModels, err := compileMobxKeystoneModels(s.config.Pgxgen.Version, config, _structs, scalarTypes)
 		if err != nil {
 			return err
 		}

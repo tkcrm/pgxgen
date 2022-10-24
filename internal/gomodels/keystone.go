@@ -21,9 +21,10 @@ type tmplKeystoneCtx struct {
 	DecoratorModelNamePrefix string
 	ExportModelSuffix        string
 	WithSetter               bool
+	Version                  string
 }
 
-func compileMobxKeystoneModels(c config.GenModels, st structs.Structs, sct structs.Types) (*templates.CompileData, error) {
+func compileMobxKeystoneModels(ver string, c config.GenModels, st structs.Structs, sct structs.Types) (*templates.CompileData, error) {
 	config := c.ExternalModels.Keystone
 
 	if config.OutputDir == "" {
@@ -52,7 +53,6 @@ func compileMobxKeystoneModels(c config.GenModels, st structs.Structs, sct struc
 	})
 
 	templates.TmplAddFunc(funcs, "exist_field_id", func(structName, fieldName string) bool {
-
 		for _, s := range st {
 			if s.Name != structName {
 				continue
@@ -108,6 +108,7 @@ func compileMobxKeystoneModels(c config.GenModels, st structs.Structs, sct struc
 		DecoratorModelNamePrefix: config.DecoratorModelNamePrefix,
 		ExportModelSuffix:        config.ExportModelSuffix,
 		WithSetter:               true,
+		Version:                  ver,
 	}
 
 	var b bytes.Buffer

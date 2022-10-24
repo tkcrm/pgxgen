@@ -55,7 +55,9 @@ export class {{.Name}}s{{ $.ExportModelSuffix}} extends Model({
 
   @modelAction
   setFormInstance(v: FormInstance | undefined): void {
+    this.isLoading = true;
     this.formInstance = v;
+    this.isLoading = false;
   }
 
   @modelAction
