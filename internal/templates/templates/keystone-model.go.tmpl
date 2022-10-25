@@ -31,6 +31,7 @@ export class {{.Name}}{{ $.ExportModelSuffix}} extends Model({
 {{ if exist_field_id .Name "id"}}
 @model("{{ $.DecoratorModelNamePrefix }}{{snake_case .Name}}s")
 export class {{.Name}}s{{ $.ExportModelSuffix}} extends Model({
+  isFormInited: prop(false).withSetter(),
   isLoading: prop(false).withSetter(),
   isSearching: prop(false).withSetter(),
   isCreatingOrUpdating: prop(false).withSetter(),
