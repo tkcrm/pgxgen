@@ -10,6 +10,8 @@ pgxgen use [`sqlc`](https://github.com/kyleconroy/sqlc) tool with additional imp
 - Generate models for [`Mobx Keystone`](https://github.com/xaviergonz/mobx-keystone)
 - Generate typescript code based on go structs
 
+> You can use [this repository](https://github.com/sxwebdev/pgxgen-example) which explains how to use `pgxgen` tool in your project
+
 ## Install
 
 ### Requirements
@@ -191,6 +193,8 @@ pgxgen models
 
 #### Install `@tkcrm/ui` in your frontend
 
+If you generate mobx keystone models install `@tkcrm/ui` in your frontend project
+
 ```bash
 npm i @tkcrm/ui --save-dev
 ```
@@ -210,23 +214,26 @@ At root of your project create a `sqlc.yaml` file with the configuration describ
 #### Configuration file `sqlc.yaml` example
 
 ```yaml
-version: 1
-packages:
-  - path: "./internal/store"
-    name: "store"
-    engine: "postgresql"
-    schema: "sql/migrations"
+version: 2
+sql:
+  - schema: "sql/migrations"
     queries: "sql/queries"
-    sql_package: "pgx/v4"
-    emit_prepared_queries: false
-    emit_json_tags: true
-    emit_exported_queries: false
-    emit_db_tags: true
-    emit_interface: true
-    emit_exact_table_names: false
-    emit_empty_slices: true
-    emit_result_struct_pointers: true
-    emit_params_struct_pointers: false
+    engine: "postgresql"
+    gen:
+      go:
+        sql_package: "pgx/v4"
+        out: "internal/store"
+        emit_prepared_queries: false
+        emit_json_tags: true
+        emit_exported_queries: false
+        emit_db_tags: true
+        emit_interface: true
+        emit_exact_table_names: false
+        emit_empty_slices: true
+        emit_result_struct_pointers: true
+        emit_params_struct_pointers: false
+        emit_enum_valid_method: true
+        emit_all_enum_values: true
 ```
 
 ### Generate `sqlc`
