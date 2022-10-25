@@ -175,6 +175,8 @@ crud_params:
             direction: DESC
           limit: true
         get:
+          # Not required. By default this method will be GetUser
+          name: GetUserByID
         delete:
         total:
 ```
@@ -209,7 +211,7 @@ pgxgen ts
 
 At root of your project create a `sqlc.yaml` file with the configuration described below.
 
-> Configuration available [there](https://docs.sqlc.dev/en/stable/reference/config.html)
+> Configuration available [here](https://docs.sqlc.dev/en/stable/reference/config.html)
 
 #### Configuration file `sqlc.yaml` example
 
