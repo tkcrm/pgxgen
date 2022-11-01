@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	sqlccli "github.com/kyleconroy/sqlc/pkg/cli"
+	"github.com/pkg/errors"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"golang.org/x/tools/imports"
@@ -55,7 +56,7 @@ func (s *sqlc) process(args []string) error {
 			}
 
 			if err := s.processFile(p.Path, modelFileName); err != nil {
-				return err
+				return errors.Wrapf(err, "failed to process file \"%s\"", modelFileName)
 			}
 		}
 	}
@@ -68,7 +69,7 @@ func (s *sqlc) process(args []string) error {
 			}
 
 			if err := s.processFile(p.Gen.Go.Out, modelFileName); err != nil {
-				return err
+				return errors.Wrapf(err, "failed to process file")
 			}
 		}
 	}
@@ -79,7 +80,7 @@ func (s *sqlc) process(args []string) error {
 func (s *sqlc) processFile(path, modelFile string) error {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to read path \"%s\"", path)
 	}
 
 	for _, file := range files {
@@ -88,14 +89,14 @@ func (s *sqlc) processFile(path, modelFile string) error {
 		if !s.config.Pgxgen.DisableAutoReaplceSqlcNullableTypes {
 			if r.MatchString(file.Name()) {
 				if err := s.replace(filepath.Join(path, file.Name()), replaceStructTypes); err != nil {
-					return err
+					return errors.Wrap(err, "replace 1 error")
 				}
 			}
 		}
 
 		if file.Name() == modelFile {
 			if err := s.replace(filepath.Join(path, file.Name()), replaceJsonTags); err != nil {
-				return err
+				return errors.Wrap(err, "replace 2 error")
 			}
 		}
 	}
@@ -127,7 +128,7 @@ func replaceJsonTags(c config.Config, str string) string {
 func (s *sqlc) replace(path string, fn func(c config.Config, str string) string) error {
 	file, err := os.ReadFile(path)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "failed to read path \"%s\"", path)
 	}
 
 	result := fn(s.config, string(file))
@@ -138,7 +139,7 @@ func (s *sqlc) replace(path string, fn func(c config.Config, str string) string)
 	}
 
 	if err := os.WriteFile(filepath.Join(path), formated, os.ModePerm); err != nil {
-		return err
+		return errors.Wrapf(err, "failed to write file to path \"%s\"", filepath.Join(path))
 	}
 
 	return nil
