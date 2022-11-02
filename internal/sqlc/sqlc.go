@@ -26,7 +26,7 @@ func New(cfg config.Config) generator.IGenerator {
 
 func (s *sqlc) Generate(args []string) error {
 	if err := s.process(args); err != nil {
-		return err
+		return errors.Wrap(err, "failed to generate sqlc data")
 	}
 
 	fmt.Println("sqlc successfully generated")
