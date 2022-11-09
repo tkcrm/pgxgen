@@ -26,7 +26,7 @@ func New(cfg config.Config) generator.IGenerator {
 
 func (s *sqlc) Generate(args []string) error {
 	if err := s.process(args); err != nil {
-		return errors.Wrap(err, "failed to generate sqlc data")
+		return errors.Wrap(err, "failed to generate sqlc")
 	}
 
 	fmt.Println("sqlc successfully generated")
@@ -89,14 +89,14 @@ func (s *sqlc) processFile(path, modelFile string) error {
 		if !s.config.Pgxgen.DisableAutoReaplceSqlcNullableTypes {
 			if r.MatchString(file.Name()) {
 				if err := s.replace(filepath.Join(path, file.Name()), replaceStructTypes); err != nil {
-					return errors.Wrap(err, "replace 1 error")
+					return err
 				}
 			}
 		}
 
 		if file.Name() == modelFile {
 			if err := s.replace(filepath.Join(path, file.Name()), replaceJsonTags); err != nil {
-				return errors.Wrap(err, "replace 2 error")
+				return err
 			}
 		}
 	}
