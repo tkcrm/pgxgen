@@ -212,7 +212,7 @@ func (s *crud) processCreate(p processParams) error {
 			p.builder.WriteString(", ")
 		}
 
-		p.builder.WriteString(fmt.Sprintf("\"%s\"", name))
+		p.builder.WriteString(name)
 	}
 	p.builder.WriteString(")\n\tVALUES (")
 
@@ -275,9 +275,9 @@ func (s *crud) processUpdate(p processParams) error {
 		}
 
 		if name == "updated_at" {
-			p.builder.WriteString("\"updated_at\"=now()")
+			p.builder.WriteString("updated_at=now()")
 		} else {
-			p.builder.WriteString(fmt.Sprintf("\"%s\"=$%d", name, lastIndex))
+			p.builder.WriteString(fmt.Sprintf("%s=$%d", name, lastIndex))
 			lastIndex++
 		}
 	}
@@ -371,7 +371,7 @@ func (s *crud) processFind(p processParams) error {
 		return err
 	}
 	if order := getOrderByParams(p.methodParams, p.table); order != nil {
-		p.builder.WriteString(fmt.Sprintf(" ORDER BY \"%s\" %s", order.By, order.Direction))
+		p.builder.WriteString(fmt.Sprintf(" ORDER BY %s %s", order.By, order.Direction))
 	}
 	if p.methodParams.Limit {
 		p.builder.WriteString(fmt.Sprintf(" LIMIT $%d OFFSET $%d", lastIndex, lastIndex+1))
@@ -433,10 +433,10 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 					operator = "="
 				}
 
-				p.builder.WriteString(fmt.Sprintf("\"%s\"%s$%d", param, operator, *lastIndex))
+				p.builder.WriteString(fmt.Sprintf("%s%s$%d", param, operator, *lastIndex))
 				*lastIndex++
 			} else {
-				p.builder.WriteString(fmt.Sprintf("\"%s\"", param))
+				p.builder.WriteString(param)
 				if item.Operator != "" {
 					p.builder.WriteString(fmt.Sprintf(" %s", item.Operator))
 				}
