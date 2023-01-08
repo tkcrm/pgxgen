@@ -38,5 +38,3 @@ _test
 build
 .env
 Dockerfile-dev
-sqlc.yaml
-pgxgen.yaml
