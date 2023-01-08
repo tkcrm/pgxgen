@@ -7,3 +7,6 @@ upgrade:
 
 build:
 	go build -v ./cmd/pgxgen
+
+test:
+	go test -v ./...
