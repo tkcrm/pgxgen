@@ -39,64 +39,100 @@ func (s *sqlc) process(args []string) error {
 		args = args[1:]
 	}
 
+	// generate sqlc code
 	genResult := sqlccli.Run(args)
 	if genResult != 0 {
 		return nil
 	}
 
-	if s.config.Sqlc.Version > 2 && s.config.Sqlc.Version < 1 {
-		return nil
+	if s.config.Sqlc.Version > 2 || s.config.Sqlc.Version < 1 {
+		return fmt.Errorf("unsupported sqlc version: %d", s.config.Sqlc.Version)
 	}
 
-	if s.config.Sqlc.Version == 1 {
-		for _, p := range s.config.Sqlc.Packages {
-			modelFileName := p.OutputModelsFileName
-			if modelFileName == "" {
-				modelFileName = "models.go"
-			}
-
-			if err := s.processFile(p.Path, modelFileName); err != nil {
-				return errors.Wrapf(err, "failed to process file \"%s\"", modelFileName)
-			}
-		}
-	}
-
-	if s.config.Sqlc.Version == 2 {
-		for _, p := range s.config.Sqlc.SQL {
-			modelFileName := p.Gen.Go.OutputModelsFileName
-			if modelFileName == "" {
-				modelFileName = "models.go"
-			}
-
-			if err := s.processFile(p.Gen.Go.Out, modelFileName); err != nil {
-				return errors.Wrapf(err, "failed to process file")
-			}
+	for _, path := range s.config.Sqlc.GetModelPaths() {
+		if err := s.processFile(path); err != nil {
+			return errors.Wrapf(err, "failed to process file \"%s\"", path)
 		}
 	}
 
 	return nil
 }
 
-func (s *sqlc) processFile(path, modelFile string) error {
-	files, err := os.ReadDir(path)
+func (s *sqlc) processFile(modelFilePath string) error {
+	modelFileDir := filepath.Dir(modelFilePath)
+	modelFileName := filepath.Base(modelFilePath)
+
+	files, err := os.ReadDir(modelFileDir)
 	if err != nil {
-		return errors.Wrapf(err, "failed to read path \"%s\"", path)
+		return errors.Wrapf(err, "failed to read path \"%s\"", modelFileDir)
 	}
 
 	for _, file := range files {
-		r := regexp.MustCompile(`(\.go)`)
+		goFileRegexp := regexp.MustCompile(`(\.go)`)
 
+		// skip not golang files
+		if !goFileRegexp.MatchString(file.Name()) {
+			continue
+		}
+
+		// replace nullable types
 		if !s.config.Pgxgen.DisableAutoReaplceSqlcNullableTypes {
-			if r.MatchString(file.Name()) {
-				if err := s.replace(filepath.Join(path, file.Name()), replaceStructTypes); err != nil {
-					return err
-				}
+			if err := s.replace(filepath.Join(modelFileDir, file.Name()), replaceStructTypes); err != nil {
+				return err
 			}
 		}
 
-		if file.Name() == modelFile {
-			if err := s.replace(filepath.Join(path, file.Name()), replaceJsonTags); err != nil {
+		// replace imports
+		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" {
+			if err := s.replace(filepath.Join(modelFileDir, file.Name()), replaceImports); err != nil {
 				return err
+			}
+		}
+
+		// process models file
+		if file.Name() == modelFileName {
+			modelFilePath := filepath.Join(modelFileDir, file.Name())
+
+			// replace json tags
+			if err := s.replace(modelFilePath, replaceJsonTags); err != nil {
+				return err
+			}
+
+			// replace package name
+			if err := s.replace(modelFilePath, replacePackageName); err != nil {
+				return err
+			}
+
+			if s.config.Pgxgen.SqlcModels.OutputDir != "" {
+				currentDir, err := os.Getwd()
+				if err != nil {
+					return err
+				}
+
+				newPathDir := filepath.Join(currentDir, s.config.Pgxgen.SqlcModels.OutputDir)
+				oldPathDir := filepath.Join(currentDir, modelFilePath)
+
+				// create dir if new path not exists
+				if _, err := os.Stat(newPathDir); errors.Is(err, os.ErrNotExist) {
+					if err := os.MkdirAll(newPathDir, os.ModePerm); err != nil {
+						return err
+					}
+				}
+
+				// move file to new directory
+				fileName := file.Name()
+				if s.config.Pgxgen.SqlcModels.OutputFilename != "" {
+					fileName = s.config.Pgxgen.SqlcModels.OutputFilename
+				}
+
+				newPathFile := filepath.Join(newPathDir, fileName)
+				if err := os.Rename(oldPathDir, newPathFile); err != nil {
+					return errors.Wrapf(err,
+						"failed to move file from %s to %s",
+						modelFilePath,
+						newPathFile,
+					)
+				}
 			}
 		}
 	}
@@ -118,6 +154,7 @@ func replaceJsonTags(c config.Config, str string) string {
 	for _, field := range c.Pgxgen.JsonTags.Omitempty {
 		res = strings.ReplaceAll(res, fmt.Sprintf("json:\"%s\"", field), fmt.Sprintf("json:\"%s,omitempty\"", field))
 	}
+
 	for _, field := range c.Pgxgen.JsonTags.Hide {
 		res = strings.ReplaceAll(res, fmt.Sprintf("json:\"%s\"", field), "json:\"-\"")
 	}
@@ -133,13 +170,15 @@ func (s *sqlc) replace(path string, fn func(c config.Config, str string) string)
 
 	result := fn(s.config, string(file))
 
-	formated, err := imports.Process(path, []byte(result), nil)
+	formatedFileContent, err := imports.Process(path, []byte(result), nil)
 	if err != nil {
 		return err
 	}
 
-	if err := os.WriteFile(filepath.Join(path), formated, os.ModePerm); err != nil {
-		return errors.Wrapf(err, "failed to write file to path \"%s\"", filepath.Join(path))
+	formattedPath := filepath.Join(path)
+
+	if err := os.WriteFile(formattedPath, formatedFileContent, os.ModePerm); err != nil {
+		return errors.Wrapf(err, "failed to write file to path \"%s\"", formattedPath)
 	}
 
 	return nil

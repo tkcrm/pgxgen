@@ -117,6 +117,8 @@ func (s *crud) process(args []string) error {
 				err = s.processFind(processParams)
 			case METHOD_TOTAL:
 				err = s.processTotal(processParams)
+			case METHOD_EXISTS:
+				err = s.processExists(processParams)
 			}
 
 			if err != nil {
@@ -352,7 +354,7 @@ func (s *crud) processGet(p processParams) error {
 	if err := s.processWhereParam(p, METHOD_GET, &lastIndex); err != nil {
 		return err
 	}
-	p.builder.WriteString(";\n\n")
+	p.builder.WriteString(" LIMIT 1;\n\n")
 
 	return nil
 }
@@ -394,6 +396,24 @@ func (s *crud) processTotal(p processParams) error {
 		return err
 	}
 	p.builder.WriteString(";\n\n")
+
+	return nil
+}
+
+func (s *crud) processExists(p processParams) error {
+	methodName := p.methodParams.Name
+	if methodName == "" {
+		methodName = getMethodName(METHOD_EXISTS, p.table)
+	}
+
+	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
+	p.builder.WriteString("SELECT EXISTS (SELECT * FROM ")
+	p.builder.WriteString(p.table)
+	lastIndex := 1
+	if err := s.processWhereParam(p, METHOD_EXISTS, &lastIndex); err != nil {
+		return err
+	}
+	p.builder.WriteString(")::boolean;\n\n")
 
 	return nil
 }

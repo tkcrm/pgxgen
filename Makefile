@@ -4,3 +4,6 @@ install:
 upgrade:
 	go-mod-upgrade
 	go mod tidy
+
+build:
+	go build -v ./cmd/pgxgen

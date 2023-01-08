@@ -2,118 +2,20 @@ package structs
 
 import (
 	"bufio"
-	"fmt"
 	"io"
 	"log"
 	"regexp"
-	"sort"
 	"strings"
 
+	"github.com/gobeam/stringy"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
-type StructParameters struct {
-	Name    string
-	Imports []string
-	Fields  []*StructField
-}
-
-func (s *StructParameters) ExistFieldIndex(name string) int {
-	for index, f := range s.Fields {
-		if f.Name == name {
-			return index
-		}
-	}
-	return -1
-}
-
-type StructField struct {
-	Name string
-	Type string
-	Tags map[string]string
-}
-
-func (s *StructField) GetGoTag() string {
-	tag := ""
-
-	keys := make([]string, 0, len(s.Tags))
-	for k := range s.Tags {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, k := range keys {
-		if tag != "" {
-			tag += " "
-		}
-		tag += fmt.Sprintf("%s:\"%s\"", k, s.Tags[k])
-	}
-
-	return tag
-}
-
-type TypesParameters struct {
-	Name string
-	Type string
-}
-
 type Types map[string]TypesParameters
 type Structs map[string]*StructParameters
-type StructSlice []*StructParameters
 
-func (st *StructSlice) ExistStructIndex(name string) (int, *StructParameters) {
-	for index, s := range *st {
-		if s.Name == name {
-			return index, s
-		}
-	}
-	return -1, nil
-}
-
-func (st *StructSlice) Sort(priorityNames ...string) error {
-	names := make([]string, 0, len(*st))
-	for _, name := range priorityNames {
-		existStructIndex, _ := st.ExistStructIndex(name)
-		if existStructIndex == -1 {
-			return fmt.Errorf("sort error: undefined struct %s", name)
-		}
-
-		names = append(names, name)
-	}
-
-	notPriorityNames := make([]string, 0, len(*st)-len(priorityNames))
-	for _, v := range *st {
-		if utils.ExistInArray(names, v.Name) {
-			continue
-		}
-		notPriorityNames = append(notPriorityNames, v.Name)
-	}
-	sort.Strings(notPriorityNames)
-
-	names = append(names, notPriorityNames...)
-
-	sorted := make(StructSlice, 0, len(names))
-	for _, n := range names {
-		for _, s := range *st {
-			if s.Name == n {
-				sorted = append(sorted, s)
-			}
-		}
-	}
-
-	*st = sorted
-
-	return nil
-}
-
-func ConvertStructsToSlice(st Structs) StructSlice {
-	res := make(StructSlice, 0, len(st))
-
-	for _, s := range st {
-		res = append(res, s)
-	}
-
-	return res
+func (s Structs) AddStruct(name string, params *StructParameters) {
+	s[name] = params
 }
 
 func getImports(file_models_str string) []string {
@@ -134,6 +36,7 @@ func GetStructs(file_models_str string) Structs {
 	currentStruct := &StructParameters{
 		Imports: getImports(file_models_str),
 	}
+
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
@@ -164,6 +67,7 @@ func GetStructs(file_models_str string) Structs {
 			if len(match) == 0 {
 				continue
 			}
+
 			field := StructField{Tags: make(map[string]string)}
 			for index, name := range reField.SubexpNames() {
 				if index != 0 && name != "" {
@@ -181,6 +85,7 @@ func GetStructs(file_models_str string) Structs {
 					}
 				}
 			}
+
 			if field.Name != "" {
 				currentStruct.Fields = append(currentStruct.Fields, &field)
 			}
@@ -188,4 +93,73 @@ func GetStructs(file_models_str string) Structs {
 	}
 
 	return structs
+}
+
+func GetMissedStructs(s Structs, scalarTypes Types) []string {
+	keys := make([]string, 0, len(s))
+	for k := range s {
+		keys = append(keys, k)
+	}
+
+	res := []string{}
+
+	for _, st := range s {
+		for _, stName := range st.GetNestedStructs(scalarTypes) {
+			if !utils.ExistInArray(keys, stName) && !utils.ExistInArray(res, stName) {
+				res = append(res, stName)
+			}
+		}
+	}
+
+	return res
+}
+
+func (s StructParameters) GetNestedStructs(scalarTypes Types) []string {
+	res := []string{}
+
+	for _, field := range s.Fields {
+		tp := field.Type
+		if tp[:1] == "*" {
+			tp = tp[1:]
+		}
+
+		// skip lowercase type
+		if tp != stringy.New(tp).UcFirst() {
+			continue
+		}
+
+		_, existScalarType := scalarTypes[field.Type]
+		if !utils.ExistInArray(res, field.Type) && !existScalarType {
+			res = append(res, field.Type)
+		}
+	}
+
+	return res
+}
+
+func FillMissedTypes(allStructs Structs, modelsStructs Structs, scalarTypes Types) {
+	missedStructs := GetMissedStructs(modelsStructs, scalarTypes)
+	if len(missedStructs) == 0 {
+		return
+	}
+
+	for _, st := range missedStructs {
+		v, ok := allStructs[st]
+		if !ok {
+			_, ok := scalarTypes[st]
+			if ok {
+				continue
+			}
+			log.Fatalf("cannont find struct \"%s\"", st)
+		}
+
+		modelsStructs.AddStruct(st, v)
+	}
+
+	missedStructs = GetMissedStructs(modelsStructs, scalarTypes)
+	if len(missedStructs) == 0 {
+		return
+	} else {
+		FillMissedTypes(allStructs, modelsStructs, scalarTypes)
+	}
 }

@@ -1,9 +1,10 @@
 package pgxgen
 
 var helpMessage = `Available Commands:
-  crud -c  Generate CRUD SQL. -c SQL_CONN_STRING
-  models   Generate models with aditional params based on sql models
-  ts       Generate typescript code based on go structs
+  crud -c     Generate CRUD SQL. -c SQL_CONN_STRING
+  gomodels    Generate models with aditional params based on sql models
+  keystone    Generate keystone models based on go models
+  ts          Generate typescript code based on go structs
   version     Print the pgxgen version number
   
   sqlc
