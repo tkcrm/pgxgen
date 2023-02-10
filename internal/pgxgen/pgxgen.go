@@ -8,12 +8,13 @@ import (
 	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/gomodels"
+	"github.com/tkcrm/pgxgen/internal/keystone"
 	"github.com/tkcrm/pgxgen/internal/sqlc"
 	"github.com/tkcrm/pgxgen/internal/typescript"
 	"gopkg.in/yaml.v3"
 )
 
-var version = "v0.0.19"
+var version = "v0.0.20"
 
 func Start(args []string) error {
 	if len(args) == 0 {
@@ -63,8 +64,10 @@ func Start(args []string) error {
 		fmt.Printf("%s\n", version)
 	case "crud":
 		generator = crud.New(c)
-	case "models":
+	case "gomodels":
 		generator = gomodels.New(c)
+	case "keystone":
+		generator = keystone.New(c)
 	case "ts":
 		generator = typescript.New(c)
 	case "sqlc":

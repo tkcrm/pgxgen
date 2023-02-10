@@ -48,25 +48,42 @@ func (s *gomodels) Generate(args []string) error {
 }
 
 func (s *gomodels) generateModels(args []string) error {
+	if s.config.Sqlc.Version > 2 || s.config.Sqlc.Version < 1 {
+		return fmt.Errorf("unsupported sqlc version: %d", s.config.Sqlc.Version)
+	}
+
 	if len(s.config.Sqlc.Packages) < len(s.config.Pgxgen.GenModels) {
 		return fmt.Errorf("sqlc packages should be more or equal pgxgen gen_models")
 	}
 
-	for index, p := range s.config.Sqlc.Packages {
-		// get models.go from sqlc
-		file, err := os.ReadFile(p.GetModelPath())
+	modelPaths := s.config.Sqlc.GetPaths().ModelsPaths
+
+	for index, modelsFilePath := range modelPaths {
+		// get models.go path
+		if s.config.Pgxgen.SqlcModels.OutputDir != "" {
+			fileName := "models.go"
+			if s.config.Pgxgen.SqlcModels.OutputFilename != "" {
+				fileName = s.config.Pgxgen.SqlcModels.OutputFilename
+			}
+
+			modelsFilePath = filepath.Join(s.config.Pgxgen.SqlcModels.OutputDir, fileName)
+		}
+
+		// get models.go file content
+		fileContent, err := os.ReadFile(modelsFilePath)
 		if err != nil {
 			return err
 		}
 
-		_structs := structs.GetStructs(string(file))
+		// get structs from go file
+		_structs := structs.GetStructs(string(fileContent))
 
 		config := s.config.Pgxgen.GenModels[index]
 		if err := s.processStructs(config, &_structs); err != nil {
 			return err
 		}
 
-		goModels, err := s.compileGoModels(config, _structs, p.GetModelPath())
+		goModels, err := s.compileGoModels(config, _structs, modelsFilePath)
 		if err != nil {
 			return err
 		}
@@ -99,16 +116,8 @@ func (s *gomodels) generateModels(args []string) error {
 			}
 		}
 
-		mobxKeystoneModels, err := compileMobxKeystoneModels(s.config.Pgxgen.Version, config, _structs, scalarTypes)
-		if err != nil {
-			return err
-		}
-		if err := templates.CompileTemplate(mobxKeystoneModels); err != nil {
-			return err
-		}
-
 		if config.DeleteSqlcData {
-			if err := os.RemoveAll(p.Path); err != nil {
+			if err := os.RemoveAll(filepath.Dir(modelsFilePath)); err != nil {
 				return err
 			}
 		}

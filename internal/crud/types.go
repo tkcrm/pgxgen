@@ -14,6 +14,7 @@ const (
 	METHOD_GET    config.MethodType = "get"
 	METHOD_FIND   config.MethodType = "find"
 	METHOD_TOTAL  config.MethodType = "total"
+	METHOD_EXISTS config.MethodType = "exists"
 )
 
 type tableColumns struct {

@@ -17,7 +17,7 @@ func CheckLastestReleaseVersion(currentVersion string) (*CheckLastestReleaseVers
 	}
 
 	client := &http.Client{
-		Timeout: time.Millisecond * 500,
+		Timeout: time.Second * 5,
 	}
 
 	githubResp, err := client.Do(req)

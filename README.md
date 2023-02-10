@@ -31,9 +31,16 @@ At root of your project create a `pgxgen.yaml`. Example of configuration below.
 ```yaml
 version: 1
 disable_auto_replace_sqlc_nullable_types: false
-# Result SQL file name; default: crud_queries.sql
-# Will save to `queries` path from `sqlc.yaml` config
-output_crud_sql_file_name: "crud_queries.sql"
+# move sqlc models to another package and directory
+sqlc_move_models:
+  # required
+  output_dir: "internal/models"
+  # default: models.go
+  output_filename: "models.go"
+  # new package name. by default based on `output_dir`
+  package_name: models
+  # required. full path to new models directory
+  package_path: github.com/company/project/internal/models
 # Generate models parameters. Not required
 gen_models:
   # default: false
@@ -95,29 +102,31 @@ gen_models:
         field_names:
           - CreatedAt
           - UpdatedAt
-    external_models:
-      keystone:
-        # required
-        output_dir: "frontend/src/stores/models"
-        # default: models.ts
-        output_file_name: "models.ts"
-        # default: empty
-        decorator_model_name_prefix: "frontend/"
-        # set method .withSetter() for all fields
-        with_setter: true
-        export_model_suffix: "Model"
-        # prettier code. nodejs must be installed on your pc
-        prettier_code: true
-        # sort output models
-        # you can specify only those structures that need to be generated
-        # in the first place and omit all the rest
-        sort: "UserRole,Users"
-        # params are currently unavailable
-        params:
-          - struct_name: "users"
-            field_name: "organization"
-            field_params:
-              - with_setter: false
+gen_keystone_models:
+  # required
+  - output_dir: "frontend/src/stores/models"
+    # default: models.ts
+    output_file_name: "models.ts"
+    # default: empty
+    decorator_model_name_prefix: "frontend/"
+    # set method .withSetter() for all fields
+    with_setter: true
+    export_model_suffix: "Model"
+    # prettier code. nodejs must be installed on your pc
+    prettier_code: true
+    # sort output models
+    # you can specify only those structures that need to be generated
+    # in the first place and omit all the rest
+    sort: "UserRole,Users"
+    # skip models
+    skip_models:
+      - NullUserRole
+    # params are currently unavailable
+    params:
+      - struct_name: "users"
+        field_name: "organization"
+        field_params:
+          - with_setter: false
 gen_typescript_from_structs:
   - path: "pb"
     output_dir: "frontend/src/stores/models"
@@ -142,8 +151,16 @@ json_tags:
   hide:
     - password
 crud_params:
+  # Auto remove generated files, ended with _gen.sql
+  auto_remove_generated_files: true
+  # Instead [ActionName][TableName] will be [ActionName]
+  # Example GetUser -> Get; FindUsers -> Find, etc.
+  # You can user `name` field for manual overwriting method name
+  exclude_table_name_from_methods: false
   tables:
     user:
+      # Not required. If you do not specify this value, then the sql file will be generated in each folder for all tables
+      output_dir: sql/queries/users
       primary_column: id
       methods:
         # get
@@ -152,6 +169,7 @@ crud_params:
         # update
         # delete
         # total
+        # exists
         create:
           skip_columns:
             - id
@@ -179,6 +197,9 @@ crud_params:
           name: GetUserByID
         delete:
         total:
+        exists:
+          where:
+            email:
 ```
 
 ### Generate `CRUD` queries for existing tables
@@ -190,7 +211,13 @@ pgxgen crud -c=postgres://DB_USER:DB_PASSWD@DB_HOST:DB_PORT/DB_NAME?sslmode=disa
 ### Generate models based on sqlc models
 
 ```bash
-pgxgen models
+pgxgen gomodels
+```
+
+### Generate keystone models based on go models
+
+```bash
+pgxgen keystone
 ```
 
 #### Install `@tkcrm/ui` in your frontend

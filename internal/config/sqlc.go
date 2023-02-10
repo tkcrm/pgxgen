@@ -60,6 +60,43 @@ type SqlcSQL struct {
 	} `yaml:"gen"`
 }
 
+type GetPathsResponse struct {
+	ModelsPaths  []string
+	QueriesPaths []string
+}
+
+func (s *Sqlc) GetPaths() GetPathsResponse {
+	res := GetPathsResponse{}
+
+	// process sqlc version 1
+	if s.Version == 1 {
+		for _, p := range s.Packages {
+			modelFileName := p.OutputModelsFileName
+			if modelFileName == "" {
+				modelFileName = "models.go"
+			}
+
+			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Path, modelFileName))
+			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
+		}
+	}
+
+	// process sqlc version 2
+	if s.Version == 2 {
+		for _, p := range s.SQL {
+			modelFileName := p.Gen.Go.OutputModelsFileName
+			if modelFileName == "" {
+				modelFileName = "models.go"
+			}
+
+			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Gen.Go.Out, modelFileName))
+			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
+		}
+	}
+
+	return res
+}
+
 func (p *Package) GetModelPath() string {
 	modelFileName := p.OutputModelsFileName
 	if modelFileName == "" {
