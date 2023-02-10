@@ -104,29 +104,29 @@ gen_models:
           - UpdatedAt
 gen_keystone_models:
   # required
-  output_dir: "frontend/src/stores/models"
-  # default: models.ts
-  output_file_name: "models.ts"
-  # default: empty
-  decorator_model_name_prefix: "frontend/"
-  # set method .withSetter() for all fields
-  with_setter: true
-  export_model_suffix: "Model"
-  # prettier code. nodejs must be installed on your pc
-  prettier_code: true
-  # sort output models
-  # you can specify only those structures that need to be generated
-  # in the first place and omit all the rest
-  sort: "UserRole,Users"
-  # skip models
-  skip_models:
-    - NullUserRole
-  # params are currently unavailable
-  params:
-    - struct_name: "users"
-      field_name: "organization"
-      field_params:
-        - with_setter: false
+  - output_dir: "frontend/src/stores/models"
+    # default: models.ts
+    output_file_name: "models.ts"
+    # default: empty
+    decorator_model_name_prefix: "frontend/"
+    # set method .withSetter() for all fields
+    with_setter: true
+    export_model_suffix: "Model"
+    # prettier code. nodejs must be installed on your pc
+    prettier_code: true
+    # sort output models
+    # you can specify only those structures that need to be generated
+    # in the first place and omit all the rest
+    sort: "UserRole,Users"
+    # skip models
+    skip_models:
+      - NullUserRole
+    # params are currently unavailable
+    params:
+      - struct_name: "users"
+        field_name: "organization"
+        field_params:
+          - with_setter: false
 gen_typescript_from_structs:
   - path: "pb"
     output_dir: "frontend/src/stores/models"

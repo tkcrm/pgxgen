@@ -1,5 +1,4 @@
 version: 1
-output_crud_sql_file_name: "crud_queries.sql"
 gen_models:
   - delete_sqlc_data: false
     models_output_dir: "internal/model"
@@ -53,18 +52,20 @@ gen_models:
           - CreatedAt
           - UpdatedAt
 gen_keystone_models:
-  output_dir: "frontend/src/stores/models"
-  output_file_name: "models.ts"
-  decorator_model_name_prefix: "frontend/"
-  with_setter: true
-  export_model_suffix: "Model"
-  prettier_code: true
-  sort: "UserRole,Users"
-  params:
-    - struct_name: "users"
-      field_name: "organization"
-      field_params:
-        - with_setter: false
+  - output_dir: "frontend/src/stores/models"
+    output_file_name: "models.ts"
+    decorator_model_name_prefix: "frontend/"
+    with_setter: true
+    export_model_suffix: "Model"
+    prettier_code: true
+    sort: "UserRole,Users"
+    skip_models:
+      - NullUserRole
+    params:
+      - struct_name: "users"
+        field_name: "organization"
+        field_params:
+          - with_setter: false
 gen_typescript_from_structs:
   - path: "pb"
     output_dir: "frontend/src/stores/models"
