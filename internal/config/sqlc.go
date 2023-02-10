@@ -60,8 +60,13 @@ type SqlcSQL struct {
 	} `yaml:"gen"`
 }
 
-func (s *Sqlc) GetModelPaths() []string {
-	var res []string
+type GetPathsResponse struct {
+	ModelsPaths  []string
+	QueriesPaths []string
+}
+
+func (s *Sqlc) GetPaths() GetPathsResponse {
+	res := GetPathsResponse{}
 
 	// process sqlc version 1
 	if s.Version == 1 {
@@ -71,7 +76,8 @@ func (s *Sqlc) GetModelPaths() []string {
 				modelFileName = "models.go"
 			}
 
-			res = append(res, filepath.Join(p.Path, modelFileName))
+			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Path, modelFileName))
+			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
 		}
 	}
 
@@ -83,7 +89,8 @@ func (s *Sqlc) GetModelPaths() []string {
 				modelFileName = "models.go"
 			}
 
-			res = append(res, filepath.Join(p.Gen.Go.Out, modelFileName))
+			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Gen.Go.Out, modelFileName))
+			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
 		}
 	}
 

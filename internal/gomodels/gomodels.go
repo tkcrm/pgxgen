@@ -56,7 +56,9 @@ func (s *gomodels) generateModels(args []string) error {
 		return fmt.Errorf("sqlc packages should be more or equal pgxgen gen_models")
 	}
 
-	for index, modelsFilePath := range s.config.Sqlc.GetModelPaths() {
+	modelPaths := s.config.Sqlc.GetPaths().ModelsPaths
+
+	for index, modelsFilePath := range modelPaths {
 		// get models.go path
 		if s.config.Pgxgen.SqlcModels.OutputDir != "" {
 			fileName := "models.go"

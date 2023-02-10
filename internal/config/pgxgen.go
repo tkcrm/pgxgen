@@ -10,7 +10,6 @@ type Pgxgen struct {
 	Version                             string                     `yaml:"version"`
 	DisableAutoReaplceSqlcNullableTypes bool                       `yaml:"disable_auto_replace_sqlc_nullable_types"`
 	SqlcModels                          SqlcMoveModels             `yaml:"sqlc_move_models"`
-	OutputCrudSqlFileName               string                     `yaml:"output_crud_sql_file_name"`
 	GenModels                           []GenModels                `yaml:"gen_models"`
 	GenKeystoneFromStruct               []GenKeystoneFromStruct    `yaml:"gen_keystone_models"`
 	GenTypescriptFromStructs            []GenTypescriptFromStructs `yaml:"gen_typescript_from_structs"`

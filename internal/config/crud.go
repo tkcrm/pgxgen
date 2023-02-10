@@ -7,8 +7,10 @@ func (m MethodType) String() string {
 }
 
 type CrudParams struct {
-	Default DefaultParams `yaml:"default"`
-	Tables  Table         `yaml:"tables"`
+	AutoRemoveGeneratedFiles    bool          `yaml:"auto_remove_generated_files"`
+	ExcludeTableNameFromMethods bool          `yaml:"exclude_table_name_from_methods"`
+	Default                     DefaultParams `yaml:"default"`
+	Tables                      Table         `yaml:"tables"`
 }
 
 type DefaultParams struct {
@@ -19,6 +21,7 @@ type Table map[string]TableParams
 
 type TableParams struct {
 	PrimaryColumn string                `yaml:"primary_column"`
+	OutputDir     string                `yaml:"output_dir"`
 	Methods       map[MethodType]Method `yaml:"methods"`
 }
 

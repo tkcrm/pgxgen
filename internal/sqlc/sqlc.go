@@ -49,7 +49,9 @@ func (s *sqlc) process(args []string) error {
 		return fmt.Errorf("unsupported sqlc version: %d", s.config.Sqlc.Version)
 	}
 
-	for _, path := range s.config.Sqlc.GetModelPaths() {
+	modelPaths := s.config.Sqlc.GetPaths().ModelsPaths
+
+	for _, path := range modelPaths {
 		if err := s.processFile(path); err != nil {
 			return errors.Wrapf(err, "failed to process file \"%s\"", path)
 		}
