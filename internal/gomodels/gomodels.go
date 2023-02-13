@@ -2,7 +2,6 @@ package gomodels
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -10,14 +9,15 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"text/template"
 
+	"github.com/pkg/errors"
+	"github.com/tkcrm/modules/pkg/templates"
+	cmnutils "github.com/tkcrm/modules/pkg/utils"
+	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
-	"github.com/tkcrm/pgxgen/internal/templates"
 	"github.com/tkcrm/pgxgen/utils"
-	"golang.org/x/tools/imports"
 )
 
 type gomodels struct {
@@ -83,11 +83,7 @@ func (s *gomodels) generateModels(args []string) error {
 			return err
 		}
 
-		goModels, err := s.compileGoModels(config, _structs, modelsFilePath)
-		if err != nil {
-			return err
-		}
-		if err := templates.CompileTemplate(goModels); err != nil {
+		if err := s.compileGoModels(config, _structs, modelsFilePath); err != nil {
 			return err
 		}
 
@@ -170,7 +166,7 @@ func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error
 
 				pointer := strings.HasPrefix(f.Type, "*")
 				ftype := strings.ReplaceAll(f.Type, "*", "")
-				if !utils.ExistInArray([]string{"int16", "int32", "int64"}, ftype) {
+				if !cmnutils.ExistInArray([]string{"int16", "int32", "int64"}, ftype) {
 					continue
 				}
 
@@ -330,14 +326,9 @@ func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error
 	return nil
 }
 
-func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path string) (*templates.CompileData, error) {
+func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path string) error {
 	if c.ModelsOutputDir == "" {
-		return nil, fmt.Errorf("config error: undefined models_output_dir")
-	}
-
-	cdata := templates.CompileData{
-		OutputDir:      c.GetModelsOutputDir(),
-		OutputFileName: c.GetModelsOutputFileName(),
+		return fmt.Errorf("config error: undefined models_output_dir")
 	}
 
 	pnsplit := strings.Split(c.ModelsOutputDir, "/")
@@ -347,18 +338,10 @@ func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path 
 		packageName = c.ModelsPackageName
 	}
 
-	tmpl := template.Must(
-		template.New("goModels").
-			ParseFS(
-				templates.Templates,
-				"templates/models.go.tmpl",
-			),
-	)
-
 	allImports := []string{}
 	for _, s := range st {
 		for _, i := range s.Imports {
-			if !utils.ExistInArray(allImports, i) {
+			if !cmnutils.ExistInArray(allImports, i) {
 				allImports = append(allImports, i)
 			}
 		}
@@ -371,19 +354,28 @@ func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path 
 		Imports: strings.Join(allImports, "\n"),
 	}
 
-	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
-	err := tmpl.ExecuteTemplate(w, "modelsFile", &tctx)
-	w.Flush()
+	tpl := templates.New()
+	compiledRes, err := tpl.Compile(templates.CompileParams{
+		TemplateName: "modelsFile",
+		TemplateType: templates.TextTemplateType,
+		FS:           assets.TemplatesFS,
+		FSPaths: []string{
+			"templates/models.go.tmpl",
+		},
+		Data: tctx,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("execte template error: %s", err.Error())
+		return errors.Wrap(err, "tpl.Compile error")
 	}
 
-	cdata.Data, err = imports.Process("", b.Bytes(), nil)
+	compiledRes, err = utils.UpdateGoImports(compiledRes)
 	if err != nil {
-		fmt.Println(b.String())
-		return nil, fmt.Errorf("formate data error: %s", err.Error())
+		return errors.Wrap(err, "UpdateGoImports error")
 	}
 
-	return &cdata, nil
+	if err := utils.SaveFile(c.GetModelsOutputDir(), c.GetModelsOutputFileName(), compiledRes); err != nil {
+		return errors.Wrap(err, "SaveFile error")
+	}
+
+	return nil
 }

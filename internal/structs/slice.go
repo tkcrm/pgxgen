@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/tkcrm/pgxgen/utils"
+	"github.com/tkcrm/modules/pkg/utils"
 )
 
 type StructSlice []*StructParameters

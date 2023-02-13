@@ -7,20 +7,23 @@ import (
 	"regexp"
 	"strings"
 
-	sqlccli "github.com/kyleconroy/sqlc/pkg/cli"
 	"github.com/pkg/errors"
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/generator"
+	sqlcpkg "github.com/tkcrm/pgxgen/pkg/sqlc"
 	"golang.org/x/tools/imports"
 )
 
 type sqlc struct {
 	config config.Config
+	crud   crud.ICRUD
 }
 
 func New(cfg config.Config) generator.IGenerator {
 	return &sqlc{
 		config: cfg,
+		crud:   crud.New(cfg),
 	}
 }
 
@@ -40,7 +43,7 @@ func (s *sqlc) process(args []string) error {
 	}
 
 	// generate sqlc code
-	genResult := sqlccli.Run(args)
+	genResult := sqlcpkg.Run(args)
 	if genResult != 0 {
 		return nil
 	}
@@ -55,6 +58,10 @@ func (s *sqlc) process(args []string) error {
 		if err := s.processFile(path); err != nil {
 			return errors.Wrapf(err, "failed to process file \"%s\"", path)
 		}
+	}
+
+	if err := s.crud.GenerateConstants(); err != nil {
+		return err
 	}
 
 	return nil

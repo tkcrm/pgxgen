@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/gobeam/stringy"
-	"github.com/tkcrm/pgxgen/utils"
+	"github.com/tkcrm/modules/pkg/utils"
 )
 
 type Types map[string]TypesParameters

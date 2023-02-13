@@ -3,7 +3,7 @@ package config
 import (
 	"strings"
 
-	"github.com/tkcrm/pgxgen/utils"
+	"github.com/tkcrm/modules/pkg/utils"
 )
 
 type Pgxgen struct {

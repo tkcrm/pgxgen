@@ -38,3 +38,6 @@ _test
 build
 .env
 Dockerfile-dev
+
+go.work
+go.work.sum
