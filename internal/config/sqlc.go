@@ -1,6 +1,10 @@
 package config
 
-import "path/filepath"
+import (
+	"path/filepath"
+
+	"github.com/tkcrm/modules/pkg/utils"
+)
 
 type Sqlc struct {
 	Version  int       `yaml:"version"`
@@ -61,8 +65,10 @@ type SqlcSQL struct {
 }
 
 type GetPathsResponse struct {
-	ModelsPaths  []string
-	QueriesPaths []string
+	ModelsPaths     []string
+	QueriesPaths    []string
+	OutPaths        []string
+	MigrationsPaths []string
 }
 
 func (s *Sqlc) GetPaths() GetPathsResponse {
@@ -76,8 +82,28 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 				modelFileName = "models.go"
 			}
 
-			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Path, modelFileName))
-			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
+			res.ModelsPaths = utils.AppendIfNotExistInArray(
+				res.ModelsPaths,
+				filepath.Join(p.Path, modelFileName),
+				func(i string) bool {
+					return i == filepath.Join(p.Path, modelFileName)
+				},
+			)
+			res.QueriesPaths = utils.AppendIfNotExistInArray(res.QueriesPaths, p.Queries,
+				func(i string) bool {
+					return i == p.Queries
+				},
+			)
+			res.OutPaths = utils.AppendIfNotExistInArray(res.OutPaths, p.Path,
+				func(i string) bool {
+					return i == p.Path
+				},
+			)
+			res.MigrationsPaths = utils.AppendIfNotExistInArray(res.MigrationsPaths, p.Schema,
+				func(i string) bool {
+					return i == p.Schema
+				},
+			)
 		}
 	}
 
@@ -89,8 +115,28 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 				modelFileName = "models.go"
 			}
 
-			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Gen.Go.Out, modelFileName))
-			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
+			res.ModelsPaths = utils.AppendIfNotExistInArray(
+				res.ModelsPaths,
+				filepath.Join(p.Gen.Go.Out, modelFileName),
+				func(i string) bool {
+					return i == filepath.Join(p.Gen.Go.Out, modelFileName)
+				},
+			)
+			res.QueriesPaths = utils.AppendIfNotExistInArray(res.QueriesPaths, p.Queries,
+				func(i string) bool {
+					return i == p.Queries
+				},
+			)
+			res.OutPaths = utils.AppendIfNotExistInArray(res.OutPaths, p.Gen.Go.Out,
+				func(i string) bool {
+					return i == p.Gen.Go.Out
+				},
+			)
+			res.MigrationsPaths = utils.AppendIfNotExistInArray(res.MigrationsPaths, p.Schema,
+				func(i string) bool {
+					return i == p.Schema
+				},
+			)
 		}
 	}
 

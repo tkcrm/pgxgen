@@ -2,7 +2,6 @@ package keystone
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -11,12 +10,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"text/template"
 
+	"github.com/pkg/errors"
+	"github.com/tkcrm/modules/pkg/templates"
+	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
-	"github.com/tkcrm/pgxgen/internal/templates"
+	"github.com/tkcrm/pgxgen/utils"
 )
 
 type keystone struct {
@@ -111,11 +112,7 @@ func (s *keystone) generateKeystone(args []string) error {
 			delete(modelStructs, modelName)
 		}
 
-		mobxKeystoneModels, err := compileMobxKeystoneModels(s.config.Pgxgen.Version, config, modelStructs, scalarTypes)
-		if err != nil {
-			return err
-		}
-		if err := templates.CompileTemplate(mobxKeystoneModels); err != nil {
+		if err := compileMobxKeystoneModels(s.config.Pgxgen.Version, config, modelStructs, scalarTypes); err != nil {
 			return err
 		}
 	}
@@ -153,73 +150,23 @@ func (s *keystone) getScalarTypes(file_models_str string) structs.Types {
 	return types
 }
 
-func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st structs.Structs, sct structs.Types) (*templates.CompileData, error) {
+func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st structs.Structs, sct structs.Types) error {
 	if cfg.OutputDir == "" {
-		return nil, fmt.Errorf("compile mobx keystone error: undefined output dir")
+		return fmt.Errorf("compile mobx keystone error: undefined output dir")
 	}
 
 	if cfg.OutputFileName == "" {
 		cfg.OutputFileName = "models.ts"
 	}
 
-	cdata := templates.CompileData{
-		OutputDir:      cfg.OutputDir,
-		OutputFileName: cfg.OutputFileName,
-	}
-
-	funcs := templates.DefaultTmplFuncs
-	templates.TmplAddFunc(funcs, "getType", func(t string) string {
-		typeWrap, tp := getKeystoneType(cfg, st, sct, t)
-
-		if cfg.WithSetter {
-			typeWrap += ".withSetter()"
-		}
-
-		return fmt.Sprintf(typeWrap, tp)
-	})
-
-	templates.TmplAddFunc(funcs, "exist_field_id", func(structName, fieldName string) bool {
-		for _, s := range st {
-			if s.Name != structName {
-				continue
-			}
-			for _, f := range s.Fields {
-				if strings.ToLower(f.Name) == fieldName {
-					return true
-				}
-			}
-		}
-
-		return false
-	})
-
-	tmpl := template.Must(
-		template.New("mobxKeystoneModels").
-			Funcs(funcs).
-			ParseFS(
-				templates.Templates,
-				"templates/keystone-model.go.tmpl",
-			),
-	)
-
 	mobxKeystoneImports := []string{
 		"Model", "tProp", "types", "model", "draft", "modelAction",
 		"prop", "clone", "Draft",
 	}
 
-	// for _, s := range st {
-	// 	for _, f := range s.Fields {
-	// 		if utils.ExistInArray([]string{"int64", "uint64"}, f.Type) &&
-	// 			!utils.ExistInArray(mobxKeystoneImports, "stringToBigIntTransform") {
-	// 			mobxKeystoneImports = append(mobxKeystoneImports, "stringToBigIntTransform")
-	// 			break
-	// 		}
-	// 	}
-	// }
-
 	structs := structs.ConvertStructsToSlice(st)
 	if err := structs.Sort(strings.Split(cfg.Sort, ",")...); err != nil {
-		return nil, err
+		return err
 	}
 
 	tctx := tmplKeystoneCtx{
@@ -237,33 +184,65 @@ func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st 
 		Version:                  ver,
 	}
 
-	var b bytes.Buffer
-	w := bufio.NewWriter(&b)
-	err := tmpl.ExecuteTemplate(w, "keystoneModelsFile", &tctx)
-	w.Flush()
+	tpl := templates.New()
+	tpl.AddFunc("getType", func(t string) string {
+		typeWrap, tp := getKeystoneType(cfg, st, sct, t)
+
+		if cfg.WithSetter {
+			typeWrap += ".withSetter()"
+		}
+
+		return fmt.Sprintf(typeWrap, tp)
+	})
+	tpl.AddFunc("existFieldId", func(structName, fieldName string) bool {
+		for _, s := range st {
+			if s.Name != structName {
+				continue
+			}
+			for _, f := range s.Fields {
+				if strings.ToLower(f.Name) == fieldName {
+					return true
+				}
+			}
+		}
+
+		return false
+	})
+	tpl.AddFunc("replaceId", func(str string) string {
+		return strings.ReplaceAll(str, "ID", "Id")
+	})
+
+	compiledRes, err := tpl.Compile(templates.CompileParams{
+		TemplateName: "keystoneModelsFile",
+		TemplateType: templates.TextTemplateType,
+		FS:           assets.TemplatesFS,
+		FSPaths: []string{
+			"templates/keystone-model.go.tmpl",
+		},
+		Data: tctx,
+	})
 	if err != nil {
-		return nil, fmt.Errorf("execte template error: %s", err.Error())
+		return errors.Wrap(err, "tpl.Compile error")
 	}
 
-	cdata.Data = b.Bytes()
+	if err := utils.SaveFile(cfg.OutputDir, cfg.OutputFileName, compiledRes); err != nil {
+		return errors.Wrap(err, "SaveFile error")
+	}
 
 	if cfg.PrettierCode {
-		cdata.AfterHook = func() error {
-			fmt.Println("prettier generated models ...")
-			cmd := exec.Command("npx", "prettier", "--write", filepath.Join(cdata.OutputDir, cdata.OutputFileName))
-			stdout, err := cmd.Output()
-			if err != nil {
-				fmt.Println(err.Error())
-				return nil
-			}
-			if len(stdout) > 0 {
-				fmt.Println(string(stdout))
-			}
+		fmt.Println("prettier generated models ...")
+		cmd := exec.Command("npx", "prettier", "--write", filepath.Join(cfg.OutputDir, cfg.OutputFileName))
+		stdout, err := cmd.Output()
+		if err != nil {
+			fmt.Println(err.Error())
 			return nil
+		}
+		if len(stdout) > 0 {
+			fmt.Println(string(stdout))
 		}
 	}
 
-	return &cdata, nil
+	return nil
 }
 
 func getKeystoneType(cfg config.GenKeystoneFromStruct, st structs.Structs, sct structs.Types, t string) (typeWrap string, tp string) {

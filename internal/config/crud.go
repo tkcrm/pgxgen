@@ -9,6 +9,7 @@ func (m MethodType) String() string {
 type CrudParams struct {
 	AutoRemoveGeneratedFiles    bool          `yaml:"auto_remove_generated_files"`
 	ExcludeTableNameFromMethods bool          `yaml:"exclude_table_name_from_methods"`
+	GenerateTableNames          bool          `yaml:"generate_table_names"`
 	Default                     DefaultParams `yaml:"default"`
 	Tables                      Table         `yaml:"tables"`
 }
