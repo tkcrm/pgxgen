@@ -11,7 +11,9 @@ import (
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/generator"
+	"github.com/tkcrm/pgxgen/internal/structs"
 	sqlcpkg "github.com/tkcrm/pgxgen/pkg/sqlc"
+	"github.com/tkcrm/pgxgen/utils"
 	"golang.org/x/tools/imports"
 )
 
@@ -52,11 +54,15 @@ func (s *sqlc) process(args []string) error {
 		return fmt.Errorf("unsupported sqlc version: %d", s.config.Sqlc.Version)
 	}
 
+	var modelFileStructs structs.Structs
 	modelPaths := s.config.Sqlc.GetPaths().ModelsPaths
-
 	for _, path := range modelPaths {
-		if err := s.processFile(path); err != nil {
-			return errors.Wrapf(err, "failed to process file \"%s\"", path)
+		if err := s.processModelFilePaths(path, &modelFileStructs); err != nil {
+			return errors.Wrapf(err, "processModelFilePaths error: failed to process file \"%s\"", path)
+		}
+
+		if err := s.processGoFilePaths(path, modelFileStructs); err != nil {
+			return errors.Wrapf(err, "processGoFilePaths error: failed to process file \"%s\"", path)
 		}
 	}
 
@@ -67,7 +73,7 @@ func (s *sqlc) process(args []string) error {
 	return nil
 }
 
-func (s *sqlc) processFile(modelFilePath string) error {
+func (s *sqlc) processModelFilePaths(modelFilePath string, modelFileStructs *structs.Structs) error {
 	modelFileDir := filepath.Dir(modelFilePath)
 	modelFileName := filepath.Base(modelFilePath)
 
@@ -91,16 +97,16 @@ func (s *sqlc) processFile(modelFilePath string) error {
 			}
 		}
 
-		// replace imports
-		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" {
-			if err := s.replace(filepath.Join(modelFileDir, file.Name()), replaceImports); err != nil {
-				return err
-			}
-		}
-
 		// process models file
 		if file.Name() == modelFileName {
 			modelFilePath := filepath.Join(modelFileDir, file.Name())
+
+			modelFile, err := utils.ReadFile(modelFilePath)
+			if err != nil {
+				return err
+			}
+
+			*modelFileStructs = structs.GetStructs(string(modelFile))
 
 			// replace json tags
 			if err := s.replace(modelFilePath, replaceJsonTags); err != nil {
@@ -122,10 +128,8 @@ func (s *sqlc) processFile(modelFilePath string) error {
 				oldPathDir := filepath.Join(currentDir, modelFilePath)
 
 				// create dir if new path not exists
-				if _, err := os.Stat(newPathDir); errors.Is(err, os.ErrNotExist) {
-					if err := os.MkdirAll(newPathDir, os.ModePerm); err != nil {
-						return err
-					}
+				if err := utils.CreatePath(newPathDir); err != nil {
+					return err
 				}
 
 				// move file to new directory
@@ -142,6 +146,35 @@ func (s *sqlc) processFile(modelFilePath string) error {
 						newPathFile,
 					)
 				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *sqlc) processGoFilePaths(path string, modelFileStructs structs.Structs) error {
+	modelFileDir := filepath.Dir(path)
+
+	files, err := os.ReadDir(modelFileDir)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read path \"%s\"", modelFileDir)
+	}
+
+	for _, file := range files {
+		goFileRegexp := regexp.MustCompile(`(\.go)`)
+
+		// skip not golang files
+		if !goFileRegexp.MatchString(file.Name()) {
+			continue
+		}
+
+		// replace imports
+		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" {
+			if err := s.replace(filepath.Join(modelFileDir, file.Name()), func(c config.Config, str string) string {
+				return replaceImports(c, str, modelFileStructs)
+			}); err != nil {
+				return err
 			}
 		}
 	}
@@ -172,9 +205,9 @@ func replaceJsonTags(c config.Config, str string) string {
 }
 
 func (s *sqlc) replace(path string, fn func(c config.Config, str string) string) error {
-	file, err := os.ReadFile(path)
+	file, err := utils.ReadFile(path)
 	if err != nil {
-		return errors.Wrapf(err, "failed to read path \"%s\"", path)
+		return err
 	}
 
 	result := fn(s.config, string(file))

@@ -8,7 +8,22 @@ import (
 )
 
 func CreatePath(path string) error {
-	return os.MkdirAll(path, 0755)
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := os.MkdirAll(path, 0755); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func ReadFile(filePath string) ([]byte, error) {
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to read file by path \"%s\"", filePath)
+	}
+
+	return file, nil
 }
 
 func SaveFile(path, fileName string, data []byte) error {

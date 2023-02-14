@@ -4,7 +4,6 @@ go 1.19
 
 require (
 	github.com/antlr/antlr4/runtime/Go/antlr v1.4.10
-	github.com/bytecodealliance/wasmtime-go/v3 v3.0.2
 	github.com/cubicdaiya/gonp v1.0.4
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-sql-driver/mysql v1.7.0
@@ -28,6 +27,7 @@ require (
 
 require (
 	github.com/benbjohnson/clock v1.3.0 // indirect
+	github.com/bytecodealliance/wasmtime-go/v5 v5.0.0
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0 // indirect
 	github.com/goccy/go-json v0.10.0 // indirect

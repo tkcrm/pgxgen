@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/internal/structs"
 )
 
 func TestReplaceImports(t *testing.T) {
@@ -48,6 +49,6 @@ const a = "b"`
 		},
 	}
 
-	replaceImports(cfg, str1)
-	replaceImports(cfg, str2)
+	replaceImports(cfg, str1, structs.Structs{})
+	replaceImports(cfg, str2, structs.Structs{})
 }

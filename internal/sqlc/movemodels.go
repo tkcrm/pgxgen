@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/internal/structs"
 )
 
 // replacePackageName - replace package name for golang file
@@ -48,7 +49,7 @@ func replacePackageName(c config.Config, str string) (res string) {
 	return res
 }
 
-func replaceImports(c config.Config, str string) (res string) {
+func replaceImports(c config.Config, str string, modelFileStructs structs.Structs) (res string) {
 	if c.Pgxgen.SqlcModels.OutputDir == "" {
 		return str
 	}
@@ -60,6 +61,26 @@ func replaceImports(c config.Config, str string) (res string) {
 
 	if c.Pgxgen.SqlcModels.PackagePath == "" {
 		log.Fatal("empty package path")
+	}
+
+	var existsSomeModelStruct bool
+	for _, item := range modelFileStructs {
+		re := regexp.MustCompile(fmt.Sprintf(`(?sm)\([\[\]\*]+%s[\,\){]+`, item.Name))
+		if re.MatchString(str) {
+			existsSomeModelStruct = true
+			break
+		}
+
+		for _, field := range item.Fields {
+			re := regexp.MustCompile(fmt.Sprintf(`(?sm)\s+\w+\s+%s\s+`, field.Name))
+			if re.MatchString(str) {
+				existsSomeModelStruct = true
+				break
+			}
+		}
+	}
+	if !existsSomeModelStruct {
+		return str
 	}
 
 	r := regexp.MustCompile(`import (\"\w+\")`)
