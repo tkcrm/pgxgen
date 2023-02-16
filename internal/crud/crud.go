@@ -3,8 +3,6 @@ package crud
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -18,16 +16,11 @@ import (
 	"github.com/tkcrm/pgxgen/utils"
 )
 
-type ICRUD interface {
-	generator.IGenerator
-	GenerateConstants() error
-}
-
 type crud struct {
 	config config.Config
 }
 
-func New(cfg config.Config) ICRUD {
+func New(cfg config.Config) generator.IGenerator {
 	return &crud{
 		config: cfg,
 	}
@@ -42,9 +35,17 @@ func (s *crud) Generate(args []string) error {
 	queriesPaths := s.config.Sqlc.GetPaths().QueriesPaths
 
 	// remove generated files
-	for _, p := range queriesPaths {
-		if err := s.removeGeneratedFiles(p); err != nil {
-			return errors.Wrap(err, "remove generated files error")
+	if s.config.Pgxgen.CrudParams.AutoRemoveGeneratedFiles {
+		for _, p := range queriesPaths {
+			if err := utils.RemoveFiles(p, "_gen.sql"); err != nil {
+				return errors.Wrap(err, "remove sql generated files error")
+			}
+		}
+
+		for _, p := range s.config.Sqlc.GetPaths().OutPaths {
+			if err := utils.RemoveFiles(p, "_gen.go"); err != nil {
+				return errors.Wrap(err, "remove go generated files error")
+			}
 		}
 	}
 
@@ -657,33 +658,4 @@ func getOrderByParams(method config.Method, table string) *config.OrderParam {
 	}
 
 	return &method.Order
-}
-
-func (s *crud) removeGeneratedFiles(path string) error {
-	if !s.config.Pgxgen.CrudParams.AutoRemoveGeneratedFiles {
-		return nil
-	}
-
-	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		return nil
-	}
-
-	dirItems, err := os.ReadDir(path)
-	if err != nil {
-		return err
-	}
-	for _, item := range dirItems {
-		if item.IsDir() {
-			continue
-		}
-
-		if strings.HasSuffix(item.Name(), "_gen.sql") {
-			filePath := filepath.Join(path, item.Name())
-			if err := os.Remove(filePath); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
 }

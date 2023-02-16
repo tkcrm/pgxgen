@@ -9,8 +9,8 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/tkcrm/pgxgen/internal/config"
-	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/generator"
+	"github.com/tkcrm/pgxgen/internal/goconstatnts"
 	"github.com/tkcrm/pgxgen/internal/structs"
 	sqlcpkg "github.com/tkcrm/pgxgen/pkg/sqlc"
 	"github.com/tkcrm/pgxgen/utils"
@@ -18,14 +18,14 @@ import (
 )
 
 type sqlc struct {
-	config config.Config
-	crud   crud.ICRUD
+	config      config.Config
+	goConstants goconstatnts.IGoConstants
 }
 
 func New(cfg config.Config) generator.IGenerator {
 	return &sqlc{
-		config: cfg,
-		crud:   crud.New(cfg),
+		config:      cfg,
+		goConstants: goconstatnts.New(cfg),
 	}
 }
 
@@ -66,7 +66,7 @@ func (s *sqlc) process(args []string) error {
 		}
 	}
 
-	if err := s.crud.GenerateConstants(); err != nil {
+	if err := s.goConstants.GenerateConstants(); err != nil {
 		return err
 	}
 
