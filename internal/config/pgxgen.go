@@ -15,6 +15,7 @@ type Pgxgen struct {
 	GenTypescriptFromStructs            []GenTypescriptFromStructs `yaml:"gen_typescript_from_structs"`
 	JsonTags                            JsonTags                   `yaml:"json_tags"`
 	CrudParams                          CrudParams                 `yaml:"crud_params"`
+	GoConstants                         GoConstants                `yaml:"go_constants"`
 }
 
 type SqlcMoveModels struct {

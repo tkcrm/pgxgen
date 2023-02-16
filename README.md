@@ -157,8 +157,6 @@ crud_params:
   # Example GetUser -> Get; FindUsers -> Find, etc.
   # You can user `name` field for manual overwriting method name
   exclude_table_name_from_methods: false
-  # Generate table names in file `constants_gen.go`
-  generate_table_names: false
   tables:
     user:
       # Not required. If you do not specify this value, then the sql file will be generated in each folder for all tables
@@ -202,6 +200,10 @@ crud_params:
         exists:
           where:
             email:
+go_constants:
+  tables:
+    users:
+      output_dir: internal/store/users/repo_users
 ```
 
 ### Generate `CRUD` queries for existing tables

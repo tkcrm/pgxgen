@@ -168,7 +168,17 @@ func GetCatalogByOutputDir(outputDir string) (GetCatalogResultItem, error) {
 	}
 
 	item, exists := utils.FindInArray(catalogs, func(el GetCatalogResultItem) bool {
-		return el.OutputDir == outputDir
+		absPath1, err := filepath.Abs(el.OutputDir)
+		if err != nil {
+			return false
+		}
+
+		absPath2, err := filepath.Abs(outputDir)
+		if err != nil {
+			return false
+		}
+
+		return absPath1 == absPath2
 	})
 	if !exists {
 		return res, fmt.Errorf("can not find catalog for output dir %s", outputDir)
