@@ -115,28 +115,10 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 				modelFileName = "models.go"
 			}
 
-			res.ModelsPaths = utils.AppendIfNotExistInArray(
-				res.ModelsPaths,
-				filepath.Join(p.Gen.Go.Out, modelFileName),
-				func(i string) bool {
-					return i == filepath.Join(p.Gen.Go.Out, modelFileName)
-				},
-			)
-			res.QueriesPaths = utils.AppendIfNotExistInArray(res.QueriesPaths, p.Queries,
-				func(i string) bool {
-					return i == p.Queries
-				},
-			)
-			res.OutPaths = utils.AppendIfNotExistInArray(res.OutPaths, p.Gen.Go.Out,
-				func(i string) bool {
-					return i == p.Gen.Go.Out
-				},
-			)
-			res.MigrationsPaths = utils.AppendIfNotExistInArray(res.MigrationsPaths, p.Schema,
-				func(i string) bool {
-					return i == p.Schema
-				},
-			)
+			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Gen.Go.Out, modelFileName))
+			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
+			res.OutPaths = append(res.OutPaths, p.Gen.Go.Out)
+			res.MigrationsPaths = append(res.MigrationsPaths, p.Schema)
 		}
 	}
 

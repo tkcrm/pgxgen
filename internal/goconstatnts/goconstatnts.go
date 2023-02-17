@@ -1,11 +1,14 @@
 package goconstatnts
 
 import (
+	"fmt"
+	"path/filepath"
+
 	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/templates"
 	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
-	"github.com/tkcrm/pgxgen/pkg/sqlc"
+	"github.com/tkcrm/pgxgen/internal/schema"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
@@ -15,10 +18,14 @@ type IGoConstants interface {
 
 type goConstants struct {
 	config config.Config
+	schema schema.ISchema
 }
 
 func New(config config.Config) IGoConstants {
-	return &goConstants{config}
+	return &goConstants{
+		config: config,
+		schema: schema.New(),
+	}
 }
 
 const defaultConstatsFileName = "constants_gen.go"
@@ -41,7 +48,27 @@ func (s *goConstants) GenerateConstants() error {
 	var params generateConstantsParams
 
 	for tableName, table := range s.config.Pgxgen.GoConstants.Tables {
-		catalog, err := sqlc.GetCatalogByOutputDir(table.OutputDir)
+		var schemaDir string
+		for index, path := range s.config.Sqlc.GetPaths().OutPaths {
+			absPath1, err := filepath.Abs(table.OutputDir)
+			if err != nil {
+				return err
+			}
+
+			absPath2, err := filepath.Abs(path)
+			if err != nil {
+				return err
+			}
+			if absPath1 == absPath2 {
+				schemaDir = s.config.Sqlc.GetPaths().MigrationsPaths[index]
+				break
+			}
+		}
+		if schemaDir == "" {
+			return fmt.Errorf("can not find output dir for path: %s", table.OutputDir)
+		}
+
+		catalog, err := s.schema.GetSchema(schemaDir)
 		if err != nil {
 			return err
 		}
