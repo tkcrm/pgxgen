@@ -1,13 +1,11 @@
 package crud
 
 import (
-	"context"
 	"fmt"
 	"sort"
 	"strings"
 
 	"github.com/gobeam/stringy"
-	"github.com/jackc/pgx/v4"
 	"github.com/pkg/errors"
 	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/internal/config"
@@ -157,66 +155,6 @@ func (s *crud) process() (map[string][]byte, error) {
 	}
 
 	return result, nil
-}
-
-// getTableMetaOld - deprecated
-func (s *crud) getTableMetaOld(connString string) (tables, error) {
-	groupData := make(tables)
-
-	conn, err := pgx.Connect(context.Background(), connString)
-	if err != nil {
-		return nil, fmt.Errorf("unable to connect to database: %v", err)
-	}
-	defer conn.Close(context.Background())
-
-	rows, err := conn.Query(context.Background(), `
-		SELECT attrelid::regclass AS TABLE_NAME,
-			attname AS COLUMN_NAME
-		FROM pg_attribute
-		INNER JOIN pg_class ON pg_class.oid = attrelid
-		WHERE attrelid IN
-			(SELECT pg_class.oid
-			FROM pg_class
-			INNER JOIN pg_namespace ON pg_namespace.oid = pg_class.relnamespace
-			WHERE pg_namespace.nspname IN ('public')
-			AND pg_class.relkind IN ('r', 't'))
-		AND attnum > 0
-		AND attisdropped IS FALSE
-		ORDER  BY pg_class.relname,
-					pg_attribute.attnum
-	`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	items := []tableColumns{}
-	for rows.Next() {
-		var i tableColumns
-		if err := rows.Scan(
-			&i.TableName,
-			&i.ColumnName,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	for _, item := range items {
-		metaData, ok := groupData[item.TableName]
-		if !ok {
-			groupData[item.TableName] = &tableMetaData{
-				columns: []string{item.ColumnName},
-			}
-		} else {
-			groupData[item.TableName].columns = append(metaData.columns, item.ColumnName)
-		}
-	}
-
-	return groupData, nil
 }
 
 func (s *crud) getTableMeta(outputDir string) (tables, error) {

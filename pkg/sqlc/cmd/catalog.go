@@ -21,6 +21,8 @@ import (
 
 type GetCatalogResultItem struct {
 	OutputDir     string
+	SchemaDir     []string
+	QueriesDir    []string
 	GoPackageName string
 	Catalog       *catalog.Catalog
 }
@@ -144,6 +146,8 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 
 			item := GetCatalogResultItem{
 				OutputDir:     sql.Gen.Go.Out,
+				SchemaDir:     sql.Schema,
+				QueriesDir:    sql.Queries,
 				GoPackageName: name,
 				Catalog:       c.Catalog(),
 			}
@@ -182,6 +186,37 @@ func GetCatalogByOutputDir(outputDir string) (GetCatalogResultItem, error) {
 	})
 	if !exists {
 		return res, fmt.Errorf("can not find catalog for output dir %s", outputDir)
+	}
+
+	return item, nil
+}
+
+func GetCatalogBySchemaDir(schemaDir string) (GetCatalogResultItem, error) {
+	res := GetCatalogResultItem{}
+	catalogs, err := GetCatalogs()
+	if err != nil {
+		return res, errors.Wrap(err, "get catalogs error")
+	}
+
+	item, exists := utils.FindInArray(catalogs, func(el GetCatalogResultItem) bool {
+		for _, path := range el.SchemaDir {
+			absPath1, err := filepath.Abs(path)
+			if err != nil {
+				return false
+			}
+
+			absPath2, err := filepath.Abs(schemaDir)
+			if err != nil {
+				return false
+			}
+
+			return absPath1 == absPath2
+		}
+
+		return false
+	})
+	if !exists {
+		return res, fmt.Errorf("can not find catalog for schema dir %s", schemaDir)
 	}
 
 	return item, nil

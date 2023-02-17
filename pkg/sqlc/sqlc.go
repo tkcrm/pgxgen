@@ -17,3 +17,7 @@ func GetCatalogs() (cmd.GetCatalogResult, error) {
 func GetCatalogByOutputDir(outputDir string) (cmd.GetCatalogResultItem, error) {
 	return cmd.GetCatalogByOutputDir(outputDir)
 }
+
+func GetCatalogBySchemaDir(outputDir string) (cmd.GetCatalogResultItem, error) {
+	return cmd.GetCatalogBySchemaDir(outputDir)
+}

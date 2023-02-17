@@ -17,11 +17,6 @@ const (
 	METHOD_EXISTS config.MethodType = "exists"
 )
 
-type tableColumns struct {
-	TableName  string
-	ColumnName string
-}
-
 type tables map[string]*tableMetaData
 
 type tableMetaData struct {
