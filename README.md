@@ -103,8 +103,8 @@ gen_models:
           - CreatedAt
           - UpdatedAt
 gen_keystone_models:
-  # required
-  - output_dir: "frontend/src/stores/models"
+  - input_file_path: "internal/models/models_gen.go"
+    output_dir: "frontend/src/stores/models"
     # default: models.ts
     output_file_name: "models.ts"
     # default: empty
