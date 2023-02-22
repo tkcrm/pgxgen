@@ -31,39 +31,24 @@ func New(cfg config.Config) generator.IGenerator {
 }
 
 func (s *keystone) Generate(args []string) error {
-	if err := s.generateKeystone(args); err != nil {
+	if err := s.generateKeystone(); err != nil {
 		return err
 	}
 
-	fmt.Println("models successfully generated")
+	fmt.Println("keystone models successfully generated")
 
 	return nil
 }
 
-func (s *keystone) generateKeystone(args []string) error {
-	if s.config.Sqlc.Version > 2 || s.config.Sqlc.Version < 1 {
-		return fmt.Errorf("unsupported sqlc version: %d", s.config.Sqlc.Version)
-	}
-
-	if len(s.config.Sqlc.Packages) < len(s.config.Pgxgen.GenModels) {
-		return fmt.Errorf("sqlc packages should be more or equal pgxgen gen_models")
-	}
-
-	modelPaths := s.config.Sqlc.GetPaths().ModelsPaths
-
-	for index, modelsFilePath := range modelPaths {
-		// get models.go path
-		if s.config.Pgxgen.SqlcModels.OutputDir != "" {
-			fileName := "models.go"
-			if s.config.Pgxgen.SqlcModels.OutputFilename != "" {
-				fileName = s.config.Pgxgen.SqlcModels.OutputFilename
-			}
-
-			modelsFilePath = filepath.Join(s.config.Pgxgen.SqlcModels.OutputDir, fileName)
+func (s *keystone) generateKeystone() error {
+	for _, params := range s.config.Pgxgen.GenKeystoneFromStruct {
+		// validate params
+		if err := params.Validate(); err != nil {
+			return err
 		}
 
-		// get models.go file content
-		fileContent, err := os.ReadFile(modelsFilePath)
+		// get models file content
+		fileContent, err := utils.ReadFile(params.InputFilePath)
 		if err != nil {
 			return err
 		}
@@ -71,15 +56,9 @@ func (s *keystone) generateKeystone(args []string) error {
 		// get structs from go file
 		modelStructs := structs.GetStructs(string(fileContent))
 
-		if len(s.config.Pgxgen.GenKeystoneFromStruct) < index+1 {
-			return fmt.Errorf("undefined gen keystone config")
-		}
-
-		config := s.config.Pgxgen.GenKeystoneFromStruct[index]
-
 		// get all types from ModelsOutputDir
 		scalarTypes := make(structs.Types)
-		dirItems, err := os.ReadDir(filepath.Dir(modelsFilePath))
+		dirItems, err := os.ReadDir(filepath.Dir(params.InputFilePath))
 		if err != nil {
 			return err
 		}
@@ -90,9 +69,9 @@ func (s *keystone) generateKeystone(args []string) error {
 			if item.IsDir() {
 				continue
 			}
-			path := filepath.Join(filepath.Dir(modelsFilePath), item.Name())
+			path := filepath.Join(filepath.Dir(params.InputFilePath), item.Name())
 
-			file, err := os.ReadFile(path)
+			file, err := utils.ReadFile(path)
 			if err != nil {
 				return err
 			}
@@ -108,11 +87,11 @@ func (s *keystone) generateKeystone(args []string) error {
 
 		structs.FillMissedTypes(allStructs, modelStructs, scalarTypes)
 
-		for _, modelName := range config.SkipModels {
+		for _, modelName := range params.SkipModels {
 			delete(modelStructs, modelName)
 		}
 
-		if err := compileMobxKeystoneModels(s.config.Pgxgen.Version, config, modelStructs, scalarTypes); err != nil {
+		if err := compileMobxKeystoneModels(s.config.Pgxgen.Version, params, modelStructs, scalarTypes); err != nil {
 			return err
 		}
 	}
