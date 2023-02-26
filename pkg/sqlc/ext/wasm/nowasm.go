@@ -3,8 +3,8 @@
 package wasm
 
 import (
-	"context"
 	"fmt"
+    "context"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 )

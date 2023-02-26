@@ -10,3 +10,6 @@ build:
 
 test:
 	go test -v ./...
+
+copysqlc:
+	go run cmd/copysqlc/main.go
