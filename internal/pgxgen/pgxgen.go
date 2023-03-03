@@ -10,11 +10,12 @@ import (
 	"github.com/tkcrm/pgxgen/internal/gomodels"
 	"github.com/tkcrm/pgxgen/internal/keystone"
 	"github.com/tkcrm/pgxgen/internal/sqlc"
+	"github.com/tkcrm/pgxgen/internal/sqlformatter"
 	"github.com/tkcrm/pgxgen/internal/typescript"
 	"gopkg.in/yaml.v3"
 )
 
-var version = "v0.0.26"
+var version = "v0.0.27"
 
 func Start(args []string) error {
 	if len(args) == 0 {
@@ -72,6 +73,8 @@ func Start(args []string) error {
 		generator = typescript.New(c)
 	case "sqlc":
 		generator = sqlc.New(c)
+	case "sqlformatter":
+		generator = sqlformatter.New(c)
 	default:
 		return fmt.Errorf("undefined command %s", args[0])
 	}

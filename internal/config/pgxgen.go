@@ -16,6 +16,7 @@ type Pgxgen struct {
 	JsonTags                            JsonTags                   `yaml:"json_tags"`
 	CrudParams                          CrudParams                 `yaml:"crud_params"`
 	GoConstants                         GoConstants                `yaml:"go_constants"`
+	SQLFormatter                        SQLFormatter               `yaml:"sql_formatter"`
 }
 
 type SqlcMoveModels struct {
