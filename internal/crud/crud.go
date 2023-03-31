@@ -1,6 +1,7 @@
 package crud
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strings"
@@ -27,7 +28,7 @@ func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	}
 }
 
-func (s *crud) Generate(args []string) error {
+func (s *crud) Generate(_ context.Context, args []string) error {
 	res, err := s.process()
 	if err != nil {
 		return errors.Wrap(err, "process error")

@@ -2,6 +2,7 @@ package gomodels
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -40,7 +41,7 @@ type tmplGoModelsCtx struct {
 	Imports string
 }
 
-func (s *gomodels) Generate(args []string) error {
+func (s *gomodels) Generate(_ context.Context, args []string) error {
 	if err := s.generateModels(args); err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package typescript
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,7 +39,7 @@ type tmplTypescriptCtx struct {
 	ExportTypeSuffix string
 }
 
-func (s *typescript) Generate(args []string) error {
+func (s *typescript) Generate(_ context.Context, args []string) error {
 	if err := s.generateTypescript(args); err != nil {
 		return err
 	}

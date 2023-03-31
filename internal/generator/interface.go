@@ -1,5 +1,7 @@
 package generator
 
+import "context"
+
 type IGenerator interface {
-	Generate(args []string) error
+	Generate(ctx context.Context, args []string) error
 }

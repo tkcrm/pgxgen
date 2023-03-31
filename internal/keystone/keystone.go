@@ -2,6 +2,7 @@ package keystone
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"log"
@@ -33,7 +34,7 @@ func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	}
 }
 
-func (s *keystone) Generate(args []string) error {
+func (s *keystone) Generate(_ context.Context, args []string) error {
 	if err := s.generateKeystone(); err != nil {
 		return err
 	}

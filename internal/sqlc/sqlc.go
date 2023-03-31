@@ -1,6 +1,7 @@
 package sqlc
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,7 +33,7 @@ func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	}
 }
 
-func (s *sqlc) Generate(args []string) error {
+func (s *sqlc) Generate(_ context.Context, args []string) error {
 	if err := s.process(args); err != nil {
 		return errors.Wrap(err, "failed to generate sqlc")
 	}
