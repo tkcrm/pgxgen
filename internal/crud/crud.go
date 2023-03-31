@@ -10,16 +10,19 @@ import (
 	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/pkg/sqlc"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type crud struct {
+	logger logger.Logger
 	config config.Config
 }
 
-func New(cfg config.Config) generator.IGenerator {
+func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	return &crud{
+		logger: logger,
 		config: cfg,
 	}
 }
@@ -74,7 +77,7 @@ func (s *crud) Generate(args []string) error {
 		}
 	}
 
-	fmt.Println("crud successfully generated")
+	s.logger.Info("crud successfully generated")
 
 	return nil
 }

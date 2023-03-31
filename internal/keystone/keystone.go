@@ -17,15 +17,18 @@ import (
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type keystone struct {
+	logger logger.Logger
 	config config.Config
 }
 
-func New(cfg config.Config) generator.IGenerator {
+func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	return &keystone{
+		logger: logger,
 		config: cfg,
 	}
 }
@@ -35,7 +38,7 @@ func (s *keystone) Generate(args []string) error {
 		return err
 	}
 
-	fmt.Println("keystone models successfully generated")
+	s.logger.Info("keystone models successfully generated")
 
 	return nil
 }

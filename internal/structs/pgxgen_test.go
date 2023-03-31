@@ -1,4 +1,4 @@
-package pgxgen_test
+package structs_test
 
 import (
 	"bufio"

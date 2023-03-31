@@ -15,15 +15,18 @@ import (
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type typescript struct {
+	logger logger.Logger
 	config config.Config
 }
 
-func New(cfg config.Config) generator.IGenerator {
+func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	return &typescript{
+		logger: logger,
 		config: cfg,
 	}
 }
@@ -40,7 +43,7 @@ func (s *typescript) Generate(args []string) error {
 		return err
 	}
 
-	fmt.Println("ts types successfully generated")
+	s.logger.Info("typescript types successfully generated")
 
 	return nil
 }

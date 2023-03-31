@@ -34,6 +34,7 @@ type GenTableNamesParamsItem struct {
 	TableNamePreffix string
 	TableName        string
 }
+
 type ConstantParamsItem struct {
 	Package string
 	Version string

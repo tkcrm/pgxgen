@@ -12,18 +12,21 @@ import (
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/goconstatnts"
 	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	sqlcpkg "github.com/tkcrm/pgxgen/pkg/sqlc"
 	"github.com/tkcrm/pgxgen/utils"
 	"golang.org/x/tools/imports"
 )
 
 type sqlc struct {
+	logger      logger.Logger
 	config      config.Config
 	goConstants goconstatnts.IGoConstants
 }
 
-func New(cfg config.Config) generator.IGenerator {
+func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	return &sqlc{
+		logger:      logger,
 		config:      cfg,
 		goConstants: goconstatnts.New(cfg),
 	}
@@ -34,7 +37,7 @@ func (s *sqlc) Generate(args []string) error {
 		return errors.Wrap(err, "failed to generate sqlc")
 	}
 
-	fmt.Println("sqlc successfully generated")
+	s.logger.Info("sqlc successfully generated")
 
 	return nil
 }
