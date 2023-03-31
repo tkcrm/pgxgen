@@ -46,6 +46,10 @@ pgxgen check-version
 
 At root of your project create a `pgxgen.yaml`. Example of configuration below.
 
+> You can specify a different name, but must use this flag: `--pgxgen-config [new_name.yaml]`
+>
+> Example: `pgxgen --pgxgen-config pgxgen-new.yaml`
+
 ```yaml
 version: 1
 disable_auto_replace_sqlc_nullable_types: false
@@ -262,7 +266,11 @@ At root of your project create a `sqlc.yaml` file with the configuration describ
 
 > Configuration available [here](https://docs.sqlc.dev/en/stable/reference/config.html)
 
-#### Configuration file `sqlc.yaml` example
+#### Configuration `sqlc.yaml` file example
+
+> You can specify a different name, but must use this flag: `--sqlc-config [new_name.yaml]`
+>
+> Example: `pgxgen --sqlc-config sqlc-new.yaml`
 
 ```yaml
 version: 2
