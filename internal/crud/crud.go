@@ -59,6 +59,10 @@ func (s *crud) Generate(_ context.Context, args []string) error {
 			return fmt.Errorf("can not find table params for table: %s", tableName)
 		}
 
+		if len(data) == 0 {
+			continue
+		}
+
 		if tableParams.OutputDir != "" {
 			tableNamePaths[tableParams.OutputDir] = tableName
 

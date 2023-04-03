@@ -30,7 +30,12 @@ require (
 	gopkg.in/yaml.v2 v2.2.8
 )
 
-require github.com/cristalhq/flagx v0.4.0
+require (
+	github.com/cristalhq/flagx v0.4.0
+	github.com/stretchr/testify v1.8.2
+)
+
+require github.com/pmezard/go-difflib v1.0.0 // indirect
 
 require (
 	github.com/benbjohnson/clock v1.3.0 // indirect

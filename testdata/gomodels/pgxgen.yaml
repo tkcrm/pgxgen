@@ -1,0 +1,43 @@
+version: 1
+gen_models:
+  - input_file_path: "../../testdata/gomodels/test_models.go"
+    output_dir: "../../testdata/gomodels/gen"
+    output_file_name: "test_models_gen.go"
+    package_name: model
+    exclude_structs:
+      - struct_name: NullWebhookStatus
+      - struct_name: NullWebhookType
+    include_structs:
+      - struct_name: Webhook
+    rename:
+      Webhook: WebhookDto
+    update_fields:
+      - struct_name: Webhook
+        field_name: Type
+        new_parameters:
+          type: "string"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "type"
+      - struct_name: Webhook
+        field_name: Status
+        new_parameters:
+          type: "string"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "status"
+      - struct_name: Webhook
+        field_name: RawData
+        new_parameters:
+          type: "json.RawMessage"
+          match_with_current_tags: true
+    update_all_struct_fields:
+      by_type:
+        - type: "sql.NullTime"
+          new_type: "*time.Time"
+          match_with_current_tags: true
+          tags:
+            - name: "json"
+              value: "-"

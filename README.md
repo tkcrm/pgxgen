@@ -65,25 +65,31 @@ sqlc_move_models:
   package_path: github.com/company/project/internal/models
 # Generate models parameters. Not required
 gen_models:
-  # default: false
-  - delete_sqlc_data: true
-    # required
-    models_output_dir: "internal/model"
-    # default: models.go
-    models_output_filename: "models.go"
-    # default: last item in models_output_dir
-    models_package_name: "model"
-    models_imports:
+  - # path to a specific file
+    input_file_path: "internal/store/models.go"
+    # input dir. will process all files with extension `.go`
+    input_dir: "internal/store"
+    # delete specific file or all files in dir. default: false
+    delete_original_files: false
+    # output dir. required
+    output_dir: "internal/models"
+    # output file name. required
+    output_file_name: "models_gen.go"
+    # default: last item in output_dir
+    package_name: "model"
+    # additional imports
+    imports:
       - "github.com/uptrace/bun"
     # Use uint64 instead int64 for all fields ends with ID
     use_uint_for_ids: true
     use_uint_for_ids_exceptions:
-      - struct_name: "users"
+      - struct_name: "User"
         field_names:
           - OrganizationID
           - UserID
+    # add new field to struct
     add_fields:
-      - struct_name: "users"
+      - struct_name: "User"
         # default: start
         # available values: start, end, after FieldName
         position: "start"
@@ -92,7 +98,9 @@ gen_models:
         tags:
           - name: "bun"
             value: "table:users,alias:u"
+    # update fields for all structs
     update_all_struct_fields:
+      # update by field name
       by_field:
         - field_name: "ID"
           new_field_name: "bun.NullTime"
@@ -101,6 +109,7 @@ gen_models:
           tags:
             - name: "json"
               value: "-"
+      # update by field type
       by_type:
         - type: "*time.Time"
           new_type: "bun.NullTime"
@@ -108,6 +117,7 @@ gen_models:
           tags:
             - name: "json"
               value: "-"
+    # update fields in specific struct
     update_fields:
       - struct_name: "users"
         field_name: "Password"
@@ -119,11 +129,20 @@ gen_models:
           tags:
             - name: "json"
               value: "-"
+    # delete specific field in struct
     delete_fields:
       - struct_name: "users"
         field_names:
           - CreatedAt
           - UpdatedAt
+    rename:
+      oldName: newName
+    # exclude structs from result list
+    exclude_structs:
+      - struct_name: "User"
+    # only the listed structures will be used
+    include_structs:
+      - struct_name: "User"
 gen_keystone_models:
   - input_file_path: "internal/models/models_gen.go"
     output_dir: "frontend/src/stores/models"

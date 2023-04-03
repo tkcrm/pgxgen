@@ -178,7 +178,7 @@ func (s *sqlc) processGoFilePaths(path string, modelFileStructs structs.Structs)
 			if err := s.replace(filepath.Join(modelFileDir, file.Name()), func(c config.Config, str string) string {
 				return replaceImports(c, str, modelFileStructs)
 			}); err != nil {
-				return err
+				return fmt.Errorf("replace error: %w", err)
 			}
 		}
 	}
