@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -113,7 +112,7 @@ func (s *keystone) getScalarTypes(file_models_str string) structs.Types {
 			if err == io.EOF {
 				break
 			}
-			log.Fatal(err)
+			s.logger.Fatal(err)
 		}
 
 		if strings.Contains(line, "struct {") {

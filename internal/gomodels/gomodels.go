@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -34,19 +33,12 @@ func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	}
 }
 
-type tmplGoModelsCtx struct {
-	Version string
-	Package string
-	Structs structs.Structs
-	Imports string
-}
-
 func (s *gomodels) Generate(_ context.Context, args []string) error {
 	if err := s.generateModels(args); err != nil {
 		return err
 	}
 
-	s.logger.Info("models successfully generated")
+	s.logger.Info("go models successfully generated")
 
 	return nil
 }
@@ -74,7 +66,7 @@ func (s *gomodels) generateModels(args []string) error {
 		}
 
 		// get models.go file content
-		fileContent, err := os.ReadFile(modelsFilePath)
+		fileContent, err := utils.ReadFile(modelsFilePath)
 		if err != nil {
 			return err
 		}
@@ -97,13 +89,14 @@ func (s *gomodels) generateModels(args []string) error {
 		if err != nil {
 			return err
 		}
+
 		for _, item := range dirItems {
 			if item.IsDir() {
 				continue
 			}
 			path := filepath.Join(config.GetModelsOutputDir(), item.Name())
 
-			file, err := os.ReadFile(path)
+			file, err := utils.ReadFile(path)
 			if err != nil {
 				return err
 			}
@@ -126,9 +119,9 @@ func (s *gomodels) generateModels(args []string) error {
 	return nil
 }
 
-func (s *gomodels) getScalarTypes(file_models_str string) structs.Types {
+func (s *gomodels) getScalarTypes(fileContent string) structs.Types {
 	types := make(structs.Types)
-	r := bufio.NewReader(strings.NewReader(file_models_str))
+	r := bufio.NewReader(strings.NewReader(fileContent))
 
 	for {
 		line, err := r.ReadString('\n')
@@ -136,12 +129,13 @@ func (s *gomodels) getScalarTypes(file_models_str string) structs.Types {
 			if err == io.EOF {
 				break
 			}
-			log.Fatal(err)
+			s.logger.Fatal(err)
 		}
 
 		if strings.Contains(line, "struct {") {
 			continue
 		}
+
 		r := regexp.MustCompile(`^type (\w+) ([^\s]+)`)
 		match := r.FindStringSubmatch(line)
 
@@ -377,8 +371,12 @@ func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path 
 		return errors.Wrap(err, "UpdateGoImports error")
 	}
 
-	if err := utils.SaveFile(c.GetModelsOutputDir(), c.GetModelsOutputFileName(), compiledRes); err != nil {
-		return errors.Wrap(err, "SaveFile error")
+	if err := utils.SaveFile(
+		c.GetModelsOutputDir(),
+		c.GetModelsOutputFileName(),
+		compiledRes,
+	); err != nil {
+		return fmt.Errorf("save file error: %w", err)
 	}
 
 	return nil

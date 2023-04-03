@@ -58,6 +58,7 @@ func RemoveFiles(path, nameSuffix string) error {
 	if err != nil {
 		return err
 	}
+
 	for _, item := range dirItems {
 		if item.IsDir() {
 			continue
