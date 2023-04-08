@@ -15,7 +15,6 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pganalyze/pg_query_go/v2 v2.2.0
 	github.com/pingcap/tidb/parser v0.0.0-20230224142707-1d2040a2abb1
-	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
 	github.com/tkcrm/modules v0.0.0-20230308042354-885154fb5ff9
@@ -35,7 +34,10 @@ require (
 	github.com/stretchr/testify v1.8.2
 )
 
-require github.com/pmezard/go-difflib v1.0.0 // indirect
+require (
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+)
 
 require (
 	github.com/benbjohnson/clock v1.3.0 // indirect

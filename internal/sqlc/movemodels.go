@@ -1,117 +1,107 @@
 package sqlc
 
 import (
-	"bufio"
 	"fmt"
-	"io"
-	"log"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/utils"
 )
 
-// replacePackageName - replace package name for golang file
-func replacePackageName(c config.Config, str string) (res string) {
-	if c.Pgxgen.SqlcModels.OutputDir == "" {
-		return str
-	}
+func (s *sqlc) moveModels(
+	cfg config.PgxgenSqlc,
+	modelsMoved *map[string]structs.Structs,
+	files []fs.DirEntry,
+	modelPath, modelFileDir, modelFileName string,
+) error {
+	modelFileStructs, alreadyMoved := (*modelsMoved)[cfg.SchemaDir]
 
-	outputDirPath := strings.Split(c.Pgxgen.SqlcModels.OutputDir, "/")
-	if len(outputDirPath) == 0 {
-		return str
-	}
-
-	packageName := outputDirPath[len(outputDirPath)-1]
-	if c.Pgxgen.SqlcModels.PackageName != "" {
-		packageName = c.Pgxgen.SqlcModels.PackageName
-	}
-
-	r := bufio.NewReader(strings.NewReader(str))
-
-	for {
-		line, err := r.ReadString('\n')
+	if !alreadyMoved {
+		// get sqlc model file content
+		modelFileContent, err := utils.ReadFile(modelPath)
 		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			log.Fatal(err)
+			return err
 		}
 
-		if strings.HasPrefix(line, "package") {
-			res += "package " + packageName
-		} else {
-			res += line
+		// get structs from model file
+		modelFileStructs = structs.GetStructs(string(modelFileContent))
+
+		// replace package name in model file
+		if err := s.replace(
+			modelPath,
+			func(c config.Config, str string) (string, error) {
+				return replacePackageName(str, cfg.SqlcModels)
+			},
+		); err != nil {
+			return fmt.Errorf("replacePackageName error: %w", err)
 		}
 	}
 
-	return res
-}
+	for _, file := range files {
+		goFileRegexp := regexp.MustCompile(`(\.go)`)
 
-func replaceImports(c config.Config, str string, modelFileStructs structs.Structs) (res string) {
-	if c.Pgxgen.SqlcModels.OutputDir == "" {
-		return str
-	}
-
-	outputDirPath := strings.Split(c.Pgxgen.SqlcModels.OutputDir, "/")
-	if len(outputDirPath) == 0 {
-		return str
-	}
-
-	if c.Pgxgen.SqlcModels.PackagePath == "" {
-		log.Fatal("empty package path")
-	}
-
-	var existsSomeModelStruct bool
-	for _, item := range modelFileStructs {
-		re := regexp.MustCompile(fmt.Sprintf(`(?sm)\([\[\]\*]+%s[\,\){]+`, item.Name))
-		if re.MatchString(str) {
-			existsSomeModelStruct = true
-			break
+		// skip not golang files
+		if !goFileRegexp.MatchString(file.Name()) {
+			continue
 		}
 
-		for _, field := range item.Fields {
-			re := regexp.MustCompile(fmt.Sprintf(`(?sm)\s+\w+\s+%s\s+`, field.Name))
-			if re.MatchString(str) {
-				existsSomeModelStruct = true
-				break
+		// replace imports in generated files by sqlc
+		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" {
+			if err := s.replace(
+				filepath.Join(modelFileDir, file.Name()),
+				func(c config.Config, str string) (string, error) {
+					return replaceImports(str, cfg.SqlcModels, modelFileStructs)
+				},
+			); err != nil {
+				return fmt.Errorf("replaceImports error: %w", err)
 			}
 		}
 	}
-	if !existsSomeModelStruct {
-		return str
-	}
 
-	r := regexp.MustCompile(`import (\"\w+\")`)
-	r2 := regexp.MustCompile(`(?sm)^import \(\s(([^\)]+)\s)+\)`)
-
-	if r.MatchString(str) {
-		matches := r.FindStringSubmatch(str)
-		if len(matches) > 1 {
-			res = r.ReplaceAllString(str, getNewImports(matches[1:], c.Pgxgen.SqlcModels.PackagePath))
+	// delete models.go if already moved
+	if alreadyMoved {
+		if err := utils.RemoveFile(modelPath); err != nil {
+			return fmt.Errorf("remove file %s error: %w", modelPath, err)
 		}
+		return nil
 	}
 
-	if r2.MatchString(str) {
-		matches := r2.FindStringSubmatch(str)
-		if len(matches) == 3 {
-			packageImports := matches[2]
-			var re2 = regexp.MustCompile(`(\s+(.*)\n?)`)
-			rs2 := re2.FindAllStringSubmatch(packageImports, -1)
-			imports := make([]string, 0, len(rs2))
-			for _, item := range rs2 {
-				imports = append(imports, item[2])
-			}
-
-			res = r2.ReplaceAllString(str, getNewImports(imports, c.Pgxgen.SqlcModels.PackagePath))
-		}
+	// move model file
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return err
 	}
 
-	return res
-}
+	newPathDir := filepath.Join(currentDir, cfg.SqlcModels.Move.OutputDir)
+	oldPathDir := filepath.Join(currentDir, modelPath)
 
-func getNewImports(existImports []string, packagePath string) string {
-	existImports = append(existImports, fmt.Sprintf(". \"%s\"", packagePath))
-	return fmt.Sprintf("import(\n%s\n)", strings.Join(existImports, "\n"))
+	// create dir if new path not exists
+	if err := utils.CreatePath(newPathDir); err != nil {
+		return fmt.Errorf("create new dir error: %w", err)
+	}
+
+	// move file to new directory
+	fileName := modelFileName
+	if cfg.SqlcModels.Move.OutputFileName != "" {
+		fileName = cfg.SqlcModels.Move.OutputFileName
+	}
+
+	newPathFile := filepath.Join(newPathDir, fileName)
+	if err := os.Rename(oldPathDir, newPathFile); err != nil {
+		return fmt.Errorf(
+			"failed to move file from %s to %s: %w",
+			modelPath,
+			newPathFile,
+			err,
+		)
+	}
+
+	(*modelsMoved)[cfg.SchemaDir] = modelFileStructs
+
+	return nil
 }

@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pkg/errors"
 	"golang.org/x/tools/imports"
 )
 
@@ -63,7 +62,7 @@ func GetGoPackageNameForDir(path string) (string, error) {
 
 		goPackage, err := GetGoPackageNameForFile(path, item.Name())
 		if err != nil {
-			return "", errors.Wrap(err, "GetGoPackageNameForFile error")
+			return "", fmt.Errorf("GetGoPackageNameForFile error: %w", err)
 		}
 
 		if strings.HasSuffix(goPackage, "_test") {

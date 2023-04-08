@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"path/filepath"
 
 	"github.com/tkcrm/modules/pkg/utils"
@@ -65,14 +66,18 @@ type SqlcSQL struct {
 }
 
 type GetPathsResponse struct {
-	ModelsPaths     []string
-	QueriesPaths    []string
-	OutPaths        []string
-	MigrationsPaths []string
+	ModelsPaths  []string
+	QueriesPaths []string
+	OutPaths     []string
+	SchemaPaths  []string
+}
+
+func (s GetPathsResponse) GetModelPathByIndex(index int) string {
+	return s.ModelsPaths[index]
 }
 
 func (s *Sqlc) GetPaths() GetPathsResponse {
-	res := GetPathsResponse{}
+	var res GetPathsResponse
 
 	// process sqlc version 1
 	if s.Version == 1 {
@@ -82,28 +87,10 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 				modelFileName = "models.go"
 			}
 
-			res.ModelsPaths = utils.AppendIfNotExistInArray(
-				res.ModelsPaths,
-				filepath.Join(p.Path, modelFileName),
-				func(i string) bool {
-					return i == filepath.Join(p.Path, modelFileName)
-				},
-			)
-			res.QueriesPaths = utils.AppendIfNotExistInArray(res.QueriesPaths, p.Queries,
-				func(i string) bool {
-					return i == p.Queries
-				},
-			)
-			res.OutPaths = utils.AppendIfNotExistInArray(res.OutPaths, p.Path,
-				func(i string) bool {
-					return i == p.Path
-				},
-			)
-			res.MigrationsPaths = utils.AppendIfNotExistInArray(res.MigrationsPaths, p.Schema,
-				func(i string) bool {
-					return i == p.Schema
-				},
-			)
+			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Path, modelFileName))
+			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
+			res.OutPaths = append(res.OutPaths, p.Path)
+			res.SchemaPaths = append(res.SchemaPaths, p.Schema)
 		}
 	}
 
@@ -118,7 +105,7 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 			res.ModelsPaths = append(res.ModelsPaths, filepath.Join(p.Gen.Go.Out, modelFileName))
 			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
 			res.OutPaths = append(res.OutPaths, p.Gen.Go.Out)
-			res.MigrationsPaths = append(res.MigrationsPaths, p.Schema)
+			res.SchemaPaths = append(res.SchemaPaths, p.Schema)
 		}
 	}
 
@@ -139,4 +126,47 @@ func (p *SqlcSQL) GetModelPath() string {
 		modelFileName = "models.go"
 	}
 	return filepath.Join(p.Gen.Go.Out, modelFileName)
+}
+
+func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string) ([]string, error) {
+	availablePaths := []string{"models", "queries", "out", "schema"}
+	if !utils.ExistInArray(availablePaths, pathType) {
+		return nil, fmt.Errorf("unavailable path type %s", pathType)
+	}
+
+	// filter model paths for current schema
+	filteredModelPaths := []string{}
+	for index, item := range gpr.SchemaPaths {
+		absFirst, err := filepath.Abs(item)
+		if err != nil {
+			return nil, err
+		}
+
+		absSecond, err := filepath.Abs(inSchemaDir)
+		if err != nil {
+			return nil, err
+		}
+
+		if absFirst == absSecond {
+			var modelPath string
+			switch pathType {
+			case "models":
+				modelPath = gpr.ModelsPaths[index]
+			case "queries":
+				modelPath = gpr.QueriesPaths[index]
+			case "out":
+				modelPath = gpr.OutPaths[index]
+			case "schema":
+				modelPath = gpr.SchemaPaths[index]
+			default:
+				return nil, fmt.Errorf("unavailable path type %s", pathType)
+			}
+
+			if !utils.ExistInArray(filteredModelPaths, modelPath) {
+				filteredModelPaths = append(filteredModelPaths, modelPath)
+			}
+		}
+	}
+
+	return filteredModelPaths, nil
 }

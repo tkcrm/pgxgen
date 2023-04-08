@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/templates"
 	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
@@ -34,11 +34,14 @@ func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 }
 
 func (s *keystone) Generate(_ context.Context, args []string) error {
+	s.logger.Infof("generate keystone models")
+	timeStart := time.Now()
+
 	if err := s.generateKeystone(); err != nil {
 		return err
 	}
 
-	s.logger.Info("keystone models successfully generated")
+	s.logger.Infof("keystone models successfully generated in: %s", time.Since(timeStart))
 
 	return nil
 }
@@ -204,11 +207,11 @@ func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st 
 		Data: tctx,
 	})
 	if err != nil {
-		return errors.Wrap(err, "tpl.Compile error")
+		return fmt.Errorf("tpl.Compile error: %w", err)
 	}
 
 	if err := utils.SaveFile(cfg.OutputDir, cfg.OutputFileName, compiledRes); err != nil {
-		return errors.Wrap(err, "SaveFile error")
+		return fmt.Errorf("SaveFile error: %w", err)
 	}
 
 	if cfg.PrettierCode {

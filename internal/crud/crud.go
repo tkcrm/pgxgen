@@ -5,20 +5,22 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/gobeam/stringy"
-	"github.com/pkg/errors"
 	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/pkg/sqlc"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/cmd"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type crud struct {
-	logger logger.Logger
-	config config.Config
+	logger   logger.Logger
+	config   config.Config
+	catalogs map[string]cmd.GetCatalogResultItem
 }
 
 func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
@@ -29,68 +31,109 @@ func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 }
 
 func (s *crud) Generate(_ context.Context, args []string) error {
-	res, err := s.process()
-	if err != nil {
-		return errors.Wrap(err, "process error")
+	for _, cfg := range s.config.Pgxgen.Sqlc {
+		s.logger.Infof("generate crud for schema: %s", cfg.SchemaDir)
+		timeStart := time.Now()
+
+		// validate config
+		if err := cfg.Validate(); err != nil {
+			return err
+		}
+
+		// get queries paths for current schema
+		queriesPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "queries")
+		if err != nil {
+			return fmt.Errorf("GetPathsByScheme error: %w", err)
+		}
+
+		// get queries paths for current schema
+		outputPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "out")
+		if err != nil {
+			return fmt.Errorf("GetPathsByScheme error: %w", err)
+		}
+
+		// get catalogs
+		allCatalogs, err := sqlc.GetCatalogs()
+		if err != nil {
+			return err
+		}
+
+		s.catalogs = make(map[string]cmd.GetCatalogResultItem, len(outputPaths))
+		for _, path := range outputPaths {
+			item, err := sqlc.GetCatalogByOutputDir(allCatalogs, path)
+			if err != nil {
+				return err
+			}
+			s.catalogs[path] = item
+		}
+
+		// get sql code for each tables
+		sqlData, err := s.generateSQLForEachTable(cfg.CrudParams, outputPaths)
+		if err != nil {
+			return fmt.Errorf("generate sql for each tables error: %w", err)
+		}
+
+		// remove generated files
+		if cfg.CrudParams.AutoRemoveGeneratedFiles {
+			for _, p := range queriesPaths {
+				if err := utils.RemoveFiles(p, "_gen.sql"); err != nil {
+					return fmt.Errorf("remove sql generated files error: %w", err)
+				}
+			}
+
+			for _, p := range s.config.Sqlc.GetPaths().OutPaths {
+				if err := utils.RemoveFiles(p, "_gen.go"); err != nil {
+					return fmt.Errorf("remove go generated files error: %w", err)
+				}
+
+				if err := utils.RemoveFiles(p, "_gen.sql.go"); err != nil {
+					return fmt.Errorf("remove go generated files error: %w", err)
+				}
+			}
+		}
+
+		// save new files
+		tableNamePaths := make(map[string]string, len(sqlData))
+		for tableName, data := range sqlData {
+			tableParams, ok := cfg.CrudParams.Tables[tableName]
+			if !ok {
+				return fmt.Errorf("can not find table params for table: %s", tableName)
+			}
+
+			if len(data) == 0 {
+				continue
+			}
+
+			if tableParams.OutputDir != "" {
+				tableNamePaths[tableParams.OutputDir] = tableName
+
+				if err := s.saveFile(cfg, data, tableName, tableParams.OutputDir); err != nil {
+					return fmt.Errorf("saveFile error: %w", err)
+				}
+
+				continue
+			}
+
+			for _, p := range queriesPaths {
+				tableNamePaths[p] = tableName
+
+				if err := s.saveFile(cfg, data, tableName, p); err != nil {
+					return fmt.Errorf("saveFile error: %w", err)
+				}
+			}
+		}
+
+		s.logger.Infof("crud successfully generated in: %s", time.Since(timeStart))
 	}
-
-	queriesPaths := s.config.Sqlc.GetPaths().QueriesPaths
-
-	// remove generated files
-	if s.config.Pgxgen.CrudParams.AutoRemoveGeneratedFiles {
-		for _, p := range queriesPaths {
-			if err := utils.RemoveFiles(p, "_gen.sql"); err != nil {
-				return errors.Wrap(err, "remove sql generated files error")
-			}
-		}
-
-		for _, p := range s.config.Sqlc.GetPaths().OutPaths {
-			if err := utils.RemoveFiles(p, "_gen.go"); err != nil {
-				return errors.Wrap(err, "remove go generated files error")
-			}
-		}
-	}
-
-	// save new files
-	tableNamePaths := make(map[string]string, len(res))
-	for tableName, data := range res {
-		tableParams, ok := s.config.Pgxgen.CrudParams.Tables[tableName]
-		if !ok {
-			return fmt.Errorf("can not find table params for table: %s", tableName)
-		}
-
-		if len(data) == 0 {
-			continue
-		}
-
-		if tableParams.OutputDir != "" {
-			tableNamePaths[tableParams.OutputDir] = tableName
-
-			if err := s.saveFile(data, tableName, tableParams.OutputDir); err != nil {
-				return errors.Wrap(err, "saveFile error")
-			}
-
-			continue
-		}
-
-		for _, p := range queriesPaths {
-			tableNamePaths[p] = tableName
-
-			if err := s.saveFile(data, tableName, p); err != nil {
-				return errors.Wrap(err, "saveFile error")
-			}
-		}
-	}
-
-	s.logger.Info("crud successfully generated")
 
 	return nil
 }
 
-func (s *crud) process() (map[string][]byte, error) {
-	result := make(map[string][]byte, len(s.config.Sqlc.GetPaths().OutPaths))
+// generateSQLForEachTable - generate sql queries for each tables
+func (s *crud) generateSQLForEachTable(crudParams config.CrudParams, outputPaths []string) (map[string][]byte, error) {
+	result := make(map[string][]byte, len(outputPaths))
 
-	for _, outPath := range s.config.Sqlc.GetPaths().OutPaths {
+	for _, outPath := range outputPaths {
 		// Get all tables from postgres
 		tablesData, err := s.getTableMeta(outPath)
 		if err != nil {
@@ -101,14 +144,14 @@ func (s *crud) process() (map[string][]byte, error) {
 		//builder.WriteString(headText)
 
 		// Sort tables
-		tableKeys := make([]string, 0, len(s.config.Pgxgen.CrudParams.Tables))
-		for k := range s.config.Pgxgen.CrudParams.Tables {
+		tableKeys := make([]string, 0, len(crudParams.Tables))
+		for k := range crudParams.Tables {
 			tableKeys = append(tableKeys, k)
 		}
 		sort.Strings(tableKeys)
 
 		for _, tableName := range tableKeys {
-			tableParams := s.config.Pgxgen.CrudParams.Tables[tableName]
+			tableParams := crudParams.Tables[tableName]
 
 			metaData := tablesData.getTableMetaData(tableName)
 			if metaData == nil {
@@ -138,23 +181,23 @@ func (s *crud) process() (map[string][]byte, error) {
 				var err error
 				switch config.MethodType(methodType) {
 				case METHOD_CREATE:
-					err = s.processCreate(params)
+					err = s.processCreate(crudParams, params)
 				case METHOD_UPDATE:
-					err = s.processUpdate(params)
+					err = s.processUpdate(crudParams, params)
 				case METHOD_DELETE:
-					err = s.processDelete(params)
+					err = s.processDelete(crudParams, params)
 				case METHOD_GET:
-					err = s.processGet(params)
+					err = s.processGet(crudParams, params)
 				case METHOD_FIND:
-					err = s.processFind(params)
+					err = s.processFind(crudParams, params)
 				case METHOD_TOTAL:
-					err = s.processTotal(params)
+					err = s.processTotal(crudParams, params)
 				case METHOD_EXISTS:
-					err = s.processExists(params)
+					err = s.processExists(crudParams, params)
 				}
 
 				if err != nil {
-					return nil, errors.Wrap(err, fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName))
+					return nil, fmt.Errorf(fmt.Sprintf(ErrWhileProcessTemplate, methodType, tableName)+" error: %w", err)
 				}
 			}
 
@@ -168,9 +211,9 @@ func (s *crud) process() (map[string][]byte, error) {
 func (s *crud) getTableMeta(outputDir string) (tables, error) {
 	groupData := make(tables)
 
-	catalog, err := sqlc.GetCatalogByOutputDir(outputDir)
-	if err != nil {
-		return nil, err
+	catalog, ok := s.catalogs[outputDir]
+	if !ok {
+		return nil, fmt.Errorf("can not find catalog for output dir: %s", outputDir)
 	}
 
 	for _, schema := range catalog.Catalog.Schemas {
@@ -194,10 +237,10 @@ func (s *crud) getTableMeta(outputDir string) (tables, error) {
 	return groupData, nil
 }
 
-func (s *crud) processCreate(p processParams) error {
+func (s *crud) processCreate(cfg config.CrudParams, p processParams) error {
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_CREATE, p.table)
+		methodName = s.getMethodName(cfg, METHOD_CREATE, p.table)
 	}
 
 	operationType := "exec"
@@ -243,7 +286,7 @@ func (s *crud) processCreate(p processParams) error {
 	return nil
 }
 
-func (s *crud) processUpdate(p processParams) error {
+func (s *crud) processUpdate(cfg config.CrudParams, p processParams) error {
 	primaryColumn, err := getPrimaryColumn(p.metaData.columns, p.table, p.tableParams.PrimaryColumn)
 	if err != nil {
 		return err
@@ -255,7 +298,7 @@ func (s *crud) processUpdate(p processParams) error {
 
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_UPDATE, p.table)
+		methodName = s.getMethodName(cfg, METHOD_UPDATE, p.table)
 	}
 
 	operationType := "exec"
@@ -301,7 +344,7 @@ func (s *crud) processUpdate(p processParams) error {
 	return nil
 }
 
-func (s *crud) processDelete(p processParams) error {
+func (s *crud) processDelete(cfg config.CrudParams, p processParams) error {
 	primaryColumn, err := getPrimaryColumn(p.metaData.columns, p.table, p.tableParams.PrimaryColumn)
 	if err != nil {
 		return err
@@ -313,7 +356,7 @@ func (s *crud) processDelete(p processParams) error {
 
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_DELETE, p.table)
+		methodName = s.getMethodName(cfg, METHOD_DELETE, p.table)
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :exec\n", methodName))
@@ -331,7 +374,7 @@ func (s *crud) processDelete(p processParams) error {
 	return nil
 }
 
-func (s *crud) processGet(p processParams) error {
+func (s *crud) processGet(cfg config.CrudParams, p processParams) error {
 	primaryColumn, err := getPrimaryColumn(p.metaData.columns, p.table, p.tableParams.PrimaryColumn)
 	if err != nil {
 		return err
@@ -343,7 +386,7 @@ func (s *crud) processGet(p processParams) error {
 
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_GET, p.table)
+		methodName = s.getMethodName(cfg, METHOD_GET, p.table)
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
@@ -361,10 +404,10 @@ func (s *crud) processGet(p processParams) error {
 	return nil
 }
 
-func (s *crud) processFind(p processParams) error {
+func (s *crud) processFind(cfg config.CrudParams, p processParams) error {
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_FIND, p.table)
+		methodName = s.getMethodName(cfg, METHOD_FIND, p.table)
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :many\n", methodName))
@@ -384,10 +427,10 @@ func (s *crud) processFind(p processParams) error {
 	return nil
 }
 
-func (s *crud) processTotal(p processParams) error {
+func (s *crud) processTotal(cfg config.CrudParams, p processParams) error {
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_TOTAL, p.table)
+		methodName = s.getMethodName(cfg, METHOD_TOTAL, p.table)
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
@@ -402,10 +445,10 @@ func (s *crud) processTotal(p processParams) error {
 	return nil
 }
 
-func (s *crud) processExists(p processParams) error {
+func (s *crud) processExists(cfg config.CrudParams, p processParams) error {
 	methodName := p.methodParams.Name
 	if methodName == "" {
-		methodName = s.getMethodName(METHOD_EXISTS, p.table)
+		methodName = s.getMethodName(cfg, METHOD_EXISTS, p.table)
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
@@ -495,8 +538,8 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 	return nil
 }
 
-func (s *crud) saveFile(data []byte, tableName, path string) error {
-	tableParams, ok := s.config.Pgxgen.CrudParams.Tables[tableName]
+func (s *crud) saveFile(cfg config.PgxgenSqlc, data []byte, tableName, path string) error {
+	tableParams, ok := cfg.CrudParams.Tables[tableName]
 	if !ok {
 		return fmt.Errorf("can not find table params for table: %s", tableName)
 	}
@@ -506,12 +549,12 @@ func (s *crud) saveFile(data []byte, tableName, path string) error {
 	}
 
 	if tableName == "" {
-		return errors.New("empty table name")
+		return fmt.Errorf("empty table name")
 	}
 
 	fileName := fmt.Sprintf("%s_gen.sql", tableName)
 	if err := utils.SaveFile(path, fileName, data); err != nil {
-		return errors.Wrap(err, "SaveFile error")
+		return fmt.Errorf("SaveFile error: %w", err)
 	}
 
 	return nil
@@ -522,9 +565,9 @@ func (s *crud) saveFile(data []byte, tableName, path string) error {
 // 	return res
 // }
 
-func (s *crud) getMethodName(methodType config.MethodType, tableName string) string {
+func (s *crud) getMethodName(cfg config.CrudParams, methodType config.MethodType, tableName string) string {
 	var methodName string
-	if s.config.Pgxgen.CrudParams.ExcludeTableNameFromMethods {
+	if cfg.ExcludeTableNameFromMethods {
 		methodName = methodType.String()
 	} else {
 		methodName = fmt.Sprintf("%s %s", methodType.String(), tableName)

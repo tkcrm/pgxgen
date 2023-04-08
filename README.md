@@ -52,18 +52,81 @@ At root of your project create a `pgxgen.yaml`. Example of configuration below.
 
 ```yaml
 version: 1
-disable_auto_replace_sqlc_nullable_types: false
-# move sqlc models to another package and directory
-sqlc_move_models:
-  # required
-  output_dir: "internal/models"
-  # default: models.go
-  output_filename: "models.go"
-  # new package name. by default based on `output_dir`
-  package_name: models
-  # required. full path to new models directory
-  package_path: github.com/company/project/internal/models
-# Generate models parameters. Not required
+sqlc:
+  - # directory with migrations. required
+    schema_dir: sql/migrations
+    models:
+      # replace nullable types. ex: sql.NullInt32 -> *int32
+      replace_sqlc_nullable_types: true
+      # move sqlc models to another package and directory
+      move: # required
+        output_dir: internal/models
+        # default: models.go
+        output_file_name: models_gen.go
+        # new package name. by default based on `output_dir`
+        package_name: models
+        # required. full path to new models directory
+        package_path: github.com/company/project/internal/models
+
+    # generate crud sql for tables
+    crud:
+      # Auto remove generated files, ended with _gen.sql
+      auto_remove_generated_files: true
+      # Instead [ActionName][TableName] will be [ActionName]
+      # Example GetUser -> Get; FindUsers -> Find, etc.
+      # You can user `name` field for manual overwriting method name
+      exclude_table_name_from_methods: false
+      tables:
+        user:
+          # Not required. If you do not specify this value, then the sql file will be generated in each folder for all tables
+          output_dir: sql/queries/users
+          primary_column: id
+          methods:
+            # get
+            # find
+            # create
+            # update
+            # delete
+            # total
+            # exists
+            create:
+              skip_columns:
+                - id
+                - updated_at
+              returning: "*"
+            update:
+              skip_columns:
+                - id
+                - created_at
+              returning: "*"
+            find:
+              where:
+                user_id:
+                  operator: "!="
+                deleted_at:
+                  value: "IS NULL"
+              where_additional:
+                - (NOT @is_is_active::boolean OR "is_active" = @is_active)
+              order:
+                by: created_at
+                direction: DESC
+              limit: true
+            get:
+              # Not required. By default this method will be GetUser
+              name: GetUserByID
+            delete:
+            total:
+            exists:
+              where:
+                email:
+
+    # go constants
+    constants:
+      tables:
+        users:
+          output_dir: internal/store/users/repo_users
+
+# modification of existing models. not required
 gen_models:
   - # path to a specific file
     input_file_path: "internal/store/models.go"
@@ -143,6 +206,7 @@ gen_models:
     # only the listed structures will be used
     include_structs:
       - struct_name: "User"
+
 gen_keystone_models:
   - input_file_path: "internal/models/models_gen.go"
     output_dir: "frontend/src/stores/models"
@@ -168,6 +232,7 @@ gen_keystone_models:
         field_name: "organization"
         field_params:
           - with_setter: false
+
 gen_typescript_from_structs:
   - path: "pb"
     output_dir: "frontend/src/stores/models"
@@ -181,70 +246,6 @@ gen_typescript_from_structs:
     exclude_struct_names_regexp:
       - "GetUserRequest"
       - "GetOrganizationRequest"
-# Update json tag. Not required
-json_tags:
-  # List of struct fields
-  # Convert: `json:"field_name"` => `json:"field_name,omitempty"`
-  omitempty:
-    - created_at
-  # List of struct fields
-  # Convert: `json:"field_name"` => `json:"-"`
-  hide:
-    - password
-crud_params:
-  # Auto remove generated files, ended with _gen.sql
-  auto_remove_generated_files: true
-  # Instead [ActionName][TableName] will be [ActionName]
-  # Example GetUser -> Get; FindUsers -> Find, etc.
-  # You can user `name` field for manual overwriting method name
-  exclude_table_name_from_methods: false
-  tables:
-    user:
-      # Not required. If you do not specify this value, then the sql file will be generated in each folder for all tables
-      output_dir: sql/queries/users
-      primary_column: id
-      methods:
-        # get
-        # find
-        # create
-        # update
-        # delete
-        # total
-        # exists
-        create:
-          skip_columns:
-            - id
-            - updated_at
-          returning: "*"
-        update:
-          skip_columns:
-            - id
-            - created_at
-          returning: "*"
-        find:
-          where:
-            user_id:
-              operator: "!="
-            deleted_at:
-              value: "IS NULL"
-          where_additional:
-            - (NOT @is_is_active::boolean OR "is_active" = @is_active)
-          order:
-            by: created_at
-            direction: DESC
-          limit: true
-        get:
-          # Not required. By default this method will be GetUser
-          name: GetUserByID
-        delete:
-        total:
-        exists:
-          where:
-            email:
-go_constants:
-  tables:
-    users:
-      output_dir: internal/store/users/repo_users
 ```
 
 ### Generate `CRUD` queries for existing tables

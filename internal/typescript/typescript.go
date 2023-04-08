@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
-	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/templates"
 	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
@@ -40,11 +40,14 @@ type tmplTypescriptCtx struct {
 }
 
 func (s *typescript) Generate(_ context.Context, args []string) error {
+	s.logger.Infof("generate typescript code")
+	timeStart := time.Now()
+
 	if err := s.generateTypescript(args); err != nil {
 		return err
 	}
 
-	s.logger.Info("typescript types successfully generated")
+	s.logger.Infof("typescript code successfully generated in: %s", time.Since(timeStart))
 
 	return nil
 }
@@ -190,11 +193,11 @@ func (s *typescript) compileTypescript(c config.GenTypescriptFromStructs, st str
 		Data: tctx,
 	})
 	if err != nil {
-		return errors.Wrap(err, "tpl.Compile error")
+		return fmt.Errorf("tpl.Compile error: %w", err)
 	}
 
 	if err := utils.SaveFile(c.OutputDir, c.OutputFileName, compiledRes); err != nil {
-		return errors.Wrap(err, "SaveFile error")
+		return fmt.Errorf("SaveFile error: %w", err)
 	}
 
 	if c.PrettierCode {

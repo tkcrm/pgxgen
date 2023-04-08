@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/templates"
 	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/internal/assets"
@@ -38,13 +38,16 @@ func (s *gomodels) Generate(_ context.Context, args []string) error {
 		return nil
 	}
 
+	s.logger.Infof("generate go models")
+	timeStart := time.Now()
+
 	for _, genStructsCfg := range s.config.Pgxgen.GenModels {
 		if err := s.generateModels(genStructsCfg); err != nil {
 			return err
 		}
 	}
 
-	s.logger.Info("go models successfully generated")
+	s.logger.Infof("go models successfully generated in: %s", time.Since(timeStart))
 
 	return nil
 }
@@ -462,12 +465,12 @@ func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path 
 		Data: tctx,
 	})
 	if err != nil {
-		return errors.Wrap(err, "tpl.Compile error")
+		return fmt.Errorf("tpl.Compile error: %w", err)
 	}
 
 	compiledRes, err = utils.UpdateGoImports(compiledRes)
 	if err != nil {
-		return errors.Wrap(err, "UpdateGoImports error")
+		return fmt.Errorf("UpdateGoImports error: %w", err)
 	}
 
 	if err := utils.SaveFile(c.OutputDir, c.OutputFileName, compiledRes); err != nil {
