@@ -4,13 +4,14 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sync"
 
-	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/compiler"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
@@ -95,7 +96,9 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 	grp, _ := errgroup.WithContext(ctx)
 	grp.SetLimit(runtime.GOMAXPROCS(0))
 
+	var m sync.Mutex
 	res = make(GetCatalogResult, 0)
+
 	for _, pair := range pairs {
 		sql := pair
 
@@ -152,7 +155,9 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 				Catalog:       c.Catalog(),
 			}
 
+			m.Lock()
 			res = append(res, item)
+			m.Unlock()
 
 			return nil
 		})
@@ -164,13 +169,8 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 	return res, nil
 }
 
-func GetCatalogByOutputDir(outputDir string) (GetCatalogResultItem, error) {
+func GetCatalogByOutputDir(catalogs GetCatalogResult, outputDir string) (GetCatalogResultItem, error) {
 	res := GetCatalogResultItem{}
-	catalogs, err := GetCatalogs()
-	if err != nil {
-		return res, errors.Wrap(err, "get catalogs error")
-	}
-
 	item, exists := utils.FindInArray(catalogs, func(el GetCatalogResultItem) bool {
 		absPath1, err := filepath.Abs(el.OutputDir)
 		if err != nil {
@@ -185,7 +185,7 @@ func GetCatalogByOutputDir(outputDir string) (GetCatalogResultItem, error) {
 		return absPath1 == absPath2
 	})
 	if !exists {
-		return res, fmt.Errorf("can not find catalog for output dir %s", outputDir)
+		return res, fmt.Errorf("can not find catalog for output dir: %s", outputDir)
 	}
 
 	return item, nil
@@ -195,7 +195,7 @@ func GetCatalogBySchemaDir(schemaDir string) (GetCatalogResultItem, error) {
 	res := GetCatalogResultItem{}
 	catalogs, err := GetCatalogs()
 	if err != nil {
-		return res, errors.Wrap(err, "get catalogs error")
+		return res, fmt.Errorf("get catalogs error: %w", err)
 	}
 
 	item, exists := utils.FindInArray(catalogs, func(el GetCatalogResultItem) bool {
@@ -210,7 +210,9 @@ func GetCatalogBySchemaDir(schemaDir string) (GetCatalogResultItem, error) {
 				return false
 			}
 
-			return absPath1 == absPath2
+			if absPath1 == absPath2 {
+				return true
+			}
 		}
 
 		return false

@@ -1,29 +1,33 @@
 package typescript
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
-	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/templates"
 	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type typescript struct {
+	logger logger.Logger
 	config config.Config
 }
 
-func New(cfg config.Config) generator.IGenerator {
+func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	return &typescript{
+		logger: logger,
 		config: cfg,
 	}
 }
@@ -35,12 +39,15 @@ type tmplTypescriptCtx struct {
 	ExportTypeSuffix string
 }
 
-func (s *typescript) Generate(args []string) error {
+func (s *typescript) Generate(_ context.Context, args []string) error {
+	s.logger.Infof("generate typescript code")
+	timeStart := time.Now()
+
 	if err := s.generateTypescript(args); err != nil {
 		return err
 	}
 
-	fmt.Println("ts types successfully generated")
+	s.logger.Infof("typescript code successfully generated in: %s", time.Since(timeStart))
 
 	return nil
 }
@@ -186,11 +193,11 @@ func (s *typescript) compileTypescript(c config.GenTypescriptFromStructs, st str
 		Data: tctx,
 	})
 	if err != nil {
-		return errors.Wrap(err, "tpl.Compile error")
+		return fmt.Errorf("tpl.Compile error: %w", err)
 	}
 
 	if err := utils.SaveFile(c.OutputDir, c.OutputFileName, compiledRes); err != nil {
-		return errors.Wrap(err, "SaveFile error")
+		return fmt.Errorf("SaveFile error: %w", err)
 	}
 
 	if c.PrettierCode {

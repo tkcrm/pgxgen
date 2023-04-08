@@ -8,7 +8,8 @@ import (
 	"strings"
 
 	"github.com/gobeam/stringy"
-	"github.com/tkcrm/modules/pkg/utils"
+	cmnutils "github.com/tkcrm/modules/pkg/utils"
+	"github.com/tkcrm/pgxgen/utils"
 )
 
 type Types map[string]TypesParameters
@@ -18,23 +19,14 @@ func (s Structs) AddStruct(name string, params *StructParameters) {
 	s[name] = params
 }
 
-func getImports(file_models_str string) []string {
-	res := ""
-	r := regexp.MustCompile(`(?s)import \(?([^)]+)\)?`)
-	match := r.FindAllStringSubmatch(file_models_str, -1)
-	if len(match) == 1 {
-		res = match[0][1]
-	}
-	return strings.Split(strings.ReplaceAll(res, "\r\n", "\n"), "\n")
-}
-
 func GetStructs(file_models_str string) Structs {
 	r := bufio.NewReader(strings.NewReader(file_models_str))
 
 	structs := make(Structs)
 
+	fileImports := utils.GetGoImportsFromFile(file_models_str)
 	currentStruct := &StructParameters{
-		Imports: getImports(file_models_str),
+		Imports: fileImports,
 	}
 
 	for {
@@ -49,14 +41,20 @@ func GetStructs(file_models_str string) Structs {
 		reCloseStruct := regexp.MustCompile(`^\}`)
 		if reCloseStruct.MatchString(line) {
 			structs[currentStruct.Name] = currentStruct
-			currentStruct = &StructParameters{}
+			currentStruct = &StructParameters{
+				Imports: fileImports,
+			}
 			continue
 		}
 
 		reStartStruct := regexp.MustCompile(`type (\w+) struct {`)
 		matches := reStartStruct.FindAllStringSubmatch(line, -1)
 		if len(matches) == 1 {
-			currentStruct = &StructParameters{Name: matches[0][1], Fields: make([]*StructField, 0)}
+			currentStruct = &StructParameters{
+				Name:    matches[0][1],
+				Fields:  make([]*StructField, 0),
+				Imports: fileImports,
+			}
 			continue
 		}
 
@@ -105,7 +103,7 @@ func GetMissedStructs(s Structs, scalarTypes Types) []string {
 
 	for _, st := range s {
 		for _, stName := range st.GetNestedStructs(scalarTypes) {
-			if !utils.ExistInArray(keys, stName) && !utils.ExistInArray(res, stName) {
+			if !cmnutils.ExistInArray(keys, stName) && !cmnutils.ExistInArray(res, stName) {
 				res = append(res, stName)
 			}
 		}
@@ -129,7 +127,7 @@ func (s StructParameters) GetNestedStructs(scalarTypes Types) []string {
 		}
 
 		_, existScalarType := scalarTypes[field.Type]
-		if !utils.ExistInArray(res, field.Type) && !existScalarType {
+		if !cmnutils.ExistInArray(res, field.Type) && !existScalarType {
 			res = append(res, field.Type)
 		}
 	}

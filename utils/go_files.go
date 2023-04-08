@@ -10,7 +10,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/pkg/errors"
 	"golang.org/x/tools/imports"
 )
 
@@ -63,7 +62,7 @@ func GetGoPackageNameForDir(path string) (string, error) {
 
 		goPackage, err := GetGoPackageNameForFile(path, item.Name())
 		if err != nil {
-			return "", errors.Wrap(err, "GetGoPackageNameForFile error")
+			return "", fmt.Errorf("GetGoPackageNameForFile error: %w", err)
 		}
 
 		if strings.HasSuffix(goPackage, "_test") {
@@ -79,6 +78,36 @@ func GetGoPackageNameForDir(path string) (string, error) {
 	}
 
 	return res, nil
+}
+
+func GetGoImportsFromFile(data string) []string {
+	res := []string{}
+	r := regexp.MustCompile(`import (\"\w+\")`)
+	r2 := regexp.MustCompile(`(?sm)^import \(\s(([^\)]+)\s)+\)`)
+
+	if r.MatchString(data) {
+		matches := r.FindStringSubmatch(data)
+		if len(matches) > 1 {
+			res = matches[1:]
+		}
+	}
+
+	if r2.MatchString(data) {
+		matches := r2.FindStringSubmatch(data)
+		if len(matches) == 3 {
+			packageImports := matches[2]
+			var re2 = regexp.MustCompile(`(\s+(.*)\n?)`)
+			rs2 := re2.FindAllStringSubmatch(packageImports, -1)
+			imports := make([]string, 0, len(rs2))
+			for _, item := range rs2 {
+				imports = append(imports, item[2])
+			}
+
+			res = imports
+		}
+	}
+
+	return res
 }
 
 func UpdateGoImports(data []byte) ([]byte, error) {

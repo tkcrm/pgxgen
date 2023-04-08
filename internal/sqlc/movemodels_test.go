@@ -41,14 +41,13 @@ import "context"
 
 const a = "b"`
 
-	cfg := config.Config{
-		Pgxgen: config.Pgxgen{
-			SqlcModels: config.SqlcMoveModels{
-				PackagePath: "1234",
-			},
-		},
+	cfg := config.SqlcModels{}
+
+	if _, err := replaceImports(str1, cfg, structs.Structs{}); err != nil {
+		t.Fatal(err)
 	}
 
-	replaceImports(cfg, str1, structs.Structs{})
-	replaceImports(cfg, str2, structs.Structs{})
+	if _, err := replaceImports(str2, cfg, structs.Structs{}); err != nil {
+		t.Fatal(err)
+	}
 }

@@ -1,32 +1,13 @@
-package pgxgen_test
+package structs_test
 
 import (
 	"bufio"
 	"fmt"
 	"io"
-	"os"
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/tkcrm/pgxgen/internal/config"
-	"gopkg.in/yaml.v3"
 )
-
-func Test_Config(t *testing.T) {
-	var c config.Pgxgen
-
-	configFile, err := os.ReadFile("../../pgxgen.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if err := yaml.Unmarshal(configFile, &c); err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Printf("%+v", c)
-}
 
 type structParameters struct {
 	name   string

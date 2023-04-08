@@ -9,20 +9,34 @@ require (
 	github.com/go-sql-driver/mysql v1.7.0
 	github.com/gobeam/stringy v0.0.6
 	github.com/google/go-cmp v0.5.9
-	github.com/jackc/pgx/v4 v4.18.0
+	github.com/jackc/pgx/v4 v4.18.1
 	github.com/jinzhu/inflection v1.0.0
 	github.com/lib/pq v1.10.7
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/pganalyze/pg_query_go/v2 v2.2.0
 	github.com/pingcap/tidb/parser v0.0.0-20230224142707-1d2040a2abb1
-	github.com/pkg/errors v0.9.1
 	github.com/spf13/cobra v1.6.1
 	github.com/spf13/pflag v1.0.5
-	github.com/tkcrm/modules v0.0.0-20230225150552-c2440af87d0b
+	github.com/tkcrm/modules v0.0.0-20230308042354-885154fb5ff9
 	golang.org/x/sync v0.1.0
-	golang.org/x/tools v0.6.0
-	google.golang.org/protobuf v1.28.1
+	golang.org/x/tools v0.7.0
+	google.golang.org/protobuf v1.30.0
 	gopkg.in/yaml.v3 v3.0.1
+)
+
+require (
+	github.com/cristalhq/acmd v0.11.1
+	gopkg.in/yaml.v2 v2.2.8
+)
+
+require (
+	github.com/cristalhq/flagx v0.4.0
+	github.com/stretchr/testify v1.8.2
+)
+
+require (
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 )
 
 require (
@@ -30,8 +44,8 @@ require (
 	github.com/bytecodealliance/wasmtime-go/v5 v5.0.0
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
-	github.com/goccy/go-json v0.10.0 // indirect
-	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/goccy/go-json v0.10.2 // indirect
+	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.14.0 // indirect
@@ -44,12 +58,12 @@ require (
 	github.com/pingcap/log v1.1.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/multierr v1.9.0 // indirect
+	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
-	golang.org/x/crypto v0.6.0 // indirect
-	golang.org/x/exp v0.0.0-20230224173230-c95f2b4c22f2 // indirect
-	golang.org/x/mod v0.8.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/crypto v0.7.0 // indirect
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
+	golang.org/x/mod v0.9.0 // indirect
+	golang.org/x/sys v0.6.0 // indirect
+	golang.org/x/text v0.8.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

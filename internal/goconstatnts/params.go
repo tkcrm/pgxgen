@@ -1,11 +1,11 @@
 package goconstatnts
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 
 	"github.com/gobeam/stringy"
-	"github.com/pkg/errors"
 	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/utils"
 )
@@ -21,7 +21,7 @@ func (s *generateConstantsParams) addConstantItem(version, outputDir, tableName 
 
 	packageName, err := utils.GetGoPackageNameForDir(outputDir)
 	if err != nil {
-		return errors.Wrap(err, "GetGoPackageNameForDir error")
+		return fmt.Errorf("GetGoPackageNameForDir error: %w", err)
 	}
 
 	params, ok := s.ConstantsParams[outputDir]

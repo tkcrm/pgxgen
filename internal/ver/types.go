@@ -2,7 +2,7 @@ package ver
 
 import "time"
 
-var MessageTemplate = `The current version of pgxgen is not the latest.
+var MessageTemplate = `The current version of pgxgen is outdated.
 Please update with the following command:
 
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest

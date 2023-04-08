@@ -2,40 +2,46 @@ package keystone
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
-	"github.com/pkg/errors"
 	"github.com/tkcrm/modules/pkg/templates"
 	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type keystone struct {
+	logger logger.Logger
 	config config.Config
 }
 
-func New(cfg config.Config) generator.IGenerator {
+func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
 	return &keystone{
+		logger: logger,
 		config: cfg,
 	}
 }
 
-func (s *keystone) Generate(args []string) error {
+func (s *keystone) Generate(_ context.Context, args []string) error {
+	s.logger.Infof("generate keystone models")
+	timeStart := time.Now()
+
 	if err := s.generateKeystone(); err != nil {
 		return err
 	}
 
-	fmt.Println("keystone models successfully generated")
+	s.logger.Infof("keystone models successfully generated in: %s", time.Since(timeStart))
 
 	return nil
 }
@@ -109,7 +115,7 @@ func (s *keystone) getScalarTypes(file_models_str string) structs.Types {
 			if err == io.EOF {
 				break
 			}
-			log.Fatal(err)
+			s.logger.Fatal(err)
 		}
 
 		if strings.Contains(line, "struct {") {
@@ -201,11 +207,11 @@ func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st 
 		Data: tctx,
 	})
 	if err != nil {
-		return errors.Wrap(err, "tpl.Compile error")
+		return fmt.Errorf("tpl.Compile error: %w", err)
 	}
 
 	if err := utils.SaveFile(cfg.OutputDir, cfg.OutputFileName, compiledRes); err != nil {
-		return errors.Wrap(err, "SaveFile error")
+		return fmt.Errorf("SaveFile error: %w", err)
 	}
 
 	if cfg.PrettierCode {
