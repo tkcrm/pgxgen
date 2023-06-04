@@ -61,8 +61,7 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 
 	dir, filename := getConfigPathCustom(stderr, "")
 	e := Env{
-		ExperimentalFeatures: false,
-		DryRun:               false,
+		DryRun: false,
 	}
 	ctx := context.Background()
 

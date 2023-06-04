@@ -67,8 +67,7 @@ type importer struct {
 func (i *importer) usesType(typ string) bool {
 	for _, strct := range i.Structs {
 		for _, f := range strct.Fields {
-			fType := trimSliceAndPointerPrefix(f.Type)
-			if strings.HasPrefix(fType, typ) {
+			if hasPrefixIgnoringSliceAndPointerPrefix(f.Type, typ) {
 				return true
 			}
 		}
@@ -91,6 +90,9 @@ func (i *importer) Imports(filename string) [][]ImportSpec {
 	}
 	copyfromFileName := "copyfrom.go"
 	batchFileName := "batch.go"
+	if i.Settings.Go.OutputBatchFileName != "" {
+		batchFileName = i.Settings.Go.OutputBatchFileName
+	}
 
 	switch filename {
 	case dbFileName:
@@ -236,13 +238,12 @@ func (i *importer) interfaceImports() fileImports {
 				if usesBatch([]Query{q}) {
 					continue
 				}
-				if strings.HasPrefix(q.Ret.Type(), name) {
+				if hasPrefixIgnoringSliceAndPointerPrefix(q.Ret.Type(), name) {
 					return true
 				}
 			}
 			if !q.Arg.isEmpty() {
-				argType := trimSliceAndPointerPrefix(q.Arg.Type())
-				if strings.HasPrefix(argType, name) {
+				if hasPrefixIgnoringSliceAndPointerPrefix(q.Arg.Type(), name) {
 					return true
 				}
 			}
@@ -302,28 +303,24 @@ func (i *importer) queryImports(filename string) fileImports {
 			if q.hasRetType() {
 				if q.Ret.EmitStruct() {
 					for _, f := range q.Ret.Struct.Fields {
-						fType := trimSliceAndPointerPrefix(f.Type)
-						if strings.HasPrefix(fType, name) {
+						if hasPrefixIgnoringSliceAndPointerPrefix(f.Type, name) {
 							return true
 						}
 					}
 				}
-				retType := trimSliceAndPointerPrefix(q.Ret.Type())
-				if strings.HasPrefix(retType, name) {
+				if hasPrefixIgnoringSliceAndPointerPrefix(q.Ret.Type(), name) {
 					return true
 				}
 			}
 			if !q.Arg.isEmpty() {
 				if q.Arg.EmitStruct() {
 					for _, f := range q.Arg.Struct.Fields {
-						fType := trimSliceAndPointerPrefix(f.Type)
-						if strings.HasPrefix(fType, name) {
+						if hasPrefixIgnoringSliceAndPointerPrefix(f.Type, name) {
 							return true
 						}
 					}
 				}
-				argType := trimSliceAndPointerPrefix(q.Arg.Type())
-				if strings.HasPrefix(argType, name) {
+				if hasPrefixIgnoringSliceAndPointerPrefix(q.Arg.Type(), name) {
 					return true
 				}
 			}
@@ -363,12 +360,24 @@ func (i *importer) queryImports(filename string) fileImports {
 		return false
 	}
 
+	// Search for sqlc.slice() calls
+	sqlcSliceScan := func() bool {
+		for _, q := range gq {
+			if q.Arg.HasSqlcSlices() {
+				return true
+			}
+		}
+		return false
+	}
+
 	if anyNonCopyFrom {
 		std["context"] = struct{}{}
 	}
 
 	sqlpkg := parseDriver(i.Settings.Go.SqlPackage)
-	if sliceScan() && !sqlpkg.IsPGX() {
+	if sqlcSliceScan() {
+		std["strings"] = struct{}{}
+	} else if sliceScan() && !sqlpkg.IsPGX() {
 		pkg[ImportSpec{Path: "github.com/lib/pq"}] = struct{}{}
 	}
 
@@ -415,28 +424,24 @@ func (i *importer) batchImports() fileImports {
 			if q.hasRetType() {
 				if q.Ret.EmitStruct() {
 					for _, f := range q.Ret.Struct.Fields {
-						fType := trimSliceAndPointerPrefix(f.Type)
-						if strings.HasPrefix(fType, name) {
+						if hasPrefixIgnoringSliceAndPointerPrefix(f.Type, name) {
 							return true
 						}
 					}
 				}
-				retType := trimSliceAndPointerPrefix(q.Ret.Type())
-				if strings.HasPrefix(retType, name) {
+				if hasPrefixIgnoringSliceAndPointerPrefix(q.Ret.Type(), name) {
 					return true
 				}
 			}
 			if !q.Arg.isEmpty() {
 				if q.Arg.EmitStruct() {
 					for _, f := range q.Arg.Struct.Fields {
-						fType := trimSliceAndPointerPrefix(f.Type)
-						if strings.HasPrefix(fType, name) {
+						if hasPrefixIgnoringSliceAndPointerPrefix(f.Type, name) {
 							return true
 						}
 					}
 				}
-				argType := trimSliceAndPointerPrefix(q.Arg.Type())
-				if strings.HasPrefix(argType, name) {
+				if hasPrefixIgnoringSliceAndPointerPrefix(q.Arg.Type(), name) {
 					return true
 				}
 			}
@@ -461,6 +466,12 @@ func trimSliceAndPointerPrefix(v string) string {
 	v = strings.TrimPrefix(v, "[]")
 	v = strings.TrimPrefix(v, "*")
 	return v
+}
+
+func hasPrefixIgnoringSliceAndPointerPrefix(s, prefix string) bool {
+	trimmedS := trimSliceAndPointerPrefix(s)
+	trimmedPrefix := trimSliceAndPointerPrefix(prefix)
+	return strings.HasPrefix(trimmedS, trimmedPrefix)
 }
 
 func replaceConflictedArg(imports [][]ImportSpec, queries []Query) []Query {

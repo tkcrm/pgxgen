@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"runtime/trace"
-	"strings"
 	"sync"
 
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/status"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/golang"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/json"
@@ -24,9 +24,12 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/sqlc/ext"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/ext/process"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/ext/wasm"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/info"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/multierr"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/opts"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/remote"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlpath"
 )
 
 const errMessageNoVersion = `The configuration file must have a version number.
@@ -45,7 +48,10 @@ The supported version can only be "1" or "2".
 const errMessageNoPackages = `No packages are configured`
 
 func printFileErr(stderr io.Writer, dir string, fileErr *multierr.FileError) {
-	filename := strings.TrimPrefix(fileErr.Filename, dir+"/")
+	filename, err := filepath.Rel(dir, fileErr.Filename)
+	if err != nil {
+		filename = fileErr.Filename
+	}
 	fmt.Fprintf(stderr, "%s:%d:%d: %s\n", filename, fileErr.Line, fileErr.Column, fileErr.Err)
 }
 
@@ -98,13 +104,14 @@ func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config,
 	}
 
 	base := filepath.Base(configPath)
-	blob, err := os.ReadFile(configPath)
+	file, err := os.Open(configPath)
 	if err != nil {
 		fmt.Fprintf(stderr, "error parsing %s: file does not exist\n", base)
 		return "", nil, err
 	}
+	defer file.Close()
 
-	conf, err := config.ParseConfig(bytes.NewReader(blob))
+	conf, err := config.ParseConfig(file)
 	if err != nil {
 		switch err {
 		case config.ErrMissingVersion:
@@ -136,6 +143,10 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 	if err := e.Validate(conf); err != nil {
 		fmt.Fprintf(stderr, "error validating %s: %s\n", base, err)
 		return nil, err
+	}
+
+	if conf.Cloud.Project != "" && !e.NoRemote {
+		return remoteGenerate(ctx, configPath, conf, dir, stderr)
 	}
 
 	output := map[string]string{}
@@ -246,13 +257,76 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 		return nil, err
 	}
 	if errored {
-		for i, _ := range stderrs {
+		for i := range stderrs {
 			if _, err := io.Copy(stderr, &stderrs[i]); err != nil {
 				return nil, err
 			}
 		}
 		return nil, fmt.Errorf("errored")
 	}
+	return output, nil
+}
+
+func remoteGenerate(ctx context.Context, configPath string, conf *config.Config, dir string, stderr io.Writer) (map[string]string, error) {
+	rpcClient, err := remote.NewClient(conf.Cloud)
+	if err != nil {
+		fmt.Fprintf(stderr, "error creating rpc client: %s\n", err)
+		return nil, err
+	}
+
+	configBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		fmt.Fprintf(stderr, "error reading config file %s: %s\n", configPath, err)
+		return nil, err
+	}
+
+	rpcReq := remote.GenerateRequest{
+		Version: info.Version,
+		Inputs:  []*remote.File{{Path: filepath.Base(configPath), Bytes: configBytes}},
+	}
+
+	for _, pkg := range conf.SQL {
+		for _, paths := range []config.Paths{pkg.Schema, pkg.Queries} {
+			for i, relFilePath := range paths {
+				paths[i] = filepath.Join(dir, relFilePath)
+			}
+			files, err := sqlpath.Glob(paths)
+			if err != nil {
+				fmt.Fprintf(stderr, "error globbing paths: %s\n", err)
+				return nil, err
+			}
+			for _, filePath := range files {
+				fileBytes, err := os.ReadFile(filePath)
+				if err != nil {
+					fmt.Fprintf(stderr, "error reading file %s: %s\n", filePath, err)
+					return nil, err
+				}
+				fileRelPath, _ := filepath.Rel(dir, filePath)
+				rpcReq.Inputs = append(rpcReq.Inputs, &remote.File{Path: fileRelPath, Bytes: fileBytes})
+			}
+		}
+	}
+
+	rpcResp, err := rpcClient.Generate(ctx, &rpcReq)
+	if err != nil {
+		rpcStatus, ok := status.FromError(err)
+		if !ok {
+			return nil, err
+		}
+		fmt.Fprintf(stderr, "rpc error: %s", rpcStatus.Message())
+		return nil, rpcStatus.Err()
+	}
+
+	if rpcResp.ExitCode != 0 {
+		fmt.Fprintf(stderr, "%s", rpcResp.Stderr)
+		return nil, errors.New("remote execution returned with non-zero exit code")
+	}
+
+	output := map[string]string{}
+	for _, file := range rpcResp.Outputs {
+		output[filepath.Join(dir, file.Path)] = string(file.Bytes)
+	}
+
 	return output, nil
 }
 
