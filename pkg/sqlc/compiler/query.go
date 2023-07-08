@@ -16,8 +16,10 @@ type Table struct {
 
 type Column struct {
 	Name         string
+	OriginalName string
 	DataType     string
 	NotNull      bool
+	Unsigned     bool
 	IsArray      bool
 	Comment      string
 	Length       *int
@@ -49,6 +51,9 @@ type Query struct {
 
 	// Needed for CopyFrom
 	InsertIntoTable *ast.TableName
+
+	// Needed for vet
+	RawStmt *ast.RawStmt
 }
 
 type Parameter struct {

@@ -153,6 +153,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 						DataType:     dataType,
 						IsNamedParam: isNamed,
 						NotNull:      p.NotNull(),
+						IsSqlcSlice:  p.IsSqlcSlice(),
 					},
 				})
 				continue
@@ -212,12 +213,15 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 							Number: ref.ref.Number,
 							Column: &Column{
 								Name:         p.Name(),
+								OriginalName: c.Name,
 								DataType:     dataType(&c.Type),
 								NotNull:      p.NotNull(),
+								Unsigned:     c.IsUnsigned,
 								IsArray:      c.IsArray,
 								Length:       c.Length,
 								Table:        table,
 								IsNamedParam: isNamed,
+								IsSqlcSlice:  p.IsSqlcSlice(),
 							},
 						})
 					}
@@ -253,10 +257,6 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 				}
 			}
 
-			number := 0
-			if pr, ok := n.Left.(*ast.ParamRef); ok {
-				number = pr.Number
-			}
 
 			for _, table := range tables {
 				schema := table.Schema
@@ -267,15 +267,26 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 				if c, ok := typeMap[schema][table.Name][key]; ok {
 					defaultP := named.NewInferredParam(key, c.IsNotNull)
 					p, isNamed := params.FetchMerge(ref.ref.Number, defaultP)
+					var namePrefix string
+					if !isNamed {
+						if ref.ref == n.Left {
+							namePrefix = "from_"
+						} else if ref.ref == n.Right {
+							namePrefix = "to_"
+						}
+					}
+
 					a = append(a, Parameter{
-						Number: number,
+						Number: ref.ref.Number,
 						Column: &Column{
-							Name:         p.Name(),
+							Name:         namePrefix + p.Name(),
 							DataType:     dataType(&c.Type),
 							NotNull:      p.NotNull(),
+							Unsigned:     c.IsUnsigned,
 							IsArray:      c.IsArray,
 							Table:        table,
 							IsNamedParam: isNamed,
+							IsSqlcSlice:  p.IsSqlcSlice(),
 						},
 					})
 				}
@@ -344,6 +355,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 							DataType:     "any",
 							IsNamedParam: isNamed,
 							NotNull:      p.NotNull(),
+							IsSqlcSlice:  p.IsSqlcSlice(),
 						},
 					})
 					continue
@@ -384,6 +396,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 						DataType:     dataType(paramType),
 						NotNull:      p.NotNull(),
 						IsNamedParam: isNamed,
+						IsSqlcSlice:  p.IsSqlcSlice(),
 					},
 				})
 			}
@@ -442,12 +455,14 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 					Number: ref.ref.Number,
 					Column: &Column{
 						Name:         p.Name(),
+						OriginalName: c.Name,
 						DataType:     dataType(&c.Type),
 						NotNull:      p.NotNull(),
 						IsArray:      c.IsArray,
 						Table:        &ast.TableName{Schema: schema, Name: rel},
 						Length:       c.Length,
 						IsNamedParam: isNamed,
+						IsSqlcSlice:  p.IsSqlcSlice(),
 					},
 				})
 			} else {
@@ -549,8 +564,10 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 							Number: number,
 							Column: &Column{
 								Name:         p.Name(),
+								OriginalName: c.Name,
 								DataType:     dataType(&c.Type),
 								NotNull:      c.IsNotNull,
+								Unsigned:     c.IsUnsigned,
 								IsArray:      c.IsArray,
 								Table:        table,
 								IsNamedParam: isNamed,

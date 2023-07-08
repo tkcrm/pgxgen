@@ -77,6 +77,11 @@ func Walk(f Visitor, node ast.Node) {
 			Walk(f, n.Type)
 		}
 
+	case *ast.CommentOnViewStmt:
+		if n.View != nil {
+			Walk(f, n.View)
+		}
+
 	case *ast.CompositeTypeStmt:
 		if n.TypeName != nil {
 			Walk(f, n.TypeName)
@@ -1063,6 +1068,9 @@ func Walk(f Visitor, node ast.Node) {
 		if n.WhereClause != nil {
 			Walk(f, n.WhereClause)
 		}
+		if n.LimitCount != nil {
+			Walk(f, n.LimitCount)
+		}
 		if n.ReturningList != nil {
 			Walk(f, n.ReturningList)
 		}
@@ -2032,6 +2040,9 @@ func Walk(f Visitor, node ast.Node) {
 		}
 		if n.FromClause != nil {
 			Walk(f, n.FromClause)
+		}
+		if n.LimitCount != nil {
+			Walk(f, n.LimitCount)
 		}
 		if n.ReturningList != nil {
 			Walk(f, n.ReturningList)

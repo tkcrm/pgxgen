@@ -257,9 +257,7 @@ func (i *importer) interfaceImports() fileImports {
 }
 
 func (i *importer) modelImports() fileImports {
-	std, pkg := buildImports(i.Settings, nil, func(prefix string) bool {
-		return i.usesType(prefix)
-	})
+	std, pkg := buildImports(i.Settings, nil, i.usesType)
 
 	if len(i.Enums) > 0 {
 		std["fmt"] = struct{}{}
@@ -346,12 +344,12 @@ func (i *importer) queryImports(filename string) fileImports {
 			if !q.Arg.isEmpty() {
 				if q.Arg.IsStruct() {
 					for _, f := range q.Arg.Struct.Fields {
-						if strings.HasPrefix(f.Type, "[]") && f.Type != "[]byte" {
+						if strings.HasPrefix(f.Type, "[]") && f.Type != "[]byte" && !f.HasSqlcSlice() {
 							return true
 						}
 					}
 				} else {
-					if strings.HasPrefix(q.Arg.Type(), "[]") && q.Arg.Type() != "[]byte" {
+					if strings.HasPrefix(q.Arg.Type(), "[]") && q.Arg.Type() != "[]byte" && !q.Arg.HasSqlcSlices() {
 						return true
 					}
 				}
@@ -377,7 +375,8 @@ func (i *importer) queryImports(filename string) fileImports {
 	sqlpkg := parseDriver(i.Settings.Go.SqlPackage)
 	if sqlcSliceScan() {
 		std["strings"] = struct{}{}
-	} else if sliceScan() && !sqlpkg.IsPGX() {
+	}
+	if sliceScan() && !sqlpkg.IsPGX() {
 		pkg[ImportSpec{Path: "github.com/lib/pq"}] = struct{}{}
 	}
 
