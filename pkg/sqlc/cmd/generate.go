@@ -115,11 +115,11 @@ func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config,
 	if err != nil {
 		switch err {
 		case config.ErrMissingVersion:
-			fmt.Fprintf(stderr, errMessageNoVersion)
+			fmt.Fprint(stderr, errMessageNoVersion)
 		case config.ErrUnknownVersion:
-			fmt.Fprintf(stderr, errMessageUnknownVersion)
+			fmt.Fprint(stderr, errMessageUnknownVersion)
 		case config.ErrNoPackages:
-			fmt.Fprintf(stderr, errMessageNoPackages)
+			fmt.Fprint(stderr, errMessageNoPackages)
 		}
 		fmt.Fprintf(stderr, "error parsing %s: %s\n", base, err)
 		return "", nil, err
@@ -257,7 +257,7 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 		return nil, err
 	}
 	if errored {
-		for i := range stderrs {
+		for i, _ := range stderrs {
 			if _, err := io.Copy(stderr, &stderrs[i]); err != nil {
 				return nil, err
 			}

@@ -14,11 +14,11 @@ import (
 
 // OutputColumns determines which columns a statement will output
 func (c *Compiler) OutputColumns(stmt ast.Node) ([]*catalog.Column, error) {
-	qc, err := buildQueryCatalog(c.catalog, stmt, nil)
+	qc, err := c.buildQueryCatalog(c.catalog, stmt, nil)
 	if err != nil {
 		return nil, err
 	}
-	cols, err := outputColumns(qc, stmt)
+	cols, err := c.outputColumns(qc, stmt)
 	if err != nil {
 		return nil, err
 	}
@@ -26,12 +26,13 @@ func (c *Compiler) OutputColumns(stmt ast.Node) ([]*catalog.Column, error) {
 	catCols := make([]*catalog.Column, 0, len(cols))
 	for _, col := range cols {
 		catCols = append(catCols, &catalog.Column{
-			Name:      col.Name,
-			Type:      ast.TypeName{Name: col.DataType},
-			IsNotNull: col.NotNull,
-			IsArray:   col.IsArray,
-			Comment:   col.Comment,
-			Length:    col.Length,
+			Name:       col.Name,
+			Type:       ast.TypeName{Name: col.DataType},
+			IsNotNull:  col.NotNull,
+			IsUnsigned: col.Unsigned,
+			IsArray:    col.IsArray,
+			Comment:    col.Comment,
+			Length:     col.Length,
 		})
 	}
 	return catCols, nil
@@ -50,8 +51,8 @@ func hasStarRef(cf *ast.ColumnRef) bool {
 //
 // Return an error if column references are ambiguous
 // Return an error if column references don't exist
-func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
-	tables, err := sourceTables(qc, node)
+func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
+	tables, err := c.sourceTables(qc, node)
 	if err != nil {
 		return nil, err
 	}
@@ -67,13 +68,42 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 
 		if n.GroupClause != nil {
 			for _, item := range n.GroupClause.Items {
-				ref, ok := item.(*ast.ColumnRef)
-				if !ok {
-					continue
-				}
-
-				if err := findColumnForRef(ref, tables, n); err != nil {
+				if err := findColumnForNode(item, tables, n); err != nil {
 					return nil, err
+				}
+			}
+		}
+		validateOrderBy := true
+		if c.conf.StrictOrderBy != nil {
+			validateOrderBy = *c.conf.StrictOrderBy
+		}
+		if validateOrderBy {
+			if n.SortClause != nil {
+				for _, item := range n.SortClause.Items {
+					sb, ok := item.(*ast.SortBy)
+					if !ok {
+						continue
+					}
+					if err := findColumnForNode(sb.Node, tables, n); err != nil {
+						return nil, fmt.Errorf("%v: if you want to skip this validation, set 'strict_order_by' to false", err)
+					}
+				}
+			}
+			if n.WindowClause != nil {
+				for _, item := range n.WindowClause.Items {
+					sb, ok := item.(*ast.List)
+					if !ok {
+						continue
+					}
+					for _, single := range sb.Items {
+						caseExpr, ok := single.(*ast.CaseExpr)
+						if !ok {
+							continue
+						}
+						if err := findColumnForNode(caseExpr.Xpr, tables, n); err != nil {
+							return nil, fmt.Errorf("%v: if you want to skip this validation, set 'strict_order_by' to false", err)
+						}
+					}
 				}
 			}
 		}
@@ -81,11 +111,11 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 		// For UNION queries, targets is empty and we need to look for the
 		// columns in Largs.
 		if len(targets.Items) == 0 && n.Larg != nil {
-			return outputColumns(qc, n.Larg)
+			return c.outputColumns(qc, n.Larg)
 		}
 	case *ast.CallStmt:
 		targets = &ast.List{}
-	case *ast.TruncateStmt:
+	case *ast.TruncateStmt, *ast.RefreshMatViewStmt, *ast.NotifyStmt, *ast.ListenStmt:
 		targets = &ast.List{}
 	case *ast.UpdateStmt:
 		targets = n.ReturningList
@@ -248,15 +278,17 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 							cname = *res.Name
 						}
 						cols = append(cols, &Column{
-							Name:       cname,
-							Type:       c.Type,
-							Scope:      scope,
-							Table:      c.Table,
-							TableAlias: t.Rel.Name,
-							DataType:   c.DataType,
-							NotNull:    c.NotNull,
-							IsArray:    c.IsArray,
-							Length:     c.Length,
+							Name:         cname,
+							OriginalName: c.Name,
+							Type:         c.Type,
+							Scope:        scope,
+							Table:        c.Table,
+							TableAlias:   t.Rel.Name,
+							DataType:     c.DataType,
+							NotNull:      c.NotNull,
+							Unsigned:     c.Unsigned,
+							IsArray:      c.IsArray,
+							Length:       c.Length,
 						})
 					}
 				}
@@ -300,7 +332,7 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 			case ast.EXISTS_SUBLINK:
 				cols = append(cols, &Column{Name: name, DataType: "bool", NotNull: true})
 			case ast.EXPR_SUBLINK:
-				subcols, err := outputColumns(qc, n.Subselect)
+				subcols, err := c.outputColumns(qc, n.Subselect)
 				if err != nil {
 					return nil, err
 				}
@@ -336,7 +368,7 @@ func outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, error) {
 			cols = append(cols, col)
 
 		case *ast.SelectStmt:
-			subcols, err := outputColumns(qc, n)
+			subcols, err := c.outputColumns(qc, n)
 			if err != nil {
 				return nil, err
 			}
@@ -425,7 +457,7 @@ func isTableRequired(n ast.Node, col *Column, prior int) int {
 // Return an error if column references don't exist
 // Return an error if a table is referenced twice
 // Return an error if an unknown column is referenced
-func sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
+func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
 	var list *ast.List
 	switch n := node.(type) {
 	case *ast.DeleteStmt:
@@ -437,7 +469,7 @@ func sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
 	case *ast.SelectStmt:
 		list = astutils.Search(n.FromClause, func(node ast.Node) bool {
 			switch node.(type) {
-			case *ast.RangeVar, *ast.RangeSubselect, *ast.FuncName:
+			case *ast.RangeVar, *ast.RangeSubselect, *ast.RangeFunction:
 				return true
 			default:
 				return false
@@ -448,11 +480,18 @@ func sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
 			_, ok := node.(*ast.RangeVar)
 			return ok
 		})
+	case *ast.RefreshMatViewStmt:
+		list = astutils.Search(n.Relation, func(node ast.Node) bool {
+			_, ok := node.(*ast.RangeVar)
+			return ok
+		})
 	case *ast.UpdateStmt:
 		list = &ast.List{
 			Items: append(n.FromClause.Items, n.Relations.Items...),
 		}
 	case *ast.CallStmt:
+		list = &ast.List{}
+	case *ast.NotifyStmt, *ast.ListenStmt:
 		list = &ast.List{}
 	default:
 		return nil, fmt.Errorf("sourceTables: unsupported node type: %T", n)
@@ -462,10 +501,20 @@ func sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
 	for _, item := range list.Items {
 		switch n := item.(type) {
 
-		case *ast.FuncName:
+		case *ast.RangeFunction:
 			// If the function or table can't be found, don't error out.  There
 			// are many queries that depend on functions unknown to sqlc.
-			fn, err := qc.GetFunc(n)
+			var funcCall *ast.FuncCall
+			switch f := n.Functions.Items[0].(type) {
+			case *ast.List:
+				funcCall = f.Items[0].(*ast.FuncCall)
+			case *ast.FuncCall:
+				funcCall = f
+			default:
+				return nil, fmt.Errorf("sourceTables: unsupported function call type %T", n.Functions.Items[0])
+			}
+
+			fn, err := qc.GetFunc(funcCall.Func)
 			if err != nil {
 				continue
 			}
@@ -475,12 +524,27 @@ func sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, error) {
 				Name:    fn.ReturnType.Name,
 			})
 			if err != nil {
-				continue
+				if n.Alias == nil || len(n.Alias.Colnames.Items) == 0 {
+					continue
+				}
+
+				table = &Table{}
+				for _, colName := range n.Alias.Colnames.Items {
+					table.Columns = append(table.Columns, &Column{
+						Name:     colName.(*ast.String).Str,
+						DataType: "any",
+					})
+				}
+			}
+			if n.Alias != nil {
+				table.Rel = &ast.TableName{
+					Name: *n.Alias.Aliasname,
+				}
 			}
 			tables = append(tables, table)
 
 		case *ast.RangeSubselect:
-			cols, err := outputColumns(qc, n.Subquery)
+			cols, err := c.outputColumns(qc, n.Subquery)
 			if err != nil {
 				return nil, err
 			}
@@ -544,16 +608,19 @@ func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) 
 				if res.Name != nil {
 					cname = *res.Name
 				}
+
 				cols = append(cols, &Column{
-					Name:       cname,
-					Type:       c.Type,
-					Table:      c.Table,
-					TableAlias: alias,
-					DataType:   c.DataType,
-					NotNull:    c.NotNull,
-					IsArray:    c.IsArray,
-					Length:     c.Length,
-					EmbedTable: c.EmbedTable,
+					Name:         cname,
+					Type:         c.Type,
+					Table:        c.Table,
+					TableAlias:   alias,
+					DataType:     c.DataType,
+					NotNull:      c.NotNull,
+					Unsigned:     c.Unsigned,
+					IsArray:      c.IsArray,
+					Length:       c.Length,
+					EmbedTable:   c.EmbedTable,
+					OriginalName: c.Name,
 				})
 			}
 		}
@@ -573,6 +640,14 @@ func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) 
 		}
 	}
 	return cols, nil
+}
+
+func findColumnForNode(item ast.Node, tables []*Table, n *ast.SelectStmt) error {
+	ref, ok := item.(*ast.ColumnRef)
+	if !ok {
+		return nil
+	}
+	return findColumnForRef(ref, tables, n)
 }
 
 func findColumnForRef(ref *ast.ColumnRef, tables []*Table, selectStatement *ast.SelectStmt) error {
