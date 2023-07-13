@@ -65,6 +65,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 		targets = n.ReturningList
 	case *ast.SelectStmt:
 		targets = n.TargetList
+		isUnion := len(targets.Items) == 0 && n.Larg != nil
 
 		if n.GroupClause != nil {
 			for _, item := range n.GroupClause.Items {
@@ -77,7 +78,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 		if c.conf.StrictOrderBy != nil {
 			validateOrderBy = *c.conf.StrictOrderBy
 		}
-		if validateOrderBy {
+		if !isUnion && validateOrderBy {
 			if n.SortClause != nil {
 				for _, item := range n.SortClause.Items {
 					sb, ok := item.(*ast.SortBy)
@@ -110,7 +111,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 
 		// For UNION queries, targets is empty and we need to look for the
 		// columns in Largs.
-		if len(targets.Items) == 0 && n.Larg != nil {
+		if isUnion {
 			return c.outputColumns(qc, n.Larg)
 		}
 	case *ast.CallStmt:
@@ -502,18 +503,25 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 		switch n := item.(type) {
 
 		case *ast.RangeFunction:
-			// If the function or table can't be found, don't error out.  There
-			// are many queries that depend on functions unknown to sqlc.
 			var funcCall *ast.FuncCall
 			switch f := n.Functions.Items[0].(type) {
 			case *ast.List:
-				funcCall = f.Items[0].(*ast.FuncCall)
+				switch fi := f.Items[0].(type) {
+				case *ast.FuncCall:
+					funcCall = fi
+				case *ast.SQLValueFunction:
+					continue // TODO handle this correctly
+				default:
+					continue
+			}
 			case *ast.FuncCall:
 				funcCall = f
 			default:
 				return nil, fmt.Errorf("sourceTables: unsupported function call type %T", n.Functions.Items[0])
 			}
 
+			// If the function or table can't be found, don't error out.  There
+			// are many queries that depend on functions unknown to sqlc.
 			fn, err := qc.GetFunc(funcCall.Func)
 			if err != nil {
 				continue
