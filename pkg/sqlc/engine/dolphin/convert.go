@@ -1,7 +1,6 @@
 package dolphin
 
 import (
-	"fmt"
 	"log"
 	"strings"
 
@@ -144,7 +143,7 @@ func (c *cc) convertAlterTableStmt(n *pcast.AlterTableStmt) ast.Node {
 
 		default:
 			if debug.Active {
-				fmt.Printf("dolphin.convert: Unknown alter table cmd %v\n", spec.Tp)
+				log.Printf("dolphin.convert: Unknown alter table cmd %v\n", spec.Tp)
 			}
 			continue
 		}
@@ -901,7 +900,10 @@ func (c *cc) convertFrameClause(n *pcast.FrameClause) ast.Node {
 }
 
 func (c *cc) convertFuncCastExpr(n *pcast.FuncCastExpr) ast.Node {
-	return todo(n)
+	return &ast.TypeCast{
+		Arg:      c.convert(n.Expr),
+		TypeName: &ast.TypeName{Name: types.TypeStr(n.Tp.GetType())},
+	}
 }
 
 func (c *cc) convertGetFormatSelectorExpr(n *pcast.GetFormatSelectorExpr) ast.Node {

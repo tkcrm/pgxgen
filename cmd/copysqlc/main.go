@@ -141,7 +141,7 @@ func renameGoPackage(path string) error {
 
 		newFileContent := strings.ReplaceAll(
 			string(fileContent),
-			"github.com/kyleconroy/sqlc/internal",
+			"github.com/sqlc-dev/sqlc/internal",
 			"github.com/tkcrm/pgxgen/pkg/sqlc",
 		)
 

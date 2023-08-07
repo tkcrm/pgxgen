@@ -31,6 +31,7 @@ func (c *Compiler) OutputColumns(stmt ast.Node) ([]*catalog.Column, error) {
 			IsNotNull:  col.NotNull,
 			IsUnsigned: col.Unsigned,
 			IsArray:    col.IsArray,
+			ArrayDims:  col.ArrayDims,
 			Comment:    col.Comment,
 			Length:     col.Length,
 		})
@@ -69,7 +70,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 
 		if n.GroupClause != nil {
 			for _, item := range n.GroupClause.Items {
-				if err := findColumnForNode(item, tables, n); err != nil {
+				if err := findColumnForNode(item, tables, targets); err != nil {
 					return nil, err
 				}
 			}
@@ -85,7 +86,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 					if !ok {
 						continue
 					}
-					if err := findColumnForNode(sb.Node, tables, n); err != nil {
+					if err := findColumnForNode(sb.Node, tables, targets); err != nil {
 						return nil, fmt.Errorf("%v: if you want to skip this validation, set 'strict_order_by' to false", err)
 					}
 				}
@@ -101,7 +102,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 						if !ok {
 							continue
 						}
-						if err := findColumnForNode(caseExpr.Xpr, tables, n); err != nil {
+						if err := findColumnForNode(caseExpr.Xpr, tables, targets); err != nil {
 							return nil, fmt.Errorf("%v: if you want to skip this validation, set 'strict_order_by' to false", err)
 						}
 					}
@@ -289,6 +290,7 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 							NotNull:      c.NotNull,
 							Unsigned:     c.Unsigned,
 							IsArray:      c.IsArray,
+							ArrayDims:    c.ArrayDims,
 							Length:       c.Length,
 						})
 					}
@@ -513,7 +515,7 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 					continue // TODO handle this correctly
 				default:
 					continue
-			}
+				}
 			case *ast.FuncCall:
 				funcCall = f
 			default:
@@ -626,6 +628,7 @@ func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) 
 					NotNull:      c.NotNull,
 					Unsigned:     c.Unsigned,
 					IsArray:      c.IsArray,
+					ArrayDims:    c.ArrayDims,
 					Length:       c.Length,
 					EmbedTable:   c.EmbedTable,
 					OriginalName: c.Name,
@@ -636,29 +639,29 @@ func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) 
 	if found == 0 {
 		return nil, &sqlerr.Error{
 			Code:     "42703",
-			Message:  fmt.Sprintf("column \"%s\" does not exist", name),
+			Message:  fmt.Sprintf("column %q does not exist", name),
 			Location: res.Location,
 		}
 	}
 	if found > 1 {
 		return nil, &sqlerr.Error{
 			Code:     "42703",
-			Message:  fmt.Sprintf("column reference \"%s\" is ambiguous", name),
+			Message:  fmt.Sprintf("column reference %q is ambiguous", name),
 			Location: res.Location,
 		}
 	}
 	return cols, nil
 }
 
-func findColumnForNode(item ast.Node, tables []*Table, n *ast.SelectStmt) error {
+func findColumnForNode(item ast.Node, tables []*Table, targetList *ast.List) error {
 	ref, ok := item.(*ast.ColumnRef)
 	if !ok {
 		return nil
 	}
-	return findColumnForRef(ref, tables, n)
+	return findColumnForRef(ref, tables, targetList)
 }
 
-func findColumnForRef(ref *ast.ColumnRef, tables []*Table, selectStatement *ast.SelectStmt) error {
+func findColumnForRef(ref *ast.ColumnRef, tables []*Table, targetList *ast.List) error {
 	parts := stringSlice(ref.Fields)
 	var alias, name string
 	if len(parts) == 1 {
@@ -675,20 +678,17 @@ func findColumnForRef(ref *ast.ColumnRef, tables []*Table, selectStatement *ast.
 		}
 
 		// Find matching column
-		var foundColumn bool
 		for _, c := range t.Columns {
 			if c.Name == name {
 				found++
-				foundColumn = true
+				break
 			}
 		}
+	}
 
-		if foundColumn {
-			continue
-		}
-
-		// Find matching alias
-		for _, c := range selectStatement.TargetList.Items {
+	// Find matching alias if necessary
+	if found == 0 {
+		for _, c := range targetList.Items {
 			resTarget, ok := c.(*ast.ResTarget)
 			if !ok {
 				continue
@@ -702,14 +702,14 @@ func findColumnForRef(ref *ast.ColumnRef, tables []*Table, selectStatement *ast.
 	if found == 0 {
 		return &sqlerr.Error{
 			Code:     "42703",
-			Message:  fmt.Sprintf("column reference \"%s\" not found", name),
+			Message:  fmt.Sprintf("column reference %q not found", name),
 			Location: ref.Location,
 		}
 	}
 	if found > 1 {
 		return &sqlerr.Error{
 			Code:     "42703",
-			Message:  fmt.Sprintf("column reference \"%s\" is ambiguous", name),
+			Message:  fmt.Sprintf("column reference %q is ambiguous", name),
 			Location: ref.Location,
 		}
 	}

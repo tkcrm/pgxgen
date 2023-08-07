@@ -241,6 +241,7 @@ func translate(node *nodes.Node) (ast.Node, error) {
 			return &ast.AlterTableSetSchemaStmt{
 				Table:     rel.TableName(),
 				NewSchema: makeString(n.Newschema),
+				MissingOk: n.MissingOk,
 			}, nil
 
 		case nodes.ObjectType_OBJECT_TYPE:
@@ -259,8 +260,9 @@ func translate(node *nodes.Node) (ast.Node, error) {
 		n := inner.AlterTableStmt
 		rel := parseRelationFromRangeVar(n.Relation)
 		at := &ast.AlterTableStmt{
-			Table: rel.TableName(),
-			Cmds:  &ast.List{},
+			Table:     rel.TableName(),
+			Cmds:      &ast.List{},
+			MissingOk: n.MissingOk,
 		}
 		for _, cmd := range n.Cmds {
 			switch cmdOneOf := cmd.Node.(type) {
@@ -285,6 +287,7 @@ func translate(node *nodes.Node) (ast.Node, error) {
 						TypeName:  rel.TypeName(),
 						IsNotNull: isNotNull(d.ColumnDef),
 						IsArray:   isArray(d.ColumnDef.TypeName),
+						ArrayDims: len(d.ColumnDef.TypeName.ArrayBounds),
 					}
 
 				case nodes.AlterTableType_AT_AlterColumnType:
@@ -310,6 +313,7 @@ func translate(node *nodes.Node) (ast.Node, error) {
 						TypeName:  rel.TypeName(),
 						IsNotNull: isNotNull(d.ColumnDef),
 						IsArray:   isArray(d.ColumnDef.TypeName),
+						ArrayDims: len(d.ColumnDef.TypeName.ArrayBounds),
 					}
 
 				case nodes.AlterTableType_AT_DropColumn:
@@ -439,6 +443,7 @@ func translate(node *nodes.Node) (ast.Node, error) {
 					TypeName:  rel.TypeName(),
 					IsNotNull: isNotNull(item.ColumnDef) || primaryKey[item.ColumnDef.Colname],
 					IsArray:   isArray(item.ColumnDef.TypeName),
+					ArrayDims: len(item.ColumnDef.TypeName.ArrayBounds),
 				})
 			}
 		}
@@ -600,16 +605,18 @@ func translate(node *nodes.Node) (ast.Node, error) {
 		case nodes.ObjectType_OBJECT_COLUMN:
 			rel := parseRelationFromRangeVar(n.Relation)
 			return &ast.RenameColumnStmt{
-				Table:   rel.TableName(),
-				Col:     &ast.ColumnRef{Name: n.Subname},
-				NewName: makeString(n.Newname),
+				Table:     rel.TableName(),
+				Col:       &ast.ColumnRef{Name: n.Subname},
+				NewName:   makeString(n.Newname),
+				MissingOk: n.MissingOk,
 			}, nil
 
 		case nodes.ObjectType_OBJECT_TABLE:
 			rel := parseRelationFromRangeVar(n.Relation)
 			return &ast.RenameTableStmt{
-				Table:   rel.TableName(),
-				NewName: makeString(n.Newname),
+				Table:     rel.TableName(),
+				NewName:   makeString(n.Newname),
+				MissingOk: n.MissingOk,
 			}, nil
 
 		case nodes.ObjectType_OBJECT_TYPE:

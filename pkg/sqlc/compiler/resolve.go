@@ -188,7 +188,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 						if !located {
 							return nil, &sqlerr.Error{
 								Code:     "42703",
-								Message:  fmt.Sprintf("table alias \"%s\" does not exist", alias),
+								Message:  fmt.Sprintf("table alias %q does not exist", alias),
 								Location: node.Location,
 							}
 						}
@@ -218,6 +218,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 								NotNull:      p.NotNull(),
 								Unsigned:     c.IsUnsigned,
 								IsArray:      c.IsArray,
+								ArrayDims:    c.ArrayDims,
 								Length:       c.Length,
 								Table:        table,
 								IsNamedParam: isNamed,
@@ -230,14 +231,14 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 				if found == 0 {
 					return nil, &sqlerr.Error{
 						Code:     "42703",
-						Message:  fmt.Sprintf("column \"%s\" does not exist", key),
+						Message:  fmt.Sprintf("column %q does not exist", key),
 						Location: node.Location,
 					}
 				}
 				if found > 1 {
 					return nil, &sqlerr.Error{
 						Code:     "42703",
-						Message:  fmt.Sprintf("column reference \"%s\" is ambiguous", key),
+						Message:  fmt.Sprintf("column reference %q is ambiguous", key),
 						Location: node.Location,
 					}
 				}
@@ -256,7 +257,6 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 					key = str.Str
 				}
 			}
-
 
 			for _, table := range tables {
 				schema := table.Schema
@@ -284,6 +284,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 							NotNull:      p.NotNull(),
 							Unsigned:     c.IsUnsigned,
 							IsArray:      c.IsArray,
+							ArrayDims:    c.ArrayDims,
 							Table:        table,
 							IsNamedParam: isNamed,
 							IsSqlcSlice:  p.IsSqlcSlice(),
@@ -458,7 +459,9 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 						OriginalName: c.Name,
 						DataType:     dataType(&c.Type),
 						NotNull:      p.NotNull(),
+						Unsigned:     c.IsUnsigned,
 						IsArray:      c.IsArray,
+						ArrayDims:    c.ArrayDims,
 						Table:        &ast.TableName{Schema: schema, Name: rel},
 						Length:       c.Length,
 						IsNamedParam: isNamed,
@@ -468,7 +471,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 			} else {
 				return nil, &sqlerr.Error{
 					Code:     "42703",
-					Message:  fmt.Sprintf("column \"%s\" does not exist", key),
+					Message:  fmt.Sprintf("column %q does not exist", key),
 					Location: n.Location,
 				}
 			}
@@ -569,6 +572,7 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 								NotNull:      c.IsNotNull,
 								Unsigned:     c.IsUnsigned,
 								IsArray:      c.IsArray,
+								ArrayDims:    c.ArrayDims,
 								Table:        table,
 								IsNamedParam: isNamed,
 								IsSqlcSlice:  p.IsSqlcSlice(),
@@ -583,20 +587,20 @@ func (comp *Compiler) resolveCatalogRefs(qc *QueryCatalog, rvs []*ast.RangeVar, 
 			if found == 0 {
 				return nil, &sqlerr.Error{
 					Code:     "42703",
-					Message:  fmt.Sprintf("396: column \"%s\" does not exist", key),
+					Message:  fmt.Sprintf("396: column %q does not exist", key),
 					Location: location,
 				}
 			}
 			if found > 1 {
 				return nil, &sqlerr.Error{
 					Code:     "42703",
-					Message:  fmt.Sprintf("in same name column reference \"%s\" is ambiguous", key),
+					Message:  fmt.Sprintf("in same name column reference %q is ambiguous", key),
 					Location: location,
 				}
 			}
 
 		default:
-			fmt.Printf("unsupported reference type: %T", n)
+			fmt.Printf("unsupported reference type: %T\n", n)
 		}
 	}
 	return a, nil

@@ -1,6 +1,7 @@
 package sqlite
 
 import (
+	"fmt"
 	"log"
 	"strconv"
 	"strings"
@@ -28,10 +29,14 @@ func todo(funcname string, n node) *ast.TODO {
 }
 
 func identifier(id string) string {
+	if len(id) >= 2 && id[0] == '"' && id[len(id)-1] == '"' {
+		unquoted, _ := strconv.Unquote(id)
+		return unquoted
+	}
 	return strings.ToLower(id)
 }
 
-func NewIdentifer(t string) *ast.String {
+func NewIdentifier(t string) *ast.String {
 	return &ast.String{Str: identifier(t)}
 }
 
@@ -120,6 +125,50 @@ func (c *cc) convertCreate_table_stmtContext(n *parser.Create_table_stmtContext)
 			})
 		}
 	}
+	return stmt
+}
+
+func (c *cc) convertCreate_virtual_table_stmtContext(n *parser.Create_virtual_table_stmtContext) ast.Node {
+	switch moduleName := n.Module_name().GetText(); moduleName {
+	case "fts5":
+		// https://www.sqlite.org/fts5.html
+		return c.convertCreate_virtual_table_fts5(n)
+	default:
+		return todo(
+			fmt.Sprintf("create_virtual_table. unsupported module name: %q", moduleName),
+			n,
+		)
+	}
+}
+
+func (c *cc) convertCreate_virtual_table_fts5(n *parser.Create_virtual_table_stmtContext) ast.Node {
+	stmt := &ast.CreateTableStmt{
+		Name:        parseTableName(n),
+		IfNotExists: n.EXISTS_() != nil,
+	}
+
+	for _, arg := range n.AllModule_argument() {
+		var columnName string
+
+		// For example: CREATE VIRTUAL TABLE tbl_ft USING fts5(b, c UNINDEXED)
+		//   * the 'b' column is parsed like Expr_qualified_column_nameContext
+		//   * the 'c' column is parsed like Column_defContext
+		if columnExpr, ok := arg.Expr().(*parser.Expr_qualified_column_nameContext); ok {
+			columnName = columnExpr.Column_name().GetText()
+		} else if columnDef, ok := arg.Column_def().(*parser.Column_defContext); ok {
+			columnName = columnDef.Column_name().GetText()
+		}
+
+		if columnName != "" {
+			stmt.Cols = append(stmt.Cols, &ast.ColumnDef{
+				Colname: identifier(columnName),
+				// you can not specify any column constraints in fts5, so we pass them manually
+				IsNotNull: true,
+				TypeName:  &ast.TypeName{Name: "text"},
+			})
+		}
+	}
+
 	return stmt
 }
 
@@ -248,7 +297,7 @@ func (c *cc) convertFuncContext(n *parser.Expr_functionContext) ast.Node {
 				},
 				Funcname: &ast.List{
 					Items: []ast.Node{
-						NewIdentifer(funcName),
+						NewIdentifier(funcName),
 					},
 				},
 				AggStar:     n.STAR() != nil,
@@ -272,16 +321,16 @@ func (c *cc) convertColumnNameExpr(n *parser.Expr_qualified_column_nameContext) 
 	if schema, ok := n.Schema_name().(*parser.Schema_nameContext); ok {
 		schemaText := schema.GetText()
 		if schemaText != "" {
-			items = append(items, NewIdentifer(schemaText))
+			items = append(items, NewIdentifier(schemaText))
 		}
 	}
 	if table, ok := n.Table_name().(*parser.Table_nameContext); ok {
 		tableName := table.GetText()
 		if tableName != "" {
-			items = append(items, NewIdentifer(tableName))
+			items = append(items, NewIdentifier(tableName))
 		}
 	}
-	items = append(items, NewIdentifer(n.Column_name().GetText()))
+	items = append(items, NewIdentifier(n.Column_name().GetText()))
 	return &ast.ColumnRef{
 		Fields: &ast.List{
 			Items: items,
@@ -331,6 +380,25 @@ func (c *cc) convertMultiSelect_stmtContext(n *parser.Select_stmtContext) ast.No
 	var where ast.Node
 	var groups = []ast.Node{}
 	var having ast.Node
+	var ctes []ast.Node
+
+	if ct := n.Common_table_stmt(); ct != nil {
+		recursive := ct.RECURSIVE_() != nil
+		for _, cte := range ct.AllCommon_table_expression() {
+			tableName := identifier(cte.Table_name().GetText())
+			var cteCols ast.List
+			for _, col := range cte.AllColumn_name() {
+				cteCols.Items = append(cteCols.Items, NewIdentifier(col.GetText()))
+			}
+			ctes = append(ctes, &ast.CommonTableExpr{
+				Ctename:      &tableName,
+				Ctequery:     c.convert(cte.Select_stmt()),
+				Location:     cte.GetStart().GetStart(),
+				Cterecursive: recursive,
+				Ctecolnames:  &cteCols,
+			})
+		}
+	}
 
 	for _, icore := range n.AllSelect_core() {
 		core, ok := icore.(*parser.Select_coreContext)
@@ -377,6 +445,9 @@ func (c *cc) convertMultiSelect_stmtContext(n *parser.Select_stmtContext) ast.No
 		LimitCount:   limitCount,
 		LimitOffset:  limitOffset,
 		ValuesLists:  &ast.List{},
+		WithClause: &ast.WithClause{
+			Ctes: &ast.List{Items: ctes},
+		},
 	}
 }
 
@@ -425,8 +496,8 @@ func (c *cc) getCols(core *parser.Select_coreContext) []ast.Node {
 			continue
 		}
 
-		if col.AS_() != nil {
-			name := col.Column_alias().GetText()
+		if col.Column_alias() != nil {
+			name := identifier(col.Column_alias().GetText())
 			target.Name = &name
 		}
 
@@ -439,7 +510,7 @@ func (c *cc) getCols(core *parser.Select_coreContext) []ast.Node {
 func (c *cc) convertWildCardField(n *parser.Result_columnContext) *ast.ColumnRef {
 	items := []ast.Node{}
 	if n.Table_name() != nil {
-		items = append(items, NewIdentifer(n.Table_name().GetText()))
+		items = append(items, NewIdentifier(n.Table_name().GetText()))
 	}
 	items = append(items, &ast.A_Star{})
 
@@ -738,7 +809,7 @@ func (c *cc) convertExprLists(lists []parser.IExprContext) *ast.List {
 func (c *cc) convertColumnNames(cols []parser.IColumn_nameContext) *ast.List {
 	list := &ast.List{Items: []ast.Node{}}
 	for _, c := range cols {
-		name := c.GetText()
+		name := identifier(c.GetText())
 		list.Items = append(list.Items, &ast.ResTarget{
 			Name: &name,
 		})
@@ -769,6 +840,10 @@ func (c *cc) convertTablesOrSubquery(n []parser.ITable_or_subqueryContext) []ast
 				alias := from.Table_alias().GetText()
 				rv.Alias = &ast.Alias{Aliasname: &alias}
 			}
+			if from.Table_alias_fallback() != nil {
+				alias := identifier(from.Table_alias_fallback().GetText())
+				rv.Alias = &ast.Alias{Aliasname: &alias}
+			}
 
 			tables = append(tables, rv)
 		} else if from.Table_function_name() != nil {
@@ -782,7 +857,7 @@ func (c *cc) convertTablesOrSubquery(n []parser.ITable_or_subqueryContext) []ast
 							},
 							Funcname: &ast.List{
 								Items: []ast.Node{
-									NewIdentifer(rel),
+									NewIdentifier(rel),
 								},
 							},
 							Args: &ast.List{
@@ -841,7 +916,7 @@ func (c *cc) convertUpdate_stmtContext(n Update_stmt) ast.Node {
 
 	list := &ast.List{}
 	for i, col := range n.AllColumn_name() {
-		colName := col.GetText()
+		colName := identifier(col.GetText())
 		target := &ast.ResTarget{
 			Name: &colName,
 			Val:  c.convert(n.Expr(i)),
@@ -887,6 +962,29 @@ func (c *cc) convertBetweenExpr(n *parser.Expr_betweenContext) ast.Node {
 	}
 }
 
+func (c *cc) convertCastExpr(n *parser.Expr_castContext) ast.Node {
+	name := n.Type_name().GetText()
+	return &ast.TypeCast{
+		Arg: c.convert(n.Expr()),
+		TypeName: &ast.TypeName{
+			Name: name,
+			Names: &ast.List{Items: []ast.Node{
+				NewIdentifier(name),
+			}},
+			ArrayBounds: &ast.List{},
+		},
+		Location: n.GetStart().GetStart(),
+	}
+}
+
+func (c *cc) convertCollateExpr(n *parser.Expr_collateContext) ast.Node {
+	return &ast.CollateExpr{
+		Xpr:      c.convert(n.Expr()),
+		Arg:      NewIdentifier(n.Collation_name().GetText()),
+		Location: n.GetStart().GetStart(),
+	}
+}
+
 func (c *cc) convert(node node) ast.Node {
 	switch n := node.(type) {
 
@@ -898,6 +996,9 @@ func (c *cc) convert(node node) ast.Node {
 
 	case *parser.Create_table_stmtContext:
 		return c.convertCreate_table_stmtContext(n)
+
+	case *parser.Create_virtual_table_stmtContext:
+		return c.convertCreate_virtual_table_stmtContext(n)
 
 	case *parser.Create_view_stmtContext:
 		return c.convertCreate_view_stmtContext(n)
@@ -944,6 +1045,9 @@ func (c *cc) convert(node node) ast.Node {
 	case *parser.Expr_betweenContext:
 		return c.convertBetweenExpr(n)
 
+	case *parser.Expr_collateContext:
+		return c.convertCollateExpr(n)
+
 	case *parser.Factored_select_stmtContext:
 		// TODO: need to handle this
 		return todo("convert(case=parser.Factored_select_stmtContext)", n)
@@ -965,6 +1069,9 @@ func (c *cc) convert(node node) ast.Node {
 
 	case *parser.Update_stmt_limitedContext:
 		return c.convertUpdate_stmtContext(n)
+
+	case *parser.Expr_castContext:
+		return c.convertCastExpr(n)
 
 	default:
 		return todo("convert(case=default)", n)

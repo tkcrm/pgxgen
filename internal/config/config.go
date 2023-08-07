@@ -7,12 +7,14 @@ import (
 	"path/filepath"
 
 	"github.com/cristalhq/flagx"
+	"github.com/tkcrm/pgxgen/pkg/logger"
 	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
-	Sqlc   Sqlc
-	Pgxgen Pgxgen
+	Sqlc     Sqlc
+	Pgxgen   Pgxgen
+	loadErrs []error
 }
 
 type configFlags struct {
@@ -29,7 +31,9 @@ func (c *configFlags) Flags() *flag.FlagSet {
 
 // LoadConfig return common config with sqlc and pgxgen data
 func LoadConfig(version string) (Config, error) {
-	var cfg Config
+	cfg := Config{
+		loadErrs: make([]error, 0),
+	}
 
 	// parse config flags
 	var cf configFlags
@@ -41,20 +45,21 @@ func LoadConfig(version string) (Config, error) {
 	var sqlcConfig Sqlc
 	sqlcConfigFile, err := os.ReadFile(cf.sqlcConfigFilePath)
 	if err != nil {
-		return cfg, fmt.Errorf("failed to read sqlc config file: %w", err)
-	}
-
-	if err := yaml.Unmarshal(sqlcConfigFile, &sqlcConfig); err != nil {
-		return cfg, err
-	}
-
-	// validate sqlc config
-	for _, p := range sqlcConfig.Packages {
-		if p.Path == "" {
-			return cfg, fmt.Errorf("undefined path in sqlc.yaml")
+		cfg.loadErrs = append(cfg.loadErrs, fmt.Errorf("failed to read sqlc config file: %w", err))
+	} else {
+		// unmashal yaml to sqlc config struct
+		if err := yaml.Unmarshal(sqlcConfigFile, &sqlcConfig); err != nil {
+			return cfg, err
 		}
-		if p.Queries == "" {
-			return cfg, fmt.Errorf("undefined queries in sqlc.yaml")
+
+		// validate sqlc config
+		for _, p := range sqlcConfig.Packages {
+			if p.Path == "" {
+				return cfg, fmt.Errorf("undefined path in sqlc.yaml")
+			}
+			if p.Queries == "" {
+				return cfg, fmt.Errorf("undefined queries in sqlc.yaml")
+			}
 		}
 	}
 
@@ -62,11 +67,12 @@ func LoadConfig(version string) (Config, error) {
 	var pgxgenConfig Pgxgen
 	pgxgenConfigFile, err := os.ReadFile(cf.pgxgenConfigFilePath)
 	if err != nil {
-		return cfg, err
-	}
-
-	if err := yaml.Unmarshal(pgxgenConfigFile, &pgxgenConfig); err != nil {
-		return cfg, err
+		cfg.loadErrs = append(cfg.loadErrs, fmt.Errorf("failed to read pgxgen config file: %w", err))
+	} else {
+		// unmashal yaml to pgxgen config struct
+		if err := yaml.Unmarshal(pgxgenConfigFile, &pgxgenConfig); err != nil {
+			return cfg, err
+		}
 	}
 
 	cfg.Sqlc = sqlcConfig
@@ -119,4 +125,16 @@ func LoadTestConfig(configsPath string) (Config, error) {
 	cfg.Pgxgen.Version = "test-version"
 
 	return cfg, nil
+}
+
+// CheckErrors check load errors, print them end exit
+func (c *Config) CheckErrors(l logger.Logger) {
+	if len(c.loadErrs) == 0 {
+		return
+	}
+
+	for _, err := range c.loadErrs {
+		l.Info(err)
+	}
+	os.Exit(1)
 }

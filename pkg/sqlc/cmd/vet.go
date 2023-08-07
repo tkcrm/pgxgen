@@ -3,9 +3,11 @@ package cmd
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime/trace"
@@ -14,23 +16,26 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/ext"
 	"github.com/jackc/pgx/v5"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/debug"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/opts"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/shfmt"
-	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/vet"
 )
 
 var ErrFailedChecks = errors.New("failed checks")
 
+var pjson = protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
+
 const RuleDbPrepare = "sqlc/db-prepare"
+const QueryFlagSqlcVetDisable = "@sqlc-vet-disable"
 
 func NewCmdVet() *cobra.Command {
 	return &cobra.Command{
@@ -49,17 +54,6 @@ func NewCmdVet() *cobra.Command {
 			return nil
 		},
 	}
-}
-
-type emptyProgram struct {
-}
-
-func (e *emptyProgram) Eval(any) (ref.Val, *cel.EvalDetails, error) {
-	return nil, nil, fmt.Errorf("unimplemented")
-}
-
-func (e *emptyProgram) ContextEval(ctx context.Context, a any) (ref.Val, *cel.EvalDetails, error) {
-	return e.Eval(a)
 }
 
 func Vet(ctx context.Context, e Env, dir, filename string, stderr io.Writer) error {
@@ -83,31 +77,38 @@ func Vet(ctx context.Context, e Env, dir, filename string, stderr io.Writer) err
 		cel.StdLib(),
 		ext.Strings(ext.StringsVersion(1)),
 		cel.Types(
-			&plugin.VetConfig{},
-			&plugin.VetQuery{},
+			&vet.Config{},
+			&vet.Query{},
+			&vet.PostgreSQL{},
+			&vet.MySQL{},
 		),
 		cel.Variable("query",
-			cel.ObjectType("plugin.VetQuery"),
+			cel.ObjectType("vet.Query"),
 		),
 		cel.Variable("config",
-			cel.ObjectType("plugin.VetConfig"),
+			cel.ObjectType("vet.Config"),
+		),
+		cel.Variable("postgresql",
+			cel.ObjectType("vet.PostgreSQL"),
+		),
+		cel.Variable("mysql",
+			cel.ObjectType("vet.MySQL"),
 		),
 	)
 	if err != nil {
-		return fmt.Errorf("new env: %s", err)
+		return fmt.Errorf("new CEL env error: %s", err)
 	}
 
-	checks := map[string]cel.Program{
-		RuleDbPrepare: &emptyProgram{},
+	rules := map[string]rule{
+		RuleDbPrepare: {NeedsPrepare: true},
 	}
-	msgs := map[string]string{}
 
 	for _, c := range conf.Rules {
 		if c.Name == "" {
-			return fmt.Errorf("checks require a name")
+			return fmt.Errorf("rules require a name")
 		}
-		if _, found := checks[c.Name]; found {
-			return fmt.Errorf("type-check error: a check with the name '%s' already exists", c.Name)
+		if _, found := rules[c.Name]; found {
+			return fmt.Errorf("type-check error: a rule with the name '%s' already exists", c.Name)
 		}
 		if c.Rule == "" {
 			return fmt.Errorf("type-check error: %s is empty", c.Name)
@@ -120,17 +121,24 @@ func Vet(ctx context.Context, e Env, dir, filename string, stderr io.Writer) err
 		if err != nil {
 			return fmt.Errorf("program construction error: %s %s", c.Name, err)
 		}
-		checks[c.Name] = prg
-		msgs[c.Name] = c.Msg
+		rule := rule{Program: &prg, Message: c.Msg}
+
+		// TODO There's probably a nicer way to do this from the ast
+		// https://pkg.go.dev/github.com/google/cel-go/common/ast#AllMatcher
+		if strings.Contains(c.Rule, "postgresql.explain") ||
+			strings.Contains(c.Rule, "mysql.explain") {
+			rule.NeedsExplain = true
+		}
+
+		rules[c.Name] = rule
 	}
 
 	c := checker{
-		Checks:     checks,
+		Rules:      rules,
 		Conf:       conf,
 		Dir:        dir,
 		Env:        env,
 		Envmap:     map[string]string{},
-		Msgs:       msgs,
 		Stderr:     stderr,
 		NoDatabase: e.NoDatabase,
 	}
@@ -149,46 +157,165 @@ func Vet(ctx context.Context, e Env, dir, filename string, stderr io.Writer) err
 	return nil
 }
 
-// Determine if a query can be prepared based on the engine and the statement
-// type.
-func prepareable(sql config.SQL, raw *ast.RawStmt) bool {
-	if sql.Engine == config.EnginePostgreSQL {
-		// TOOD: Add support for MERGE and VALUES stmts
-		switch raw.Stmt.(type) {
-		case *ast.DeleteStmt:
-			return true
-		case *ast.InsertStmt:
-			return true
-		case *ast.SelectStmt:
-			return true
-		case *ast.UpdateStmt:
-			return true
-		default:
-			return false
-		}
-	}
-	// Almost all statements in MySQL can be prepared, so I'm just going to assume they can be
-	// https://dev.mysql.com/doc/refman/8.0/en/sql-prepared-statements.html
-	if sql.Engine == config.EngineMySQL {
-		return true
-	}
-	if sql.Engine == config.EngineSQLite {
-		return true
-	}
-	return false
-}
-
 type preparer interface {
 	Prepare(context.Context, string, string) error
 }
 
-type pgxPreparer struct {
+type pgxConn struct {
 	c *pgx.Conn
 }
 
-func (p *pgxPreparer) Prepare(ctx context.Context, name, query string) error {
+func (p *pgxConn) Prepare(ctx context.Context, name, query string) error {
 	_, err := p.c.Prepare(ctx, name, query)
 	return err
+}
+
+// Return a default value for a PostgreSQL column based on its type. Returns nil
+// if the type is unknown.
+func pgDefaultValue(col *plugin.Column) any {
+	if col == nil {
+		return nil
+	}
+	if col.Type == nil {
+		return nil
+	}
+	typname := strings.TrimPrefix(col.Type.Name, "pg_catalog.")
+	switch typname {
+	case "any", "void":
+		if col.IsArray {
+			return []any{}
+		} else {
+			return nil
+		}
+	case "anyarray":
+		return []any{}
+	case "bool", "boolean":
+		if col.IsArray {
+			return []bool{}
+		} else {
+			return false
+		}
+	case "double", "double precision", "real":
+		if col.IsArray {
+			return []float32{}
+		} else {
+			return 0.1
+		}
+	case "json", "jsonb":
+		if col.IsArray {
+			return []string{}
+		} else {
+			return "{}"
+		}
+	case "citext", "string", "text", "varchar":
+		if col.IsArray {
+			return []string{}
+		} else {
+			return ""
+		}
+	case "bigint", "bigserial", "integer", "int", "int2", "int4", "int8", "serial":
+		if col.IsArray {
+			return []int{}
+		} else {
+			return 1
+		}
+	case "date", "time", "timestamp", "timestamptz":
+		if col.IsArray {
+			return []time.Time{}
+		} else {
+			return time.Time{}
+		}
+	case "uuid":
+		if col.IsArray {
+			return []string{}
+		} else {
+			return "00000000-0000-0000-0000-000000000000"
+		}
+	case "numeric", "decimal":
+		if col.IsArray {
+			return []string{}
+		} else {
+			return "0.1"
+		}
+	case "inet":
+		if col.IsArray {
+			return []string{}
+		} else {
+			return "192.168.0.1/24"
+		}
+	case "cidr":
+		if col.IsArray {
+			return []string{}
+		} else {
+			return "192.168.1/24"
+		}
+	default:
+		return nil
+	}
+}
+
+// Return a default value for a MySQL column based on its type. Returns nil
+// if the type is unknown.
+func mysqlDefaultValue(col *plugin.Column) any {
+	if col == nil {
+		return nil
+	}
+	if col.Type == nil {
+		return nil
+	}
+	switch col.Type.Name {
+	case "any":
+		return nil
+	case "bool":
+		return false
+	case "int", "bigint", "mediumint", "smallint", "tinyint", "bit":
+		return 1
+	case "decimal": // "numeric", "dec", "fixed"
+		// No perfect choice here to avoid "Impossible WHERE" but I think
+		// 0.1 is decent. It works for all cases where `scale` > 0 which
+		// should be the majority. For more information refer to
+		// https://dev.mysql.com/doc/refman/8.1/en/fixed-point-types.html.
+		return 0.1
+	case "float", "double":
+		return 0.1
+	case "date":
+		return "0000-00-00"
+	case "datetime", "timestamp":
+		return "0000-00-00 00:00:00"
+	case "time":
+		return "00:00:00"
+	case "year":
+		return "0000"
+	case "char", "varchar", "binary", "varbinary", "tinyblob", "blob",
+		"mediumblob", "longblob", "tinytext", "text", "mediumtext", "longtext":
+		return ""
+	case "json":
+		return "{}"
+	default:
+		return nil
+	}
+}
+
+func (p *pgxConn) Explain(ctx context.Context, query string, args ...*plugin.Parameter) (*vetEngineOutput, error) {
+	eQuery := "EXPLAIN (ANALYZE false, VERBOSE, COSTS, SETTINGS, BUFFERS, FORMAT JSON) " + query
+	eArgs := make([]any, len(args))
+	for i, a := range args {
+		eArgs[i] = pgDefaultValue(a.Column)
+	}
+	row := p.c.QueryRow(ctx, eQuery, eArgs...)
+	var result []json.RawMessage
+	if err := row.Scan(&result); err != nil {
+		return nil, err
+	}
+	if debug.Debug.DumpExplain {
+		fmt.Println(eQuery, "with args", eArgs)
+		fmt.Println(string(result[0]))
+	}
+	var explain vet.PostgreSQLExplain
+	if err := pjson.Unmarshal(result[0], &explain); err != nil {
+		return nil, err
+	}
+	return &vetEngineOutput{PostgreSQL: &vet.PostgreSQL{Explain: &explain}}, nil
 }
 
 type dbPreparer struct {
@@ -196,17 +323,57 @@ type dbPreparer struct {
 }
 
 func (p *dbPreparer) Prepare(ctx context.Context, name, query string) error {
-	_, err := p.db.PrepareContext(ctx, query)
+	s, err := p.db.PrepareContext(ctx, query)
+	s.Close()
 	return err
 }
 
+type explainer interface {
+	Explain(context.Context, string, ...*plugin.Parameter) (*vetEngineOutput, error)
+}
+
+type mysqlExplainer struct {
+	*sql.DB
+}
+
+func (me *mysqlExplainer) Explain(ctx context.Context, query string, args ...*plugin.Parameter) (*vetEngineOutput, error) {
+	eQuery := "EXPLAIN FORMAT=JSON " + query
+	eArgs := make([]any, len(args))
+	for i, a := range args {
+		eArgs[i] = mysqlDefaultValue(a.Column)
+	}
+	row := me.QueryRowContext(ctx, eQuery, eArgs...)
+	var result json.RawMessage
+	if err := row.Scan(&result); err != nil {
+		return nil, err
+	}
+	if debug.Debug.DumpExplain {
+		fmt.Println(eQuery, "with args", eArgs)
+		fmt.Println(string(result))
+	}
+	var explain vet.MySQLExplain
+	if err := pjson.Unmarshal(result, &explain); err != nil {
+		return nil, err
+	}
+	if explain.QueryBlock.Message != "" {
+		return nil, fmt.Errorf("mysql explain: %s", explain.QueryBlock.Message)
+	}
+	return &vetEngineOutput{MySQL: &vet.MySQL{Explain: &explain}}, nil
+}
+
+type rule struct {
+	Program      *cel.Program
+	Message      string
+	NeedsPrepare bool
+	NeedsExplain bool
+}
+
 type checker struct {
-	Checks     map[string]cel.Program
+	Rules      map[string]rule
 	Conf       *config.Config
 	Dir        string
 	Env        *cel.Env
 	Envmap     map[string]string
-	Msgs       map[string]string
 	Stderr     io.Writer
 	NoDatabase bool
 }
@@ -249,9 +416,9 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 		return ErrFailedChecks
 	}
 
-	// TODO: Add MySQL support
 	var prep preparer
-	if s.Database != nil {
+	var expl explainer
+	if s.Database != nil { // TODO only set up a database connection if a rule evaluation requires it
 		if c.NoDatabase {
 			return fmt.Errorf("database: connections disabled via command line flag")
 		}
@@ -269,7 +436,9 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 				return fmt.Errorf("database: connection error: %s", err)
 			}
 			defer conn.Close(ctx)
-			prep = &pgxPreparer{conn}
+			pConn := &pgxConn{conn}
+			prep = pConn
+			expl = pConn
 		case config.EngineMySQL:
 			db, err := sql.Open("mysql", dburl)
 			if err != nil {
@@ -280,6 +449,7 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 			}
 			defer db.Close()
 			prep = &dbPreparer{db}
+			expl = &mysqlExplainer{db}
 		case config.EngineSQLite:
 			db, err := sql.Open("sqlite3", dburl)
 			if err != nil {
@@ -290,6 +460,9 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 			}
 			defer db.Close()
 			prep = &dbPreparer{db}
+			// SQLite really doesn't want us to depend on the output of EXPLAIN
+			// QUERY PLAN: https://www.sqlite.org/eqp.html
+			expl = nil
 		default:
 			return fmt.Errorf("unsupported database uri: %s", s.Engine)
 		}
@@ -299,34 +472,69 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 	req := codeGenRequest(result, combo)
 	cfg := vetConfig(req)
 	for i, query := range req.Queries {
-		q := vetQuery(query)
+		if result.Queries[i].Flags[QueryFlagSqlcVetDisable] {
+			if debug.Active {
+				log.Printf("Skipping vet rules for query: %s\n", query.Name)
+			}
+			continue
+		}
+
+		evalMap := map[string]any{
+			"query":  vetQuery(query),
+			"config": cfg,
+		}
+
 		for _, name := range s.Rules {
-			// Built-in rule
-			if name == RuleDbPrepare {
+			rule, ok := c.Rules[name]
+			if !ok {
+				return fmt.Errorf("type-check error: a rule with the name '%s' does not exist", name)
+			}
+
+			if rule.NeedsPrepare {
 				if prep == nil {
-					fmt.Fprintf(c.Stderr, "%s: %s: %s: error preparing query: database connection required\n", query.Filename, q.Name, name)
+					fmt.Fprintf(c.Stderr, "%s: %s: %s: error preparing query: database connection required\n", query.Filename, query.Name, name)
 					errored = true
 					continue
 				}
-				original := result.Queries[i]
-				if prepareable(s, original.RawStmt) {
-					name := fmt.Sprintf("sqlc_vet_%d_%d", time.Now().Unix(), i)
-					if err := prep.Prepare(ctx, name, query.Text); err != nil {
-						fmt.Fprintf(c.Stderr, "%s: %s: %s: error preparing query: %s\n", query.Filename, q.Name, name, err)
-						errored = true
-					}
+				prepName := fmt.Sprintf("sqlc_vet_%d_%d", time.Now().Unix(), i)
+				if err := prep.Prepare(ctx, prepName, query.Text); err != nil {
+					fmt.Fprintf(c.Stderr, "%s: %s: %s: error preparing query: %s\n", query.Filename, query.Name, name, err)
+					errored = true
+					continue
 				}
+			}
+
+			// short-circuit for "sqlc/db-prepare" rule which doesn't have a CEL program
+			if rule.Program == nil {
 				continue
 			}
 
-			prg, ok := c.Checks[name]
-			if !ok {
-				return fmt.Errorf("type-check error: a check with the name '%s' does not exist", name)
+			// Get explain output for this query if we need it
+			_, pgsqlOK := evalMap["postgresql"]
+			_, mysqlOK := evalMap["mysql"]
+			if rule.NeedsExplain && !(pgsqlOK || mysqlOK) {
+				if expl == nil {
+					fmt.Fprintf(c.Stderr, "%s: %s: %s: error explaining query: database connection required\n", query.Filename, query.Name, name)
+					errored = true
+					continue
+				}
+				engineOutput, err := expl.Explain(ctx, query.Text, query.Params...)
+				if err != nil {
+					fmt.Fprintf(c.Stderr, "%s: %s: %s: error explaining query: %s\n", query.Filename, query.Name, name, err)
+					errored = true
+					continue
+				}
+
+				evalMap["postgresql"] = engineOutput.PostgreSQL
+				evalMap["mysql"] = engineOutput.MySQL
 			}
-			out, _, err := prg.Eval(map[string]any{
-				"query":  q,
-				"config": cfg,
-			})
+
+			if debug.Debug.DumpVetEnv {
+				fmt.Printf("vars for rule '%s' evaluating against query '%s':\n", name, query.Name)
+				debug.DumpAsJSON(evalMap)
+			}
+
+			out, _, err := (*rule.Program).Eval(evalMap)
 			if err != nil {
 				return err
 			}
@@ -336,11 +544,10 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 			}
 			if tripped {
 				// TODO: Get line numbers in the output
-				msg := c.Msgs[name]
-				if msg == "" {
-					fmt.Fprintf(c.Stderr, "%s: %s: %s\n", query.Filename, q.Name, name)
+				if rule.Message == "" {
+					fmt.Fprintf(c.Stderr, "%s: %s: %s\n", query.Filename, query.Name, name)
 				} else {
-					fmt.Fprintf(c.Stderr, "%s: %s: %s: %s\n", query.Filename, q.Name, name, msg)
+					fmt.Fprintf(c.Stderr, "%s: %s: %s: %s\n", query.Filename, query.Name, name, rule.Message)
 				}
 				errored = true
 			}
@@ -352,8 +559,8 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 	return nil
 }
 
-func vetConfig(req *plugin.CodeGenRequest) *plugin.VetConfig {
-	return &plugin.VetConfig{
+func vetConfig(req *plugin.CodeGenRequest) *vet.Config {
+	return &vet.Config{
 		Version: req.Settings.Version,
 		Engine:  req.Settings.Engine,
 		Schema:  req.Settings.Schema,
@@ -361,17 +568,22 @@ func vetConfig(req *plugin.CodeGenRequest) *plugin.VetConfig {
 	}
 }
 
-func vetQuery(q *plugin.Query) *plugin.VetQuery {
-	var params []*plugin.VetParameter
+func vetQuery(q *plugin.Query) *vet.Query {
+	var params []*vet.Parameter
 	for _, p := range q.Params {
-		params = append(params, &plugin.VetParameter{
+		params = append(params, &vet.Parameter{
 			Number: p.Number,
 		})
 	}
-	return &plugin.VetQuery{
+	return &vet.Query{
 		Sql:    q.Text,
 		Name:   q.Name,
-		Cmd:    strings.TrimPrefix(":", q.Cmd),
+		Cmd:    strings.TrimPrefix(q.Cmd, ":"),
 		Params: params,
 	}
+}
+
+type vetEngineOutput struct {
+	PostgreSQL *vet.PostgreSQL
+	MySQL      *vet.MySQL
 }
