@@ -18,6 +18,16 @@ type Table struct {
 	Comment string
 }
 
+func checkMissing(err error, missingOK bool) error {
+	var serr *sqlerr.Error
+	if errors.As(err, &serr) {
+		if serr.Err == sqlerr.NotFound && missingOK {
+			return nil
+		}
+	}
+	return err
+}
+
 func (table *Table) isExistColumn(cmd *ast.AlterTableCmd) (int, error) {
 	for i, c := range table.Columns {
 		if c.Name == *cmd.Name {
@@ -47,6 +57,7 @@ func (table *Table) addColumn(cmd *ast.AlterTableCmd) error {
 		IsNotNull:  cmd.Def.IsNotNull,
 		IsUnsigned: cmd.Def.IsUnsigned,
 		IsArray:    cmd.Def.IsArray,
+		ArrayDims:  cmd.Def.ArrayDims,
 		Length:     cmd.Def.Length,
 	})
 	return nil
@@ -60,6 +71,7 @@ func (table *Table) alterColumnType(cmd *ast.AlterTableCmd) error {
 	if index >= 0 {
 		table.Columns[index].Type = *cmd.Def.TypeName
 		table.Columns[index].IsArray = cmd.Def.IsArray
+		table.Columns[index].ArrayDims = cmd.Def.ArrayDims
 	}
 	return nil
 }
@@ -106,6 +118,7 @@ type Column struct {
 	IsNotNull  bool
 	IsUnsigned bool
 	IsArray    bool
+	ArrayDims  int
 	Comment    string
 	Length     *int
 }
@@ -167,7 +180,7 @@ func (c *Catalog) alterTable(stmt *ast.AlterTableStmt) error {
 	}
 	_, table, err := c.getTable(stmt.Table)
 	if err != nil {
-		return err
+		return checkMissing(err, stmt.MissingOk)
 	}
 	for _, item := range stmt.Cmds.Items {
 		switch cmd := item.(type) {
@@ -206,11 +219,11 @@ func (c *Catalog) alterTableSetSchema(stmt *ast.AlterTableSetSchemaStmt) error {
 	}
 	oldSchema, err := c.getSchema(ns)
 	if err != nil {
-		return err
+		return checkMissing(err, stmt.MissingOk)
 	}
 	tbl, idx, err := oldSchema.getTable(stmt.Table)
 	if err != nil {
-		return err
+		return checkMissing(err, stmt.MissingOk)
 	}
 	tbl.Rel.Schema = *stmt.NewSchema
 	newSchema, err := c.getSchema(*stmt.NewSchema)
@@ -255,7 +268,7 @@ func (c *Catalog) createTable(stmt *ast.CreateTableStmt) error {
 				seen[col.Name] = notNull || col.IsNotNull
 				if a, ok := coltype[col.Name]; ok {
 					if !sameType(&a, &col.Type) {
-						return fmt.Errorf("column \"%s\" has a type conflict", col.Name)
+						return fmt.Errorf("column %q has a type conflict", col.Name)
 					}
 				}
 				continue
@@ -286,7 +299,7 @@ func (c *Catalog) createTable(stmt *ast.CreateTableStmt) error {
 				seen[col.Colname] = notNull || col.IsNotNull
 				if a, ok := coltype[col.Colname]; ok {
 					if !sameType(&a, col.TypeName) {
-						return fmt.Errorf("column \"%s\" has a type conflict", col.Colname)
+						return fmt.Errorf("column %q has a type conflict", col.Colname)
 					}
 				}
 				continue
@@ -298,6 +311,7 @@ func (c *Catalog) createTable(stmt *ast.CreateTableStmt) error {
 				IsNotNull:  col.IsNotNull,
 				IsUnsigned: col.IsUnsigned,
 				IsArray:    col.IsArray,
+				ArrayDims:  col.ArrayDims,
 				Comment:    col.Comment,
 				Length:     col.Length,
 			}
@@ -354,7 +368,7 @@ func (c *Catalog) dropTable(stmt *ast.DropTableStmt) error {
 func (c *Catalog) renameColumn(stmt *ast.RenameColumnStmt) error {
 	_, tbl, err := c.getTable(stmt.Table)
 	if err != nil {
-		return err
+		return checkMissing(err, stmt.MissingOk)
 	}
 	idx := -1
 	for i := range tbl.Columns {
@@ -375,7 +389,7 @@ func (c *Catalog) renameColumn(stmt *ast.RenameColumnStmt) error {
 func (c *Catalog) renameTable(stmt *ast.RenameTableStmt) error {
 	sch, tbl, err := c.getTable(stmt.Table)
 	if err != nil {
-		return err
+		return checkMissing(err, stmt.MissingOk)
 	}
 	if _, _, err := sch.getTable(&ast.TableName{Name: *stmt.NewName}); err == nil {
 		return sqlerr.RelationExists(*stmt.NewName)

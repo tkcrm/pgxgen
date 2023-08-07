@@ -47,7 +47,7 @@ require (
 
 require (
 	github.com/benbjohnson/clock v1.3.5 // indirect
-	github.com/bytecodealliance/wasmtime-go/v8 v8.0.0
+	github.com/bytecodealliance/wasmtime-go/v11 v11.0.0
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/goccy/go-json v0.10.2 // indirect

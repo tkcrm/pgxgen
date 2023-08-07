@@ -1,6 +1,8 @@
 package golang
 
 import (
+	"strings"
+
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/sdk"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 )
@@ -48,8 +50,11 @@ func goType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		}
 	}
 	typ := goInnerType(req, col)
-	if col.IsArray || col.IsSqlcSlice {
+	if col.IsSqlcSlice {
 		return "[]" + typ
+	}
+	if col.IsArray {
+		return strings.Repeat("[]", int(col.ArrayDims)) + typ
 	}
 	return typ
 }

@@ -21,6 +21,7 @@ type Column struct {
 	NotNull      bool
 	Unsigned     bool
 	IsArray      bool
+	ArrayDims    int
 	Comment      string
 	Length       *int
 	IsNamedParam bool
@@ -42,6 +43,7 @@ type Query struct {
 	SQL      string
 	Name     string
 	Cmd      string // TODO: Pick a better name. One of: one, many, exec, execrows, copyFrom
+	Flags    map[string]bool
 	Columns  []*Column
 	Params   []Parameter
 	Comments []string

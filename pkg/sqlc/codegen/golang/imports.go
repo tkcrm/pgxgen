@@ -21,9 +21,9 @@ type ImportSpec struct {
 
 func (s ImportSpec) String() string {
 	if s.ID != "" {
-		return fmt.Sprintf("%s \"%s\"", s.ID, s.Path)
+		return fmt.Sprintf("%s %q", s.ID, s.Path)
 	} else {
-		return fmt.Sprintf("\"%s\"", s.Path)
+		return fmt.Sprintf("%q", s.Path)
 	}
 }
 
@@ -188,7 +188,7 @@ func buildImports(settings *plugin.Settings, queries []Query, uses func(string) 
 		}
 	}
 
-	for typeName, _ := range pqtypeTypes {
+	for typeName := range pqtypeTypes {
 		if uses(typeName) {
 			pkg[ImportSpec{Path: "github.com/sqlc-dev/pqtype"}] = struct{}{}
 			break
@@ -334,6 +334,11 @@ func (i *importer) queryImports(filename string) fileImports {
 						if strings.HasPrefix(f.Type, "[]") && f.Type != "[]byte" {
 							return true
 						}
+						for _, embed := range f.EmbedFields {
+							if strings.HasPrefix(embed.Type, "[]") && embed.Type != "[]byte" {
+								return true
+							}
+						}
 					}
 				} else {
 					if strings.HasPrefix(q.Ret.Type(), "[]") && q.Ret.Type() != "[]byte" {
@@ -407,6 +412,13 @@ func (i *importer) copyfromImports() fileImports {
 	})
 
 	std["context"] = struct{}{}
+	if i.Settings.Go.SqlDriver == SQLDriverGoSQLDriverMySQL {
+		std["io"] = struct{}{}
+		std["fmt"] = struct{}{}
+		std["sync/atomic"] = struct{}{}
+		pkg[ImportSpec{Path: "github.com/go-sql-driver/mysql"}] = struct{}{}
+		pkg[ImportSpec{Path: "github.com/hexon/mysqltsv"}] = struct{}{}
+	}
 
 	return sortedImports(std, pkg)
 }

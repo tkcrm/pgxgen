@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/sdk"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/debug"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 )
 
@@ -68,7 +69,10 @@ func sqliteType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 		return "sql.NullFloat64"
 
 	default:
-		log.Printf("unknown SQLite type: %s\n", dt)
+		if debug.Active {
+			log.Printf("unknown SQLite type: %s\n", dt)
+		}
+
 		return "interface{}"
 
 	}
