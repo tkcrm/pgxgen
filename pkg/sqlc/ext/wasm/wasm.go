@@ -18,7 +18,7 @@ import (
 	"runtime/trace"
 	"strings"
 
-	wasmtime "github.com/bytecodealliance/wasmtime-go/v11"
+	wasmtime "github.com/bytecodealliance/wasmtime-go/v12"
 	"golang.org/x/sync/singleflight"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/info"
@@ -26,7 +26,7 @@ import (
 )
 
 // This version must be updated whenever the wasmtime-go dependency is updated
-const wasmtimeVersion = `v11.0.0`
+const wasmtimeVersion = `v12.0.0`
 
 func cacheDir() (string, error) {
 	cache := os.Getenv("SQLCCACHE")
@@ -47,6 +47,7 @@ func cacheDir() (string, error) {
 type Runner struct {
 	URL    string
 	SHA256 string
+	Env    []string
 }
 
 var flight singleflight.Group
@@ -254,6 +255,14 @@ func (r *Runner) Generate(ctx context.Context, req *plugin.CodeGenRequest) (*plu
 	wasiConfig.SetStdinFile(stdinPath)
 	wasiConfig.SetStdoutFile(stdoutPath)
 	wasiConfig.SetStderrFile(stderrPath)
+
+	keys := []string{"SQLC_VERSION"}
+	vals := []string{req.SqlcVersion}
+	for _, key := range r.Env {
+		keys = append(keys, key)
+		vals = append(vals, os.Getenv(key))
+	}
+	wasiConfig.SetEnv(keys, vals)
 
 	store := wasmtime.NewStore(engine)
 	store.SetWasi(wasiConfig)

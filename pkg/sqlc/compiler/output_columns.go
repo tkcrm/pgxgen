@@ -173,12 +173,17 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 				name = *res.Name
 			}
 			notNull := false
-			if n.Boolop == ast.BoolExprTypeNot && len(n.Args.Items) == 1 {
-				sublink, ok := n.Args.Items[0].(*ast.SubLink)
-				if ok && sublink.SubLinkType == ast.EXISTS_SUBLINK {
+			if len(n.Args.Items) == 1 {
+				switch n.Boolop {
+				case ast.BoolExprTypeIsNull, ast.BoolExprTypeIsNotNull:
 					notNull = true
-					if name == "" {
-						name = "not_exists"
+				case ast.BoolExprTypeNot:
+					sublink, ok := n.Args.Items[0].(*ast.SubLink)
+					if ok && sublink.SubLinkType == ast.EXISTS_SUBLINK {
+						notNull = true
+						if name == "" {
+							name = "not_exists"
+						}
 					}
 				}
 			}
@@ -454,6 +459,23 @@ func isTableRequired(n ast.Node, col *Column, prior int) int {
 	return tableNotFound
 }
 
+type tableVisitor struct {
+	list ast.List
+}
+
+func (r *tableVisitor) Visit(n ast.Node) astutils.Visitor {
+	switch n.(type) {
+	case *ast.RangeVar, *ast.RangeFunction:
+		r.list.Items = append(r.list.Items, n)
+		return r
+	case *ast.RangeSubselect:
+		r.list.Items = append(r.list.Items, n)
+		return nil
+	default:
+		return r
+	}
+}
+
 // Compute the output columns for a statement.
 //
 // Return an error if column references are ambiguous
@@ -470,14 +492,9 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 			Items: []ast.Node{n.Relation},
 		}
 	case *ast.SelectStmt:
-		list = astutils.Search(n.FromClause, func(node ast.Node) bool {
-			switch node.(type) {
-			case *ast.RangeVar, *ast.RangeSubselect, *ast.RangeFunction:
-				return true
-			default:
-				return false
-			}
-		})
+		var tv tableVisitor
+		astutils.Walk(&tv, n.FromClause)
+		list = &tv.list
 	case *ast.TruncateStmt:
 		list = astutils.Search(n.Relations, func(node ast.Node) bool {
 			_, ok := node.(*ast.RangeVar)
@@ -595,19 +612,26 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 
 func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) ([]*Column, error) {
 	parts := stringSlice(node.Fields)
-	var name, alias string
+	var schema, name, alias string
 	switch {
 	case len(parts) == 1:
 		name = parts[0]
 	case len(parts) == 2:
 		alias = parts[0]
 		name = parts[1]
+	case len(parts) == 3:
+		schema = parts[0]
+		alias = parts[1]
+		name = parts[2]
 	default:
 		return nil, fmt.Errorf("unknown number of fields: %d", len(parts))
 	}
 	var cols []*Column
 	var found int
 	for _, t := range tables {
+		if schema != "" && t.Rel.Schema != schema {
+			continue
+		}
 		if alias != "" && t.Rel.Name != alias {
 			continue
 		}
