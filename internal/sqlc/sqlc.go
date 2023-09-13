@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,8 +52,8 @@ func (s *sqlc) process(args []string) error {
 	s.logger.Infof("sqlc code successfully generated in: %s", time.Since(timeStart))
 
 	// check sqlc config version
-	if s.config.Sqlc.Version > 2 || s.config.Sqlc.Version < 1 {
-		return fmt.Errorf("unsupported sqlc version: %d", s.config.Sqlc.Version)
+	if !slices.Contains([]string{"1", "2"}, s.config.Sqlc.Version) {
+		return fmt.Errorf("unsupported sqlc version: %s", s.config.Sqlc.Version)
 	}
 
 	// validate sqlc model params

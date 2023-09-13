@@ -8,7 +8,7 @@ import (
 )
 
 type Sqlc struct {
-	Version  int       `yaml:"version"`
+	Version  string    `yaml:"version"`
 	Packages []Package `yaml:"packages"`
 	SQL      []SqlcSQL `yaml:"sql"`
 }
@@ -80,7 +80,7 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 	var res GetPathsResponse
 
 	// process sqlc version 1
-	if s.Version == 1 {
+	if s.Version == "1" {
 		for _, p := range s.Packages {
 			modelFileName := p.OutputModelsFileName
 			if modelFileName == "" {
@@ -95,7 +95,7 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 	}
 
 	// process sqlc version 2
-	if s.Version == 2 {
+	if s.Version == "2" {
 		for _, p := range s.SQL {
 			modelFileName := p.Gen.Go.OutputModelsFileName
 			if modelFileName == "" {
