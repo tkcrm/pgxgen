@@ -3,6 +3,7 @@ package crud
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,7 +16,6 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/sqlc"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/cmd"
 	"github.com/tkcrm/pgxgen/utils"
-	"golang.org/x/exp/slices"
 )
 
 type crud struct {

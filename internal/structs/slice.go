@@ -2,9 +2,8 @@ package structs
 
 import (
 	"fmt"
+	"slices"
 	"sort"
-
-	"golang.org/x/exp/slices"
 )
 
 type StructSlice []*StructParameters

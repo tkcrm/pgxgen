@@ -5,11 +5,11 @@ import (
 	"io"
 	"log"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/gobeam/stringy"
 	"github.com/tkcrm/pgxgen/utils"
-	"golang.org/x/exp/slices"
 )
 
 type Types map[string]TypesParameters

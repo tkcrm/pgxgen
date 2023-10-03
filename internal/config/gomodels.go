@@ -1,9 +1,8 @@
 package config
 
 import (
+	"slices"
 	"strings"
-
-	"golang.org/x/exp/slices"
 )
 
 type GenModels struct {

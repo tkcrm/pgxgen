@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,7 +19,6 @@ import (
 	"github.com/tkcrm/pgxgen/internal/structs"
 	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/utils"
-	"golang.org/x/exp/slices"
 )
 
 type gomodels struct {
