@@ -5,10 +5,10 @@ import (
 	"io"
 	"log"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/gobeam/stringy"
-	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
@@ -103,7 +103,7 @@ func GetMissedStructs(s Structs, scalarTypes Types) []string {
 
 	for _, st := range s {
 		for _, stName := range st.GetNestedStructs(scalarTypes) {
-			if !cmnutils.ExistInArray(keys, stName) && !cmnutils.ExistInArray(res, stName) {
+			if !slices.Contains(keys, stName) && !slices.Contains(res, stName) {
 				res = append(res, stName)
 			}
 		}
@@ -127,7 +127,7 @@ func (s StructParameters) GetNestedStructs(scalarTypes Types) []string {
 		}
 
 		_, existScalarType := scalarTypes[field.Type]
-		if !cmnutils.ExistInArray(res, field.Type) && !existScalarType {
+		if !slices.Contains(res, field.Type) && !existScalarType {
 			res = append(res, field.Type)
 		}
 	}

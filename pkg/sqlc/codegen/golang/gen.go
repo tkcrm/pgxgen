@@ -230,7 +230,9 @@ func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, querie
 		querierFileName = golang.OutputQuerierFileName
 	}
 	copyfromFileName := "copyfrom.go"
-	// TODO(Jille): Make this configurable.
+	if golang.OutputCopyfromFileName != "" {
+		copyfromFileName = golang.OutputCopyfromFileName
+	}
 
 	batchFileName := "batch.go"
 	if golang.OutputBatchFileName != "" {
@@ -303,6 +305,9 @@ func usesBatch(queries []Query) bool {
 
 func checkNoTimesForMySQLCopyFrom(queries []Query) error {
 	for _, q := range queries {
+		if q.Cmd != metadata.CmdCopyFrom {
+			continue
+		}
 		for _, f := range q.Arg.CopyFromMySQLFields() {
 			if f.Type == "time.Time" {
 				return fmt.Errorf("values with a timezone are not yet supported")

@@ -3,8 +3,7 @@ package config
 import (
 	"fmt"
 	"path/filepath"
-
-	"github.com/tkcrm/modules/pkg/utils"
+	"slices"
 )
 
 type Sqlc struct {
@@ -130,7 +129,7 @@ func (p *SqlcSQL) GetModelPath() string {
 
 func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string) ([]string, error) {
 	availablePaths := []string{"models", "queries", "out", "schema"}
-	if !utils.ExistInArray(availablePaths, pathType) {
+	if !slices.Contains(availablePaths, pathType) {
 		return nil, fmt.Errorf("unavailable path type %s", pathType)
 	}
 
@@ -162,7 +161,7 @@ func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string)
 				return nil, fmt.Errorf("unavailable path type %s", pathType)
 			}
 
-			if !utils.ExistInArray(filteredModelPaths, modelPath) {
+			if !slices.Contains(filteredModelPaths, modelPath) {
 				filteredModelPaths = append(filteredModelPaths, modelPath)
 			}
 		}

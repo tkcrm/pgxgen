@@ -15,7 +15,7 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/logger"
 )
 
-var version = "v0.2.6"
+var version = "v0.2.7"
 
 func main() {
 	logger := logger.New()

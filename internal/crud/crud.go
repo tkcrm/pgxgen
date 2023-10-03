@@ -3,6 +3,7 @@ package crud
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -477,7 +478,7 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 		for _, param := range paramsKeys {
 			item := params[param]
 
-			if !cmnutils.ExistInArray(p.metaData.columns, param) {
+			if !slices.Contains(p.metaData.columns, param) {
 				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
 			}
 
@@ -575,7 +576,7 @@ func (s *crud) getMethodName(cfg config.CrudParams, methodType config.MethodType
 
 	methodName = stringy.New(methodName).CamelCase()
 
-	if !cmnutils.ExistInArray([]config.MethodType{METHOD_FIND, METHOD_TOTAL}, methodType) {
+	if !slices.Contains([]config.MethodType{METHOD_FIND, METHOD_TOTAL}, methodType) {
 		if strings.HasSuffix(methodName, "s") {
 			methodName = string(methodName[:len(methodName)-1])
 		}
@@ -587,7 +588,7 @@ func (s *crud) getMethodName(cfg config.CrudParams, methodType config.MethodType
 func getPrimaryColumn(columns []string, table, column string) (string, error) {
 	primaryColumn := ""
 	if column != "" {
-		if !cmnutils.ExistInArray(columns, column) {
+		if !slices.Contains(columns, column) {
 			return primaryColumn, fmt.Errorf("table %s does not have a primary column %s", table, column)
 		}
 		primaryColumn = column

@@ -11,7 +11,6 @@ import (
 type V1GenerateSettings struct {
 	Version   string              `json:"version" yaml:"version"`
 	Cloud     Cloud               `json:"cloud" yaml:"cloud"`
-	Project   Project             `json:"project" yaml:"project"`
 	Packages  []v1PackageSettings `json:"packages" yaml:"packages"`
 	Overrides []Override          `json:"overrides,omitempty" yaml:"overrides,omitempty"`
 	Rename    map[string]string   `json:"rename,omitempty" yaml:"rename,omitempty"`
@@ -47,6 +46,7 @@ type v1PackageSettings struct {
 	OutputDBFileName          string     `json:"output_db_file_name,omitempty" yaml:"output_db_file_name"`
 	OutputModelsFileName      string     `json:"output_models_file_name,omitempty" yaml:"output_models_file_name"`
 	OutputQuerierFileName     string     `json:"output_querier_file_name,omitempty" yaml:"output_querier_file_name"`
+	OutputCopyFromFileName    string     `json:"output_copyfrom_file_name,omitempty" yaml:"output_copyfrom_file_name"`
 	OutputFilesSuffix         string     `json:"output_files_suffix,omitempty" yaml:"output_files_suffix"`
 	StrictFunctionChecks      bool       `json:"strict_function_checks" yaml:"strict_function_checks"`
 	StrictOrderBy             *bool      `json:"strict_order_by" yaml:"strict_order_by"`
@@ -131,7 +131,6 @@ func (c *V1GenerateSettings) ValidateGlobalOverrides() error {
 func (c *V1GenerateSettings) Translate() Config {
 	conf := Config{
 		Version: c.Version,
-		Project: c.Project,
 		Cloud:   c.Cloud,
 		Rules:   c.Rules,
 	}
@@ -173,6 +172,7 @@ func (c *V1GenerateSettings) Translate() Config {
 					OutputDBFileName:          pkg.OutputDBFileName,
 					OutputModelsFileName:      pkg.OutputModelsFileName,
 					OutputQuerierFileName:     pkg.OutputQuerierFileName,
+					OutputCopyFromFileName:    pkg.OutputCopyFromFileName,
 					OutputFilesSuffix:         pkg.OutputFilesSuffix,
 					QueryParameterLimit:       pkg.QueryParameterLimit,
 					OmitUnusedStructs:         pkg.OmitUnusedStructs,
