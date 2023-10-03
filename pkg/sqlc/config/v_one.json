@@ -8,14 +8,6 @@
         "version": {
             "const": "1"
         },
-        "project": {
-            "type": "object",
-            "properties": {
-                "id": {
-                    "type": "string"
-                }
-            }
-        },
         "cloud": {
             "type": "object",
             "properties": {
@@ -77,6 +69,9 @@
                         "properties": {
                             "uri": {
                                 "type": "string"
+                            },
+                            "managed": {
+                                "type": "boolean"
                             }
                         }
                     },
@@ -216,6 +211,9 @@
                         "type": "string"
                     },
                     "output_querier_file_name": {
+                        "type": "string"
+                    },
+                    "output_copyfrom_file_name": {
                         "type": "string"
                     },
                     "output_files_suffix": {

@@ -13,7 +13,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0
 	github.com/lib/pq v1.10.9
 	github.com/mattn/go-sqlite3 v1.14.17
-	github.com/pingcap/tidb/parser v0.0.0-20230913095711-a7e3176f30e0
+	github.com/pingcap/tidb/parser v0.0.0-20230928101821-95378e5bedef
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	github.com/tkcrm/modules v0.0.0-20230912214128-9e7e5a8cc63d
@@ -29,10 +29,10 @@ require (
 )
 
 require (
-	github.com/bytecodealliance/wasmtime-go/v12 v12.0.0
+	github.com/bytecodealliance/wasmtime-go/v13 v13.0.0
 	github.com/cristalhq/flagx v0.4.0
 	github.com/fatih/structtag v1.2.0
-	github.com/google/cel-go v0.18.0
+	github.com/google/cel-go v0.18.1
 	github.com/jackc/pgx/v5 v5.4.3
 	github.com/stretchr/testify v1.8.4
 )
@@ -43,12 +43,11 @@ require (
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	golang.org/x/net v0.15.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230911183012-2d3300fd4832 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230911183012-2d3300fd4832 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231002182017-d307bd883b97 // indirect
 )
 
 require (
-	github.com/benbjohnson/clock v1.3.5 // indirect
 	github.com/cznic/mathutil v0.0.0-20181122101859-297441e03548 // indirect
 	github.com/go-ozzo/ozzo-validation/v4 v4.3.0
 	github.com/goccy/go-json v0.10.2 // indirect
@@ -68,12 +67,12 @@ require (
 	github.com/riza-io/grpc-go v0.2.0
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.25.0 // indirect
+	go.uber.org/zap v1.26.0 // indirect
 	golang.org/x/crypto v0.13.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
+	golang.org/x/exp v0.0.0-20230905200255-921286631fa9
 	golang.org/x/mod v0.12.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
-	google.golang.org/grpc v1.58.0
+	google.golang.org/grpc v1.58.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

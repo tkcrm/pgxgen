@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/tkcrm/modules/pkg/templates"
-	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/internal/assets"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/structs"
 	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/tkcrm/pgxgen/utils"
+	"golang.org/x/exp/slices"
 )
 
 type gomodels struct {
@@ -101,7 +101,7 @@ func (s *gomodels) generateModels(cfg config.GenModels) error {
 				return err
 			}
 
-			if cmnutils.ExistInArray(filePaths, path) {
+			if slices.Contains(filePaths, path) {
 				continue
 			}
 
@@ -251,7 +251,7 @@ func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error
 
 				pointer := strings.HasPrefix(f.Type, "*")
 				ftype := strings.ReplaceAll(f.Type, "*", "")
-				if !cmnutils.ExistInArray([]string{"int16", "int32", "int64"}, ftype) {
+				if !slices.Contains([]string{"int16", "int32", "int64"}, ftype) {
 					continue
 				}
 
@@ -434,14 +434,14 @@ func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path 
 			item = fmt.Sprintf("\"%s\"", splitted[0])
 		}
 
-		if !cmnutils.ExistInArray(allImports, item) {
+		if !slices.Contains(allImports, item) {
 			allImports = append(allImports, item)
 		}
 	}
 
 	for _, s := range st {
 		for _, i := range s.Imports {
-			if !cmnutils.ExistInArray(allImports, i) {
+			if !slices.Contains(allImports, i) {
 				allImports = append(allImports, i)
 			}
 		}

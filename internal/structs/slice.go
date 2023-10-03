@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/tkcrm/modules/pkg/utils"
+	"golang.org/x/exp/slices"
 )
 
 type StructSlice []*StructParameters
@@ -31,7 +31,7 @@ func (st *StructSlice) Sort(priorityNames ...string) error {
 
 	notPriorityNames := make([]string, 0, len(*st)-len(priorityNames))
 	for _, v := range *st {
-		if utils.ExistInArray(names, v.Name) {
+		if slices.Contains(names, v.Name) {
 			continue
 		}
 		notPriorityNames = append(notPriorityNames, v.Name)

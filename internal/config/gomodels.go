@@ -3,7 +3,7 @@ package config
 import (
 	"strings"
 
-	"github.com/tkcrm/modules/pkg/utils"
+	"golang.org/x/exp/slices"
 )
 
 type GenModels struct {
@@ -52,7 +52,7 @@ func (s *GenModels) GetModelsOutputFileName() string {
 
 func (s *GenModels) ExistPrefereExceptionsField(st_name, field_name string) bool {
 	for _, item := range s.UseUintForIdsExceptions {
-		if item.StructName == st_name && utils.ExistInArray(item.FieldNames, field_name) {
+		if item.StructName == st_name && slices.Contains(item.FieldNames, field_name) {
 			return true
 		}
 	}
