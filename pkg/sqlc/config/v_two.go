@@ -3,7 +3,6 @@ package config
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 
 	yaml "gopkg.in/yaml.v3"
 )
@@ -26,13 +25,6 @@ func v2ParseConfig(rd io.Reader) (Config, error) {
 	}
 	if err := conf.validateGlobalOverrides(); err != nil {
 		return conf, err
-	}
-	if conf.Gen.Go != nil {
-		for i := range conf.Gen.Go.Overrides {
-			if err := conf.Gen.Go.Overrides[i].Parse(); err != nil {
-				return conf, err
-			}
-		}
 	}
 	// TODO: Store built-in plugins somewhere else
 	builtins := map[string]struct{}{
@@ -71,27 +63,6 @@ func v2ParseConfig(rd io.Reader) (Config, error) {
 			if conf.SQL[j].Gen.Go.Out == "" {
 				return conf, ErrNoPackagePath
 			}
-			if conf.SQL[j].Gen.Go.Package == "" {
-				conf.SQL[j].Gen.Go.Package = filepath.Base(conf.SQL[j].Gen.Go.Out)
-			}
-
-			if conf.SQL[j].Gen.Go.QueryParameterLimit != nil && (*conf.SQL[j].Gen.Go.QueryParameterLimit < 0) {
-				return conf, ErrInvalidQueryParameterLimit
-			}
-
-			if conf.SQL[j].Gen.Go.QueryParameterLimit == nil {
-				conf.SQL[j].Gen.Go.QueryParameterLimit = new(int32)
-				*conf.SQL[j].Gen.Go.QueryParameterLimit = 1
-			}
-
-			for i := range conf.SQL[j].Gen.Go.Overrides {
-				if err := conf.SQL[j].Gen.Go.Overrides[i].Parse(); err != nil {
-					return conf, err
-				}
-			}
-			for k, v := range conf.SQL[j].Gen.Go.Rename {
-				conf.SQL[j].Gen.Go.Rename[k] = v
-			}
 		}
 		if conf.SQL[j].Gen.JSON != nil {
 			if conf.SQL[j].Gen.JSON.Out == "" {
@@ -125,11 +96,11 @@ func (c *Config) validateGlobalOverrides() error {
 			engines[pkg.Engine] = struct{}{}
 		}
 	}
-	if c.Gen.Go == nil {
+	if c.Overrides.Go == nil {
 		return nil
 	}
 	usesMultipleEngines := len(engines) > 1
-	for _, oride := range c.Gen.Go.Overrides {
+	for _, oride := range c.Overrides.Go.Overrides {
 		if usesMultipleEngines && oride.Engine == "" {
 			return fmt.Errorf(`the "engine" field is required for global type overrides because your configuration uses multiple database engines`)
 		}

@@ -5,6 +5,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/golang/opts"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/sdk"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/debug"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
@@ -33,11 +34,11 @@ func parseIdentifierString(name string) (*plugin.Identifier, error) {
 	}
 }
 
-func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
+func postgresType(req *plugin.GenerateRequest, options *opts.Options, col *plugin.Column) string {
 	columnType := sdk.DataType(col.Type)
 	notNull := col.NotNull || col.IsArray
-	driver := parseDriver(req.Settings.Go.SqlPackage)
-	emitPointersForNull := driver.IsPGX() && req.Settings.Go.EmitPointersForNullTypes
+	driver := parseDriver(options.SqlPackage)
+	emitPointersForNull := driver.IsPGX() && options.EmitPointersForNullTypes
 
 	switch columnType {
 	case "serial", "serial4", "pg_catalog.serial4":
@@ -537,6 +538,15 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 			return "pgtype.Polygon"
 		}
 
+	case "vector":
+		if driver == SQLDriverPGXV5 {
+			if emitPointersForNull {
+				return "*pgvector.Vector"
+			} else {
+				return "pgvector.Vector"
+			}
+		}
+
 	case "void":
 		// A void value can only be scanned into an empty interface.
 		return "interface{}"
@@ -563,14 +573,14 @@ func postgresType(req *plugin.CodeGenRequest, col *plugin.Column) string {
 				if rel.Name == enum.Name && rel.Schema == schema.Name {
 					if notNull {
 						if schema.Name == req.Catalog.DefaultSchema {
-							return StructName(enum.Name, req.Settings)
+							return StructName(enum.Name, options)
 						}
-						return StructName(schema.Name+"_"+enum.Name, req.Settings)
+						return StructName(schema.Name+"_"+enum.Name, options)
 					} else {
 						if schema.Name == req.Catalog.DefaultSchema {
-							return "Null" + StructName(enum.Name, req.Settings)
+							return "Null" + StructName(enum.Name, options)
 						}
-						return "Null" + StructName(schema.Name+"_"+enum.Name, req.Settings)
+						return "Null" + StructName(schema.Name+"_"+enum.Name, options)
 					}
 				}
 			}

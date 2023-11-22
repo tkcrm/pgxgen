@@ -24,6 +24,7 @@ import (
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/debug"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/migrations"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/opts"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/quickdb"
@@ -47,8 +48,12 @@ func NewCmdVet() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			defer trace.StartRegion(cmd.Context(), "vet").End()
 			stderr := cmd.ErrOrStderr()
+			opts := &Options{
+				Env:    ParseEnv(cmd),
+				Stderr: stderr,
+			}
 			dir, name := getConfigPath(stderr, cmd.Flag("file"))
-			if err := Vet(cmd.Context(), ParseEnv(cmd), dir, name, stderr); err != nil {
+			if err := Vet(cmd.Context(), dir, name, opts); err != nil {
 				if !errors.Is(err, ErrFailedChecks) {
 					fmt.Fprintf(stderr, "%s\n", err)
 				}
@@ -59,7 +64,9 @@ func NewCmdVet() *cobra.Command {
 	}
 }
 
-func Vet(ctx context.Context, e Env, dir, filename string, stderr io.Writer) error {
+func Vet(ctx context.Context, dir, filename string, opts *Options) error {
+	e := opts.Env
+	stderr := opts.Stderr
 	configPath, conf, err := readConfig(stderr, dir, filename)
 	if err != nil {
 		return err
@@ -137,13 +144,13 @@ func Vet(ctx context.Context, e Env, dir, filename string, stderr io.Writer) err
 	}
 
 	c := checker{
-		Rules:      rules,
-		Conf:       conf,
-		Dir:        dir,
-		Env:        env,
-		Envmap:     map[string]string{},
-		Stderr:     stderr,
-		NoDatabase: e.NoDatabase,
+		Rules:         rules,
+		Conf:          conf,
+		Dir:           dir,
+		Env:           env,
+		Stderr:        stderr,
+		OnlyManagedDB: e.Debug.OnlyManagedDatabases,
+		Replacer:      shfmt.NewReplacer(nil),
 	}
 	errored := false
 	for _, sql := range conf.SQL {
@@ -327,7 +334,9 @@ type dbPreparer struct {
 
 func (p *dbPreparer) Prepare(ctx context.Context, name, query string) error {
 	s, err := p.db.PrepareContext(ctx, query)
-	s.Close()
+	if s != nil {
+		s.Close()
+	}
 	return err
 }
 
@@ -372,14 +381,14 @@ type rule struct {
 }
 
 type checker struct {
-	Rules      map[string]rule
-	Conf       *config.Config
-	Dir        string
-	Env        *cel.Env
-	Envmap     map[string]string
-	Stderr     io.Writer
-	NoDatabase bool
-	Client     pb.QuickClient
+	Rules         map[string]rule
+	Conf          *config.Config
+	Dir           string
+	Env           *cel.Env
+	Stderr        io.Writer
+	OnlyManagedDB bool
+	Client        pb.QuickClient
+	Replacer      *shfmt.Replacer
 }
 
 func (c *checker) fetchDatabaseUri(ctx context.Context, s config.SQL) (string, func() error, error) {
@@ -394,9 +403,6 @@ func (c *checker) fetchDatabaseUri(ctx context.Context, s config.SQL) (string, f
 		uri, err := c.DSN(s.Database.URI)
 		return uri, cleanup, err
 	}
-	if s.Engine != config.EnginePostgreSQL {
-		return "", cleanup, fmt.Errorf("managed: only PostgreSQL currently")
-	}
 
 	if c.Client == nil {
 		// FIXME: Eventual race condition
@@ -407,23 +413,23 @@ func (c *checker) fetchDatabaseUri(ctx context.Context, s config.SQL) (string, f
 		c.Client = client
 	}
 
-	var migrations []string
+	var ddl []string
 	files, err := sqlpath.Glob(s.Schema)
 	if err != nil {
 		return "", cleanup, err
 	}
-	for _, query := range files {
-		contents, err := os.ReadFile(query)
+	for _, schema := range files {
+		contents, err := os.ReadFile(schema)
 		if err != nil {
 			return "", cleanup, fmt.Errorf("read file: %w", err)
 		}
-		migrations = append(migrations, string(contents))
+		ddl = append(ddl, migrations.RemoveRollbackStatements(string(contents)))
 	}
 
 	resp, err := c.Client.CreateEphemeralDatabase(ctx, &pb.CreateEphemeralDatabaseRequest{
-		Engine:     "postgresql",
+		Engine:     string(s.Engine),
 		Region:     quickdb.GetClosestRegion(),
-		Migrations: migrations,
+		Migrations: ddl,
 	})
 	if err != nil {
 		return "", cleanup, fmt.Errorf("managed: create database: %w", err)
@@ -436,18 +442,23 @@ func (c *checker) fetchDatabaseUri(ctx context.Context, s config.SQL) (string, f
 		return err
 	}
 
-	return resp.Uri, cleanup, nil
+	var uri string
+	switch s.Engine {
+	case config.EngineMySQL:
+		dburi, err := quickdb.MySQLReformatURI(resp.Uri)
+		if err != nil {
+			return "", cleanup, fmt.Errorf("reformat uri: %w", err)
+		}
+		uri = dburi
+	default:
+		uri = resp.Uri
+	}
+
+	return uri, cleanup, nil
 }
 
 func (c *checker) DSN(dsn string) (string, error) {
-	// Populate the environment variable map if it is empty
-	if len(c.Envmap) == 0 {
-		for _, e := range os.Environ() {
-			k, v, _ := strings.Cut(e, "=")
-			c.Envmap[k] = v
-		}
-	}
-	return shfmt.Replace(dsn, c.Envmap), nil
+	return c.Replacer.Replace(dsn), nil
 }
 
 func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
@@ -480,8 +491,8 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 	var prep preparer
 	var expl explainer
 	if s.Database != nil { // TODO only set up a database connection if a rule evaluation requires it
-		if c.NoDatabase {
-			return fmt.Errorf("database: connections disabled via command line flag")
+		if s.Database.URI != "" && c.OnlyManagedDB {
+			return fmt.Errorf("database: connections disabled via SQLCDEBUG=databases=managed")
 		}
 		dburl, cleanup, err := c.fetchDatabaseUri(ctx, s)
 		if err != nil {
@@ -539,7 +550,7 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 	req := codeGenRequest(result, combo)
 	cfg := vetConfig(req)
 	for i, query := range req.Queries {
-		if result.Queries[i].Flags[QueryFlagSqlcVetDisable] {
+		if result.Queries[i].Metadata.Flags[QueryFlagSqlcVetDisable] {
 			if debug.Active {
 				log.Printf("Skipping vet rules for query: %s\n", query.Name)
 			}
@@ -626,7 +637,7 @@ func (c *checker) checkSQL(ctx context.Context, s config.SQL) error {
 	return nil
 }
 
-func vetConfig(req *plugin.CodeGenRequest) *vet.Config {
+func vetConfig(req *plugin.GenerateRequest) *vet.Config {
 	return &vet.Config{
 		Version: req.Settings.Version,
 		Engine:  req.Settings.Engine,

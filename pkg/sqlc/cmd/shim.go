@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"strings"
-
 	"github.com/tkcrm/pgxgen/pkg/sqlc/compiler"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config/convert"
@@ -11,128 +9,54 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/catalog"
 )
 
-func pluginOverride(r *compiler.Result, o config.Override) *plugin.Override {
-	var column string
-	var table plugin.Identifier
-
-	if o.Column != "" {
-		colParts := strings.Split(o.Column, ".")
-		switch len(colParts) {
-		case 2:
-			table.Schema = r.Catalog.DefaultSchema
-			table.Name = colParts[0]
-			column = colParts[1]
-		case 3:
-			table.Schema = colParts[0]
-			table.Name = colParts[1]
-			column = colParts[2]
-		case 4:
-			table.Catalog = colParts[0]
-			table.Schema = colParts[1]
-			table.Name = colParts[2]
-			column = colParts[3]
-		}
-	}
-	return &plugin.Override{
-		CodeType:   "", // FIXME
-		DbType:     o.DBType,
-		Nullable:   o.Nullable,
-		Unsigned:   o.Unsigned,
-		Column:     o.Column,
-		ColumnName: column,
-		Table:      &table,
-		GoType:     pluginGoType(o),
-	}
-}
-
 func pluginSettings(r *compiler.Result, cs config.CombinedSettings) *plugin.Settings {
-	var over []*plugin.Override
-	for _, o := range cs.Overrides {
-		over = append(over, pluginOverride(r, o))
-	}
 	return &plugin.Settings{
-		Version:   cs.Global.Version,
-		Engine:    string(cs.Package.Engine),
-		Schema:    []string(cs.Package.Schema),
-		Queries:   []string(cs.Package.Queries),
-		Overrides: over,
-		Rename:    cs.Rename,
-		Codegen:   pluginCodegen(cs.Codegen),
-		Go:        pluginGoCode(cs.Go),
-		Json:      pluginJSONCode(cs.JSON),
+		Version: cs.Global.Version,
+		Engine:  string(cs.Package.Engine),
+		Schema:  []string(cs.Package.Schema),
+		Queries: []string(cs.Package.Queries),
+		Codegen: pluginCodegen(cs, cs.Codegen),
 	}
 }
 
-func pluginCodegen(s config.Codegen) *plugin.Codegen {
+func pluginCodegen(cs config.CombinedSettings, s config.Codegen) *plugin.Codegen {
 	opts, err := convert.YAMLtoJSON(s.Options)
 	if err != nil {
 		panic(err)
 	}
-	return &plugin.Codegen{
+	cg := &plugin.Codegen{
 		Out:     s.Out,
 		Plugin:  s.Plugin,
 		Options: opts,
 	}
+	for _, p := range cs.Global.Plugins {
+		if p.Name == s.Plugin {
+			cg.Env = p.Env
+			cg.Process = pluginProcess(p)
+			cg.Wasm = pluginWASM(p)
+			return cg
+		}
+	}
+	return cg
 }
 
-func pluginGoCode(s config.SQLGo) *plugin.GoCode {
-	if s.QueryParameterLimit == nil {
-		s.QueryParameterLimit = new(int32)
-		*s.QueryParameterLimit = 1
+func pluginProcess(p config.Plugin) *plugin.Codegen_Process {
+	if p.Process != nil {
+		return &plugin.Codegen_Process{
+			Cmd: p.Process.Cmd,
+		}
 	}
-
-	return &plugin.GoCode{
-		EmitInterface:               s.EmitInterface,
-		EmitJsonTags:                s.EmitJSONTags,
-		JsonTagsIdUppercase:         s.JsonTagsIDUppercase,
-		EmitDbTags:                  s.EmitDBTags,
-		EmitPreparedQueries:         s.EmitPreparedQueries,
-		EmitExactTableNames:         s.EmitExactTableNames,
-		EmitEmptySlices:             s.EmitEmptySlices,
-		EmitExportedQueries:         s.EmitExportedQueries,
-		EmitResultStructPointers:    s.EmitResultStructPointers,
-		EmitParamsStructPointers:    s.EmitParamsStructPointers,
-		EmitMethodsWithDbArgument:   s.EmitMethodsWithDBArgument,
-		EmitPointersForNullTypes:    s.EmitPointersForNullTypes,
-		EmitEnumValidMethod:         s.EmitEnumValidMethod,
-		EmitAllEnumValues:           s.EmitAllEnumValues,
-		JsonTagsCaseStyle:           s.JSONTagsCaseStyle,
-		Package:                     s.Package,
-		Out:                         s.Out,
-		SqlPackage:                  s.SQLPackage,
-		SqlDriver:                   s.SQLDriver,
-		OutputDbFileName:            s.OutputDBFileName,
-		OutputBatchFileName:         s.OutputBatchFileName,
-		OutputModelsFileName:        s.OutputModelsFileName,
-		OutputQuerierFileName:       s.OutputQuerierFileName,
-		OutputCopyfromFileName:      s.OutputCopyFromFileName,
-		OutputFilesSuffix:           s.OutputFilesSuffix,
-		InflectionExcludeTableNames: s.InflectionExcludeTableNames,
-		QueryParameterLimit:         s.QueryParameterLimit,
-		OmitUnusedStructs:           s.OmitUnusedStructs,
-	}
+	return nil
 }
 
-func pluginGoType(o config.Override) *plugin.ParsedGoType {
-	// Note that there is a slight mismatch between this and the
-	// proto api. The GoType on the override is the unparsed type,
-	// which could be a qualified path or an object, as per
-	// https://docs.sqlc.dev/en/v1.18.0/reference/config.html#type-overriding
-	return &plugin.ParsedGoType{
-		ImportPath: o.GoImportPath,
-		Package:    o.GoPackage,
-		TypeName:   o.GoTypeName,
-		BasicType:  o.GoBasicType,
-		StructTags: o.GoStructTags,
+func pluginWASM(p config.Plugin) *plugin.Codegen_WASM {
+	if p.WASM != nil {
+		return &plugin.Codegen_WASM{
+			Url:    p.WASM.URL,
+			Sha256: p.WASM.SHA256,
+		}
 	}
-}
-
-func pluginJSONCode(s config.SQLJSON) *plugin.JSONCode {
-	return &plugin.JSONCode{
-		Out:      s.Out,
-		Indent:   s.Indent,
-		Filename: s.Filename,
-	}
+	return nil
 }
 
 func pluginCatalog(c *catalog.Catalog) *plugin.Catalog {
@@ -229,13 +153,13 @@ func pluginQueries(r *compiler.Result) []*plugin.Query {
 			}
 		}
 		out = append(out, &plugin.Query{
-			Name:            q.Name,
-			Cmd:             q.Cmd,
+			Name:            q.Metadata.Name,
+			Cmd:             q.Metadata.Cmd,
 			Text:            q.SQL,
-			Comments:        q.Comments,
+			Comments:        q.Metadata.Comments,
 			Columns:         columns,
 			Params:          params,
-			Filename:        q.Filename,
+			Filename:        q.Metadata.Filename,
 			InsertIntoTable: iit,
 		})
 	}
@@ -299,8 +223,8 @@ func pluginQueryParam(p compiler.Parameter) *plugin.Parameter {
 	}
 }
 
-func codeGenRequest(r *compiler.Result, settings config.CombinedSettings) *plugin.CodeGenRequest {
-	return &plugin.CodeGenRequest{
+func codeGenRequest(r *compiler.Result, settings config.CombinedSettings) *plugin.GenerateRequest {
+	return &plugin.GenerateRequest{
 		Settings:    pluginSettings(r, settings),
 		Catalog:     pluginCatalog(r.Catalog),
 		Queries:     pluginQueries(r),

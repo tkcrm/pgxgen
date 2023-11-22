@@ -9,7 +9,7 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 )
 
-func sqliteType(req *plugin.CodeGenRequest, col *plugin.Column) string {
+func sqliteType(req *plugin.GenerateRequest, col *plugin.Column) string {
 	dt := strings.ToLower(sdk.DataType(col.Type))
 	notNull := col.NotNull || col.IsArray
 

@@ -8,10 +8,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tkcrm/pgxgen/pkg/sqlc/metadata"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/migrations"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/multierr"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/opts"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/rpc"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/source"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlerr"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlpath"
@@ -20,11 +21,10 @@ import (
 // TODO: Rename this interface Engine
 type Parser interface {
 	Parse(io.Reader) ([]ast.Statement, error)
-	CommentSyntax() metadata.CommentSyntax
+	CommentSyntax() source.CommentSyntax
 	IsReservedKeyword(string) bool
 }
 
-// end copypasta
 func (c *Compiler) parseCatalog(schemas []string) error {
 	files, err := sqlpath.Glob(schemas)
 	if err != nil {
@@ -38,6 +38,7 @@ func (c *Compiler) parseCatalog(schemas []string) error {
 			continue
 		}
 		contents := migrations.RemoveRollbackStatements(string(blob))
+		c.schema = append(c.schema, contents)
 		stmts, err := c.parser.Parse(strings.NewReader(contents))
 		if err != nil {
 			merr.Add(filename, contents, 0, err)
@@ -88,16 +89,21 @@ func (c *Compiler) parseQueries(o opts.Parser) (*Result, error) {
 					loc = e.Location
 				}
 				merr.Add(filename, src, loc, err)
+				// If this rpc unauthenticated error bubbles up, then all future parsing/analysis will fail
+				if errors.Is(err, rpc.ErrUnauthenticated) {
+					return nil, merr
+				}
 				continue
 			}
-			if query.Name != "" {
-				if _, exists := set[query.Name]; exists {
-					merr.Add(filename, src, stmt.Raw.Pos(), fmt.Errorf("duplicate query name: %s", query.Name))
+			queryName := query.Metadata.Name
+			if queryName != "" {
+				if _, exists := set[queryName]; exists {
+					merr.Add(filename, src, stmt.Raw.Pos(), fmt.Errorf("duplicate query name: %s", queryName))
 					continue
 				}
-				set[query.Name] = struct{}{}
+				set[queryName] = struct{}{}
 			}
-			query.Filename = filepath.Base(filename)
+			query.Metadata.Filename = filepath.Base(filename)
 			if query != nil {
 				q = append(q, query)
 			}

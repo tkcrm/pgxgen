@@ -764,11 +764,11 @@ func (c *cc) convertLiteral(n *parser.Expr_literalContext) ast.Node {
 	return todo("convertLiteral", n)
 }
 
-func (c *cc) convertMathOperationNode(n *parser.Expr_math_opContext) ast.Node {
+func (c *cc) convertBinaryNode(n *parser.Expr_binaryContext) ast.Node {
 	return &ast.A_Expr{
 		Name: &ast.List{
 			Items: []ast.Node{
-				&ast.String{Str: "+"}, // todo: Convert operation types
+				&ast.String{Str: n.GetChild(1).(antlr.TerminalNode).GetText()},
 			},
 		},
 		Lexpr: c.convert(n.Expr(0)),
@@ -776,7 +776,7 @@ func (c *cc) convertMathOperationNode(n *parser.Expr_math_opContext) ast.Node {
 	}
 }
 
-func (c *cc) convertBinaryNode(n *parser.Expr_binaryContext) ast.Node {
+func (c *cc) convertBoolNode(n *parser.Expr_boolContext) ast.Node {
 	return &ast.BoolExpr{
 		// TODO: Set op
 		Args: &ast.List{
@@ -1096,6 +1096,28 @@ func (c *cc) convertCollateExpr(n *parser.Expr_collateContext) ast.Node {
 	}
 }
 
+func (c *cc) convertCase(n *parser.Expr_caseContext) ast.Node {
+	e := &ast.CaseExpr{
+		Args: &ast.List{},
+	}
+	es := n.AllExpr()
+	if n.ELSE_() != nil {
+		e.Defresult = c.convert(es[len(es)-1])
+		es = es[:len(es)-1]
+	}
+	if len(es)%2 == 1 {
+		e.Arg = c.convert(es[0])
+		es = es[1:]
+	}
+	for i := 0; i < len(es); i += 2 {
+		e.Args.Items = append(e.Args.Items, &ast.CaseWhen{
+			Expr:   c.convert(es[i+0]),
+			Result: c.convert(es[i+1]),
+		})
+	}
+	return e
+}
+
 func (c *cc) convert(node node) ast.Node {
 	switch n := node.(type) {
 
@@ -1141,14 +1163,14 @@ func (c *cc) convert(node node) ast.Node {
 	case *parser.Expr_literalContext:
 		return c.convertLiteral(n)
 
-	case *parser.Expr_binaryContext:
-		return c.convertBinaryNode(n)
+	case *parser.Expr_boolContext:
+		return c.convertBoolNode(n)
 
 	case *parser.Expr_listContext:
 		return c.convertExprListContext(n)
 
-	case *parser.Expr_math_opContext:
-		return c.convertMathOperationNode(n)
+	case *parser.Expr_binaryContext:
+		return c.convertBinaryNode(n)
 
 	case *parser.Expr_in_selectContext:
 		return c.convertInSelectNode(n)
@@ -1183,6 +1205,9 @@ func (c *cc) convert(node node) ast.Node {
 
 	case *parser.Expr_castContext:
 		return c.convertCastExpr(n)
+
+	case *parser.Expr_caseContext:
+		return c.convertCase(n)
 
 	default:
 		return todo("convert(case=default)", n)

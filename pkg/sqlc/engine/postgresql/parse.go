@@ -12,7 +12,7 @@ import (
 	nodes "github.com/pganalyze/pg_query_go/v4"
 	"github.com/pganalyze/pg_query_go/v4/parser"
 
-	"github.com/tkcrm/pgxgen/pkg/sqlc/metadata"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/source"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlerr"
 )
@@ -199,8 +199,8 @@ func normalizeErr(err error) error {
 }
 
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-COMMENTS
-func (p *Parser) CommentSyntax() metadata.CommentSyntax {
-	return metadata.CommentSyntax{
+func (p *Parser) CommentSyntax() source.CommentSyntax {
+	return source.CommentSyntax{
 		Dash:      true,
 		SlashStar: true,
 	}
@@ -236,7 +236,7 @@ func translate(node *nodes.Node) (ast.Node, error) {
 		n := inner.AlterObjectSchemaStmt
 		switch n.ObjectType {
 
-		case nodes.ObjectType_OBJECT_TABLE:
+		case nodes.ObjectType_OBJECT_TABLE, nodes.ObjectType_OBJECT_VIEW, nodes.ObjectType_OBJECT_MATVIEW:
 			rel := parseRelationFromRangeVar(n.Relation)
 			return &ast.AlterTableSetSchemaStmt{
 				Table:     rel.TableName(),
@@ -438,12 +438,21 @@ func translate(node *nodes.Node) (ast.Node, error) {
 				if err != nil {
 					return nil, err
 				}
+
+				primary := false
+				for _, con := range item.ColumnDef.Constraints {
+					if constraint, ok := con.Node.(*nodes.Node_Constraint); ok {
+						primary = constraint.Constraint.Contype == nodes.ConstrType_CONSTR_PRIMARY
+					}
+				}
+
 				create.Cols = append(create.Cols, &ast.ColumnDef{
-					Colname:   item.ColumnDef.Colname,
-					TypeName:  rel.TypeName(),
-					IsNotNull: isNotNull(item.ColumnDef) || primaryKey[item.ColumnDef.Colname],
-					IsArray:   isArray(item.ColumnDef.TypeName),
-					ArrayDims: len(item.ColumnDef.TypeName.ArrayBounds),
+					Colname:    item.ColumnDef.Colname,
+					TypeName:   rel.TypeName(),
+					IsNotNull:  isNotNull(item.ColumnDef) || primaryKey[item.ColumnDef.Colname],
+					IsArray:    isArray(item.ColumnDef.TypeName),
+					ArrayDims:  len(item.ColumnDef.TypeName.ArrayBounds),
+					PrimaryKey: primary,
 				})
 			}
 		}

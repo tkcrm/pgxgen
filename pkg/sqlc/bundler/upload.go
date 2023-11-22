@@ -2,28 +2,50 @@ package bundler
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"os"
+	"strings"
 
-	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/info"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/quickdb"
 	pb "github.com/tkcrm/pgxgen/pkg/sqlc/quickdb/v1"
 )
 
+var ErrNoProject = errors.New(`project uploads require a cloud project
+
+If you don't have a project, you can create one from the sqlc Cloud
+dashboard at https://dashboard.sqlc.dev/. If you have a project, ensure
+you've set its id as the value of the "project" field within the "cloud"
+section of your sqlc configuration. The id will look similar to
+"01HA8TWGMYPHK0V2GGMB3R2TP9".`)
+var ErrNoAuthToken = errors.New(`project uploads require an auth token
+
+If you don't have an auth token, you can create one from the sqlc Cloud
+dashboard at https://dashboard.sqlc.dev/. If you have an auth token, ensure
+you've set it as the value of the SQLC_AUTH_TOKEN environment variable.`)
+
 type Uploader struct {
-	token      string
 	configPath string
 	config     *config.Config
 	dir        string
 	client     pb.QuickClient
 }
 
+type QuerySetArchive struct {
+	Name    string
+	Queries []string
+	Schema  []string
+	Request *plugin.GenerateRequest
+}
+
 func NewUploader(configPath, dir string, conf *config.Config) *Uploader {
 	return &Uploader{
-		token:      os.Getenv("SQLC_AUTH_TOKEN"),
 		configPath: configPath,
 		config:     conf,
 		dir:        dir,
@@ -32,10 +54,10 @@ func NewUploader(configPath, dir string, conf *config.Config) *Uploader {
 
 func (up *Uploader) Validate() error {
 	if up.config.Cloud.Project == "" {
-		return fmt.Errorf("cloud.project is not set")
+		return ErrNoProject
 	}
-	if up.token == "" {
-		return fmt.Errorf("SQLC_AUTH_TOKEN environment variable is not set")
+	if up.config.Cloud.AuthToken == "" {
+		return ErrNoAuthToken
 	}
 	if up.client == nil {
 		client, err := quickdb.NewClientFromConfig(up.config.Cloud)
@@ -47,32 +69,86 @@ func (up *Uploader) Validate() error {
 	return nil
 }
 
-func (up *Uploader) buildRequest(ctx context.Context, result map[string]string) (*pb.UploadArchiveRequest, error) {
-	ins, err := readInputs(up.configPath, up.config)
-	if err != nil {
-		return nil, err
-	}
-	outs, err := readOutputs(up.dir, result)
-	if err != nil {
-		return nil, err
-	}
-	return &pb.UploadArchiveRequest{
-		SqlcVersion: info.Version,
-		Inputs:      ins,
-		Outputs:     outs,
-	}, nil
+var envvars = []string{
+	"GITHUB_REPOSITORY",
+	"GITHUB_REF",
+	"GITHUB_REF_NAME",
+	"GITHUB_REF_TYPE",
+	"GITHUB_SHA",
 }
 
-func (up *Uploader) DumpRequestOut(ctx context.Context, result map[string]string) error {
+func annotate() map[string]string {
+	labels := map[string]string{}
+	for _, ev := range envvars {
+		key := strings.ReplaceAll(strings.ToLower(ev), "_", ".")
+		labels[key] = os.Getenv(ev)
+	}
+	return labels
+}
+
+func BuildRequest(ctx context.Context, dir, configPath string, results []*QuerySetArchive) (*pb.UploadArchiveRequest, error) {
+	conf, err := readFile(dir, configPath)
+	if err != nil {
+		return nil, err
+	}
+	res := &pb.UploadArchiveRequest{
+		SqlcVersion: info.Version,
+		Config:      conf,
+		Annotations: annotate(),
+	}
+	for i, result := range results {
+		schema, err := readFiles(dir, result.Schema)
+		if err != nil {
+			return nil, err
+		}
+		queries, err := readFiles(dir, result.Queries)
+		if err != nil {
+			return nil, err
+		}
+		name := result.Name
+		if name == "" {
+			name = fmt.Sprintf("queryset_%d", i)
+		}
+		genreq, err := proto.Marshal(result.Request)
+		if err != nil {
+			return nil, err
+		}
+		res.QuerySets = append(res.QuerySets, &pb.QuerySet{
+			Name:    name,
+			Schema:  schema,
+			Queries: queries,
+			CodegenRequest: &pb.File{
+				Name:     "codegen_request.pb",
+				Contents: genreq,
+			},
+		})
+	}
+	return res, nil
+}
+
+func (up *Uploader) buildRequest(ctx context.Context, results []*QuerySetArchive) (*pb.UploadArchiveRequest, error) {
+	return BuildRequest(ctx, up.dir, up.configPath, results)
+}
+
+func (up *Uploader) DumpRequestOut(ctx context.Context, result []*QuerySetArchive) error {
 	req, err := up.buildRequest(ctx, result)
 	if err != nil {
 		return err
 	}
-	fmt.Println(protojson.Format(req))
+	slog.Info("config", "file", req.Config.Name, "bytes", len(req.Config.Contents))
+	for _, qs := range req.QuerySets {
+		slog.Info("codegen_request", "queryset", qs.Name, "file", "codegen_request.pb")
+		for _, file := range qs.Schema {
+			slog.Info("schema", "queryset", qs.Name, "file", file.Name, "bytes", len(file.Contents))
+		}
+		for _, file := range qs.Queries {
+			slog.Info("query", "queryset", qs.Name, "file", file.Name, "bytes", len(file.Contents))
+		}
+	}
 	return nil
 }
 
-func (up *Uploader) Upload(ctx context.Context, result map[string]string) error {
+func (up *Uploader) Upload(ctx context.Context, result []*QuerySetArchive) error {
 	if err := up.Validate(); err != nil {
 		return err
 	}

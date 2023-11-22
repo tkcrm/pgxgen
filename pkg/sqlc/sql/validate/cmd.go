@@ -6,6 +6,8 @@ import (
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/metadata"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/astutils"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/named"
 )
 
 func validateCopyfrom(n ast.Node) error {
@@ -37,7 +39,10 @@ func validateCopyfrom(n ast.Node) error {
 		return nil
 	}
 	for _, v := range sublist.Items {
-		if _, ok := v.(*ast.ParamRef); !ok {
+		_, ok := v.(*ast.ParamRef)
+		ok = ok || named.IsParamFunc(v)
+		ok = ok || named.IsParamSign(v)
+		if !ok {
 			return errors.New(":copyfrom doesn't support non-parameter values")
 		}
 	}
@@ -45,8 +50,13 @@ func validateCopyfrom(n ast.Node) error {
 }
 
 func validateBatch(n ast.Node) error {
-	nums, _, _ := ParamRef(n)
-	if len(nums) == 0 {
+	funcs := astutils.Search(n, named.IsParamFunc)
+	params := astutils.Search(n, named.IsParamSign)
+	args := astutils.Search(n, func(n ast.Node) bool {
+		_, ok := n.(*ast.ParamRef)
+		return ok
+	})
+	if (len(params.Items) + len(funcs.Items) + len(args.Items)) == 0 {
 		return errors.New(":batch* commands require parameters")
 	}
 	return nil
@@ -57,9 +67,11 @@ func Cmd(n ast.Node, name, cmd string) error {
 		return validateCopyfrom(n)
 	}
 	if (cmd == metadata.CmdBatchExec || cmd == metadata.CmdBatchMany) || cmd == metadata.CmdBatchOne {
-		return validateBatch(n)
+		if err := validateBatch(n); err != nil {
+			return err
+		}
 	}
-	if !(cmd == metadata.CmdMany || cmd == metadata.CmdOne) {
+	if !(cmd == metadata.CmdMany || cmd == metadata.CmdOne || cmd == metadata.CmdBatchMany || cmd == metadata.CmdBatchOne) {
 		return nil
 	}
 	var list *ast.List
