@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlerr"
 )

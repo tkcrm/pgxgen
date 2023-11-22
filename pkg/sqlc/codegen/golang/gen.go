@@ -10,6 +10,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/golang/opts"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/sdk"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/metadata"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
@@ -38,6 +39,7 @@ type tmplCtx struct {
 	EmitAllEnumValues         bool
 	UsesCopyFrom              bool
 	UsesBatch                 bool
+	BuildTags                 string
 }
 
 func (t *tmplCtx) OutputQuery(sourceName string) bool {
@@ -101,55 +103,95 @@ func (t *tmplCtx) codegenQueryRetval(q Query) (string, error) {
 	}
 }
 
-func Generate(ctx context.Context, req *plugin.CodeGenRequest) (*plugin.CodeGenResponse, error) {
-	enums := buildEnums(req)
-	structs := buildStructs(req)
-	queries, err := buildQueries(req, structs)
+func Generate(ctx context.Context, req *plugin.GenerateRequest) (*plugin.GenerateResponse, error) {
+	options, err := opts.Parse(req)
 	if err != nil {
 		return nil, err
 	}
 
-	if req.Settings.Go.OmitUnusedStructs {
+	if err := opts.ValidateOpts(options); err != nil {
+		return nil, err
+	}
+
+	enums := buildEnums(req, options)
+	structs := buildStructs(req, options)
+	queries, err := buildQueries(req, options, structs)
+	if err != nil {
+		return nil, err
+	}
+
+	if options.OmitUnusedStructs {
 		enums, structs = filterUnusedStructs(enums, structs, queries)
 	}
 
-	return generate(req, enums, structs, queries)
-}
-
-func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, queries []Query) (*plugin.CodeGenResponse, error) {
-	i := &importer{
-		Settings: req.Settings,
-		Queries:  queries,
-		Enums:    enums,
-		Structs:  structs,
+	if err := validate(options, enums, structs, queries); err != nil {
+		return nil, err
 	}
 
-	golang := req.Settings.Go
+	return generate(req, options, enums, structs, queries)
+}
+
+func validate(options *opts.Options, enums []Enum, structs []Struct, queries []Query) error {
+	enumNames := make(map[string]struct{})
+	for _, enum := range enums {
+		enumNames[enum.Name] = struct{}{}
+		enumNames["Null"+enum.Name] = struct{}{}
+	}
+	structNames := make(map[string]struct{})
+	for _, struckt := range structs {
+		if _, ok := enumNames[struckt.Name]; ok {
+			return fmt.Errorf("struct name conflicts with enum name: %s", struckt.Name)
+		}
+		structNames[struckt.Name] = struct{}{}
+	}
+	if !options.EmitExportedQueries {
+		return nil
+	}
+	for _, query := range queries {
+		if _, ok := enumNames[query.ConstantName]; ok {
+			return fmt.Errorf("query constant name conflicts with enum name: %s", query.ConstantName)
+		}
+		if _, ok := structNames[query.ConstantName]; ok {
+			return fmt.Errorf("query constant name conflicts with struct name: %s", query.ConstantName)
+		}
+	}
+	return nil
+}
+
+func generate(req *plugin.GenerateRequest, options *opts.Options, enums []Enum, structs []Struct, queries []Query) (*plugin.GenerateResponse, error) {
+	i := &importer{
+		Options: options,
+		Queries: queries,
+		Enums:   enums,
+		Structs: structs,
+	}
+
 	tctx := tmplCtx{
-		EmitInterface:             golang.EmitInterface,
-		EmitJSONTags:              golang.EmitJsonTags,
-		JsonTagsIDUppercase:       golang.JsonTagsIdUppercase,
-		EmitDBTags:                golang.EmitDbTags,
-		EmitPreparedQueries:       golang.EmitPreparedQueries,
-		EmitEmptySlices:           golang.EmitEmptySlices,
-		EmitMethodsWithDBArgument: golang.EmitMethodsWithDbArgument,
-		EmitEnumValidMethod:       golang.EmitEnumValidMethod,
-		EmitAllEnumValues:         golang.EmitAllEnumValues,
+		EmitInterface:             options.EmitInterface,
+		EmitJSONTags:              options.EmitJsonTags,
+		JsonTagsIDUppercase:       options.JsonTagsIdUppercase,
+		EmitDBTags:                options.EmitDbTags,
+		EmitPreparedQueries:       options.EmitPreparedQueries,
+		EmitEmptySlices:           options.EmitEmptySlices,
+		EmitMethodsWithDBArgument: options.EmitMethodsWithDbArgument,
+		EmitEnumValidMethod:       options.EmitEnumValidMethod,
+		EmitAllEnumValues:         options.EmitAllEnumValues,
 		UsesCopyFrom:              usesCopyFrom(queries),
 		UsesBatch:                 usesBatch(queries),
-		SQLDriver:                 parseDriver(golang.SqlPackage),
+		SQLDriver:                 parseDriver(options.SqlPackage),
 		Q:                         "`",
-		Package:                   golang.Package,
+		Package:                   options.Package,
 		Enums:                     enums,
 		Structs:                   structs,
 		SqlcVersion:               req.SqlcVersion,
+		BuildTags:                 options.BuildTags,
 	}
 
-	if tctx.UsesCopyFrom && !tctx.SQLDriver.IsPGX() && golang.SqlDriver != SQLDriverGoSQLDriverMySQL {
+	if tctx.UsesCopyFrom && !tctx.SQLDriver.IsPGX() && options.SqlDriver != SQLDriverGoSQLDriverMySQL {
 		return nil, errors.New(":copyfrom is only supported by pgx and github.com/go-sql-driver/mysql")
 	}
 
-	if tctx.UsesCopyFrom && golang.SqlDriver == SQLDriverGoSQLDriverMySQL {
+	if tctx.UsesCopyFrom && options.SqlDriver == SQLDriverGoSQLDriverMySQL {
 		if err := checkNoTimesForMySQLCopyFrom(queries); err != nil {
 			return nil, err
 		}
@@ -206,8 +248,8 @@ func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, querie
 			return fmt.Errorf("source error: %w", err)
 		}
 
-		if templateName == "queryFile" && golang.OutputFilesSuffix != "" {
-			name += golang.OutputFilesSuffix
+		if templateName == "queryFile" && options.OutputFilesSuffix != "" {
+			name += options.OutputFilesSuffix
 		}
 
 		if !strings.HasSuffix(name, ".go") {
@@ -218,25 +260,25 @@ func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, querie
 	}
 
 	dbFileName := "db.go"
-	if golang.OutputDbFileName != "" {
-		dbFileName = golang.OutputDbFileName
+	if options.OutputDbFileName != "" {
+		dbFileName = options.OutputDbFileName
 	}
 	modelsFileName := "models.go"
-	if golang.OutputModelsFileName != "" {
-		modelsFileName = golang.OutputModelsFileName
+	if options.OutputModelsFileName != "" {
+		modelsFileName = options.OutputModelsFileName
 	}
 	querierFileName := "querier.go"
-	if golang.OutputQuerierFileName != "" {
-		querierFileName = golang.OutputQuerierFileName
+	if options.OutputQuerierFileName != "" {
+		querierFileName = options.OutputQuerierFileName
 	}
 	copyfromFileName := "copyfrom.go"
-	if golang.OutputCopyfromFileName != "" {
-		copyfromFileName = golang.OutputCopyfromFileName
+	if options.OutputCopyfromFileName != "" {
+		copyfromFileName = options.OutputCopyfromFileName
 	}
 
 	batchFileName := "batch.go"
-	if golang.OutputBatchFileName != "" {
-		batchFileName = golang.OutputBatchFileName
+	if options.OutputBatchFileName != "" {
+		batchFileName = options.OutputBatchFileName
 	}
 
 	if err := execute(dbFileName, "dbFile"); err != nil {
@@ -245,7 +287,7 @@ func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, querie
 	if err := execute(modelsFileName, "modelsFile"); err != nil {
 		return nil, err
 	}
-	if golang.EmitInterface {
+	if options.EmitInterface {
 		if err := execute(querierFileName, "interfaceFile"); err != nil {
 			return nil, err
 		}
@@ -271,7 +313,7 @@ func generate(req *plugin.CodeGenRequest, enums []Enum, structs []Struct, querie
 			return nil, err
 		}
 	}
-	resp := plugin.CodeGenResponse{}
+	resp := plugin.GenerateResponse{}
 
 	for filename, code := range output {
 		resp.Files = append(resp.Files, &plugin.File{
@@ -334,6 +376,9 @@ func filterUnusedStructs(enums []Enum, structs []Struct, queries []Query) ([]Enu
 			if query.Ret.IsStruct() {
 				for _, field := range query.Ret.Struct.Fields {
 					keepTypes[field.Type] = struct{}{}
+					for _, embedField := range field.EmbedFields {
+						keepTypes[embedField.Type] = struct{}{}
+					}
 				}
 			}
 		}

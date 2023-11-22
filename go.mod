@@ -8,17 +8,16 @@ require (
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/gobeam/stringy v0.0.6
-	github.com/google/go-cmp v0.5.9
+	github.com/google/go-cmp v0.6.0
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/jinzhu/inflection v1.0.0
 	github.com/lib/pq v1.10.9
-	github.com/mattn/go-sqlite3 v1.14.17
-	github.com/pingcap/tidb/parser v0.0.0-20230928101821-95378e5bedef
-	github.com/spf13/cobra v1.7.0
+	github.com/mattn/go-sqlite3 v1.14.18
+	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/tkcrm/modules v0.0.0-20230912214128-9e7e5a8cc63d
-	golang.org/x/sync v0.3.0
-	golang.org/x/tools v0.13.0
+	github.com/tkcrm/modules v0.0.0-20231105124543-ee87e76cef46
+	golang.org/x/sync v0.5.0
+	golang.org/x/tools v0.15.0
 	google.golang.org/protobuf v1.31.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -29,22 +28,25 @@ require (
 )
 
 require (
-	github.com/bytecodealliance/wasmtime-go/v13 v13.0.0
+	github.com/bytecodealliance/wasmtime-go/v14 v14.0.0
 	github.com/cristalhq/flagx v0.4.0
 	github.com/fatih/structtag v1.2.0
-	github.com/google/cel-go v0.18.1
-	github.com/jackc/pgx/v5 v5.4.3
+	github.com/google/cel-go v0.18.2
+	github.com/jackc/pgx/v5 v5.5.0
+	github.com/pingcap/tidb/pkg/parser v0.0.0-20231122171140-1cf282672776
 	github.com/stretchr/testify v1.8.4
 )
 
 require (
+	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
+	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/pingcap/failpoint v0.0.0-20220801062533-2eaa32854a6c // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231002182017-d307bd883b97 // indirect
+	golang.org/x/net v0.18.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231120223509-83a465c0220f // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231120223509-83a465c0220f // indirect
 )
 
 require (
@@ -68,11 +70,11 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/crypto v0.14.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
-	golang.org/x/mod v0.12.0 // indirect
-	golang.org/x/sys v0.13.0 // indirect
-	golang.org/x/text v0.13.0 // indirect
-	google.golang.org/grpc v1.58.3
+	golang.org/x/crypto v0.15.0 // indirect
+	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
+	golang.org/x/mod v0.14.0 // indirect
+	golang.org/x/sys v0.14.0 // indirect
+	golang.org/x/text v0.14.0 // indirect
+	google.golang.org/grpc v1.59.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

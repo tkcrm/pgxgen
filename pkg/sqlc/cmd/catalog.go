@@ -82,10 +82,10 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 		return nil, err
 	}
 
-	var pairs []outPair
+	var pairs []OutputPair
 	for _, sql := range conf.SQL {
 		if sql.Gen.Go != nil {
-			pairs = append(pairs, outPair{
+			pairs = append(pairs, OutputPair{
 				SQL: sql,
 				Gen: config.SQLGen{Go: sql.Gen.Go},
 			})
@@ -129,7 +129,10 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 				name = sql.Plugin.Plugin
 			}
 
-			c := compiler.NewCompiler(sql.SQL, combo)
+			c, err := compiler.NewCompiler(sql.SQL, combo)
+			if err != nil {
+				return err
+			}
 			if err := c.ParseCatalog(sql.Schema); err != nil {
 				fmt.Fprintf(stderr, "# package %s\n", name)
 				if parserErr, ok := err.(*multierr.Error); ok {

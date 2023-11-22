@@ -1,22 +1,21 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"runtime/trace"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/golang"
-	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/json"
+	genjson "github.com/tkcrm/pgxgen/pkg/sqlc/codegen/json"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/compiler"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config/convert"
@@ -55,13 +54,6 @@ func printFileErr(stderr io.Writer, dir string, fileErr *multierr.FileError) {
 	fmt.Fprintf(stderr, "%s:%d:%d: %s\n", filename, fileErr.Line, fileErr.Column, fileErr.Err)
 }
 
-type outPair struct {
-	Gen    config.SQLGen
-	Plugin *config.Codegen
-
-	config.SQL
-}
-
 func findPlugin(conf config.Config, name string) (*config.Plugin, error) {
 	for _, plug := range conf.Plugins {
 		if plug.Name == name {
@@ -76,8 +68,9 @@ func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config,
 	if filename != "" {
 		configPath = filepath.Join(dir, filename)
 	} else {
-		var yamlMissing, jsonMissing bool
+		var yamlMissing, jsonMissing, ymlMissing bool
 		yamlPath := filepath.Join(dir, "sqlc.yaml")
+		ymlPath := filepath.Join(dir, "sqlc.yml")
 		jsonPath := filepath.Join(dir, "sqlc.json")
 
 		if _, err := os.Stat(yamlPath); os.IsNotExist(err) {
@@ -87,18 +80,27 @@ func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config,
 			jsonMissing = true
 		}
 
-		if yamlMissing && jsonMissing {
-			fmt.Fprintln(stderr, "error parsing configuration files. sqlc.yaml or sqlc.json: file does not exist")
+		if _, err := os.Stat(ymlPath); os.IsNotExist(err) {
+			ymlMissing = true
+		}
+
+		if yamlMissing && ymlMissing && jsonMissing {
+			fmt.Fprintln(stderr, "error parsing configuration files. sqlc.(yaml|yml) or sqlc.json: file does not exist")
 			return "", nil, errors.New("config file missing")
 		}
 
-		if !yamlMissing && !jsonMissing {
-			fmt.Fprintln(stderr, "error: both sqlc.json and sqlc.yaml files present")
-			return "", nil, errors.New("sqlc.json and sqlc.yaml present")
+		if (!yamlMissing || !ymlMissing) && !jsonMissing {
+			fmt.Fprintln(stderr, "error: both sqlc.json and sqlc.(yaml|yml) files present")
+			return "", nil, errors.New("sqlc.json and sqlc.(yaml|yml) present")
 		}
 
-		configPath = yamlPath
-		if yamlMissing {
+		if jsonMissing {
+			if yamlMissing {
+				configPath = ymlPath
+			} else {
+				configPath = yamlPath
+			}
+		} else {
 			configPath = jsonPath
 		}
 	}
@@ -128,8 +130,11 @@ func readConfig(stderr io.Writer, dir, filename string) (string, *config.Config,
 	return configPath, &conf, nil
 }
 
-func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer) (map[string]string, error) {
-	configPath, conf, err := readConfig(stderr, dir, filename)
+func Generate(ctx context.Context, dir, filename string, o *Options) (map[string]string, error) {
+	e := o.Env
+	stderr := o.Stderr
+
+	configPath, conf, err := o.ReadConfig(dir, filename)
 	if err != nil {
 		return nil, err
 	}
@@ -145,126 +150,70 @@ func Generate(ctx context.Context, e Env, dir, filename string, stderr io.Writer
 		return nil, err
 	}
 
+	// Comment on why these two methods exist
 	if conf.Cloud.Project != "" && e.Remote && !e.NoRemote {
 		return remoteGenerate(ctx, configPath, conf, dir, stderr)
 	}
 
-	output := map[string]string{}
-	errored := false
+	g := &generator{
+		dir:    dir,
+		output: map[string]string{},
+	}
 
-	var pairs []outPair
+	if err := processQuerySets(ctx, g, conf, dir, o); err != nil {
+		return nil, err
+	}
+
+	return g.output, nil
+}
+
+type generator struct {
+	m      sync.Mutex
+	dir    string
+	output map[string]string
+}
+
+func (g *generator) Pairs(ctx context.Context, conf *config.Config) []OutputPair {
+	var pairs []OutputPair
 	for _, sql := range conf.SQL {
 		if sql.Gen.Go != nil {
-			pairs = append(pairs, outPair{
+			pairs = append(pairs, OutputPair{
 				SQL: sql,
 				Gen: config.SQLGen{Go: sql.Gen.Go},
 			})
 		}
 		if sql.Gen.JSON != nil {
-			pairs = append(pairs, outPair{
+			pairs = append(pairs, OutputPair{
 				SQL: sql,
 				Gen: config.SQLGen{JSON: sql.Gen.JSON},
 			})
 		}
-		for i, _ := range sql.Codegen {
-			pairs = append(pairs, outPair{
+		for i := range sql.Codegen {
+			pairs = append(pairs, OutputPair{
 				SQL:    sql,
 				Plugin: &sql.Codegen[i],
 			})
 		}
 	}
+	return pairs
+}
 
-	var m sync.Mutex
-	grp, gctx := errgroup.WithContext(ctx)
-	grp.SetLimit(runtime.GOMAXPROCS(0))
-
-	stderrs := make([]bytes.Buffer, len(pairs))
-
-	for i, pair := range pairs {
-		sql := pair
-		errout := &stderrs[i]
-
-		grp.Go(func() error {
-			combo := config.Combine(*conf, sql.SQL)
-			if sql.Plugin != nil {
-				combo.Codegen = *sql.Plugin
-			}
-
-			// TODO: This feels like a hack that will bite us later
-			joined := make([]string, 0, len(sql.Schema))
-			for _, s := range sql.Schema {
-				joined = append(joined, filepath.Join(dir, s))
-			}
-			sql.Schema = joined
-
-			joined = make([]string, 0, len(sql.Queries))
-			for _, q := range sql.Queries {
-				joined = append(joined, filepath.Join(dir, q))
-			}
-			sql.Queries = joined
-
-			var name, lang string
-			parseOpts := opts.Parser{
-				Debug: debug.Debug,
-			}
-
-			switch {
-			case sql.Gen.Go != nil:
-				name = combo.Go.Package
-				lang = "golang"
-
-			case sql.Plugin != nil:
-				lang = fmt.Sprintf("process:%s", sql.Plugin.Plugin)
-				name = sql.Plugin.Plugin
-			}
-
-			packageRegion := trace.StartRegion(gctx, "package")
-			trace.Logf(gctx, "", "name=%s dir=%s plugin=%s", name, dir, lang)
-
-			result, failed := parse(gctx, name, dir, sql.SQL, combo, parseOpts, errout)
-			if failed {
-				packageRegion.End()
-				errored = true
-				return nil
-			}
-
-			out, resp, err := codegen(gctx, combo, sql, result)
-			if err != nil {
-				fmt.Fprintf(errout, "# package %s\n", name)
-				fmt.Fprintf(errout, "error generating code: %s\n", err)
-				errored = true
-				packageRegion.End()
-				return nil
-			}
-
-			files := map[string]string{}
-			for _, file := range resp.Files {
-				files[file.Name] = string(file.Contents)
-			}
-
-			m.Lock()
-			for n, source := range files {
-				filename := filepath.Join(dir, out, n)
-				output[filename] = source
-			}
-			m.Unlock()
-
-			packageRegion.End()
-			return nil
-		})
+func (g *generator) ProcessResult(ctx context.Context, combo config.CombinedSettings, sql OutputPair, result *compiler.Result) error {
+	out, resp, err := codegen(ctx, combo, sql, result)
+	if err != nil {
+		return err
 	}
-	if err := grp.Wait(); err != nil {
-		return nil, err
+	files := map[string]string{}
+	for _, file := range resp.Files {
+		files[file.Name] = string(file.Contents)
 	}
-	if errored {
-		for i, _ := range stderrs {
-			if _, err := io.Copy(stderr, &stderrs[i]); err != nil {
-				return nil, err
-			}
-		}
-		return nil, fmt.Errorf("errored")
+	g.m.Lock()
+	for n, source := range files {
+		filename := filepath.Join(g.dir, out, n)
+		g.output[filename] = source
 	}
-	return output, nil
+	g.m.Unlock()
+	return nil
 }
 
 func remoteGenerate(ctx context.Context, configPath string, conf *config.Config, dir string, stderr io.Writer) (map[string]string, error) {
@@ -332,7 +281,16 @@ func remoteGenerate(ctx context.Context, configPath string, conf *config.Config,
 
 func parse(ctx context.Context, name, dir string, sql config.SQL, combo config.CombinedSettings, parserOpts opts.Parser, stderr io.Writer) (*compiler.Result, bool) {
 	defer trace.StartRegion(ctx, "parse").End()
-	c := compiler.NewCompiler(sql, combo)
+	c, err := compiler.NewCompiler(sql, combo)
+	defer func() {
+		if c != nil {
+			c.Close(ctx)
+		}
+	}()
+	if err != nil {
+		fmt.Fprintf(stderr, "error creating compiler: %s\n", err)
+		return nil, true
+	}
 	if err := c.ParseCatalog(sql.Schema); err != nil {
 		fmt.Fprintf(stderr, "# package %s\n", name)
 		if parserErr, ok := err.(*multierr.Error); ok {
@@ -361,20 +319,12 @@ func parse(ctx context.Context, name, dir string, sql config.SQL, combo config.C
 	return c.Result(), false
 }
 
-func codegen(ctx context.Context, combo config.CombinedSettings, sql outPair, result *compiler.Result) (string, *plugin.CodeGenResponse, error) {
+func codegen(ctx context.Context, combo config.CombinedSettings, sql OutputPair, result *compiler.Result) (string, *plugin.GenerateResponse, error) {
 	defer trace.StartRegion(ctx, "codegen").End()
 	req := codeGenRequest(result, combo)
-	var handler ext.Handler
+	var handler grpc.ClientConnInterface
 	var out string
 	switch {
-	case sql.Gen.Go != nil:
-		out = combo.Go.Out
-		handler = ext.HandleFunc(golang.Generate)
-
-	case sql.Gen.JSON != nil:
-		out = combo.JSON.Out
-		handler = ext.HandleFunc(json.Generate)
-
 	case sql.Plugin != nil:
 		out = sql.Plugin.Out
 		plug, err := findPlugin(combo.Global, sql.Plugin.Plugin)
@@ -400,13 +350,49 @@ func codegen(ctx context.Context, combo config.CombinedSettings, sql outPair, re
 
 		opts, err := convert.YAMLtoJSON(sql.Plugin.Options)
 		if err != nil {
-			return "", nil, fmt.Errorf("invalid plugin options")
+			return "", nil, fmt.Errorf("invalid plugin options: %w", err)
+		}
+		req.PluginOptions = opts
+
+		global, found := combo.Global.Options[plug.Name]
+		if found {
+			opts, err := convert.YAMLtoJSON(global)
+			if err != nil {
+				return "", nil, fmt.Errorf("invalid global options: %w", err)
+			}
+			req.GlobalOptions = opts
+		}
+
+	case sql.Gen.Go != nil:
+		out = combo.Go.Out
+		handler = ext.HandleFunc(golang.Generate)
+		opts, err := json.Marshal(sql.Gen.Go)
+		if err != nil {
+			return "", nil, fmt.Errorf("opts marshal failed: %w", err)
+		}
+		req.PluginOptions = opts
+
+		if combo.Global.Overrides.Go != nil {
+			opts, err := json.Marshal(combo.Global.Overrides.Go)
+			if err != nil {
+				return "", nil, fmt.Errorf("opts marshal failed: %w", err)
+			}
+			req.GlobalOptions = opts
+		}
+
+	case sql.Gen.JSON != nil:
+		out = combo.JSON.Out
+		handler = ext.HandleFunc(genjson.Generate)
+		opts, err := json.Marshal(sql.Gen.JSON)
+		if err != nil {
+			return "", nil, fmt.Errorf("opts marshal failed: %w", err)
 		}
 		req.PluginOptions = opts
 
 	default:
 		return "", nil, fmt.Errorf("missing language backend")
 	}
-	resp, err := handler.Generate(ctx, req)
+	client := plugin.NewCodegenServiceClient(handler)
+	resp, err := client.Generate(ctx, req)
 	return out, resp, err
 }

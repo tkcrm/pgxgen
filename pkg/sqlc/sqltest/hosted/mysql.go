@@ -2,9 +2,7 @@ package hosted
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/quickdb"
@@ -12,24 +10,7 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlpath"
 )
 
-var client pb.QuickClient
-var once sync.Once
-
-func initClient() error {
-	projectID := os.Getenv("CI_SQLC_PROJECT_ID")
-	authToken := os.Getenv("CI_SQLC_AUTH_TOKEN")
-	if projectID == "" || authToken == "" {
-		return fmt.Errorf("missing project id or auth token")
-	}
-	c, err := quickdb.NewClient(projectID, authToken)
-	if err != nil {
-		return err
-	}
-	client = c
-	return nil
-}
-
-func PostgreSQL(t *testing.T, migrations []string) string {
+func MySQL(t *testing.T, migrations []string) string {
 	ctx := context.Background()
 	t.Helper()
 
@@ -57,7 +38,7 @@ func PostgreSQL(t *testing.T, migrations []string) string {
 	}
 
 	resp, err := client.CreateEphemeralDatabase(ctx, &pb.CreateEphemeralDatabaseRequest{
-		Engine:     "postgresql",
+		Engine:     "mysql",
 		Region:     quickdb.GetClosestRegion(),
 		Migrations: seed,
 	})
@@ -74,5 +55,10 @@ func PostgreSQL(t *testing.T, migrations []string) string {
 		}
 	})
 
-	return resp.Uri
+	uri, err := quickdb.MySQLReformatURI(resp.Uri)
+	if err != nil {
+		t.Fatalf("uri error: %s", err)
+	}
+
+	return uri
 }

@@ -4,10 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/catalog"
-
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/astutils"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/catalog"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/lang"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlerr"
 )
@@ -159,11 +158,11 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 			if res.Name != nil {
 				name = *res.Name
 			}
-			switch {
-			case lang.IsComparisonOperator(astutils.Join(n.Name, "")):
+			switch op := astutils.Join(n.Name, ""); {
+			case lang.IsComparisonOperator(op):
 				// TODO: Generate a name for these operations
 				cols = append(cols, &Column{Name: name, DataType: "bool", NotNull: true})
-			case lang.IsMathematicalOperator(astutils.Join(n.Name, "")):
+			case lang.IsMathematicalOperator(op):
 				cols = append(cols, &Column{Name: name, DataType: "int", NotNull: true})
 			default:
 				cols = append(cols, &Column{Name: name, DataType: "any", NotNull: false})
@@ -404,7 +403,8 @@ func (c *Compiler) outputColumns(qc *QueryCatalog, node ast.Node) ([]*Column, er
 				continue
 			}
 			for _, f := range n.FromClause.Items {
-				if res := isTableRequired(f, col, tableRequired); res != tableNotFound {
+				res := isTableRequired(f, col, tableRequired)
+				if res != tableNotFound {
 					col.NotNull = res == tableRequired
 					break
 				}
@@ -424,10 +424,12 @@ const (
 func isTableRequired(n ast.Node, col *Column, prior int) int {
 	switch n := n.(type) {
 	case *ast.RangeVar:
-		if n.Alias == nil && *n.Relname == col.Table.Name {
-			return prior
+		tableMatch := *n.Relname == col.Table.Name
+		aliasMatch := true
+		if n.Alias != nil && col.TableAlias != "" {
+			aliasMatch = *n.Alias.Aliasname == col.TableAlias
 		}
-		if n.Alias != nil && *n.Alias.Aliasname == col.TableAlias && *n.Relname == col.Table.Name {
+		if aliasMatch && tableMatch {
 			return prior
 		}
 	case *ast.JoinExpr:
@@ -508,9 +510,10 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 			return ok
 		})
 	case *ast.UpdateStmt:
-		list = &ast.List{
-			Items: append(n.FromClause.Items, n.Relations.Items...),
-		}
+		var tv tableVisitor
+		astutils.Walk(&tv, n.FromClause)
+		astutils.Walk(&tv, n.Relations)
+		list = &tv.list
 	case *ast.DoStmt:
 		list = &ast.List{}
 	case *ast.CallStmt:
@@ -523,6 +526,7 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 
 	var tables []*Table
 	for _, item := range list.Items {
+		item := item
 		switch n := item.(type) {
 
 		case *ast.RangeFunction:
@@ -549,22 +553,51 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 			if err != nil {
 				continue
 			}
-			table, err := qc.GetTable(&ast.TableName{
-				Catalog: fn.ReturnType.Catalog,
-				Schema:  fn.ReturnType.Schema,
-				Name:    fn.ReturnType.Name,
-			})
-			if err != nil {
-				if n.Alias == nil || len(n.Alias.Colnames.Items) == 0 {
-					continue
-				}
-
-				table = &Table{}
-				for _, colName := range n.Alias.Colnames.Items {
-					table.Columns = append(table.Columns, &Column{
-						Name:     colName.(*ast.String).Str,
-						DataType: "any",
-					})
+			var table *Table
+			if fn.ReturnType != nil {
+				table, err = qc.GetTable(&ast.TableName{
+					Catalog: fn.ReturnType.Catalog,
+					Schema:  fn.ReturnType.Schema,
+					Name:    fn.ReturnType.Name,
+				})
+			}
+			if table == nil || err != nil {
+				if n.Alias != nil && len(n.Alias.Colnames.Items) > 0 {
+					table = &Table{}
+					for _, colName := range n.Alias.Colnames.Items {
+						table.Columns = append(table.Columns, &Column{
+							Name:     colName.(*ast.String).Str,
+							DataType: "any",
+						})
+					}
+				} else {
+					colName := fn.Rel.Name
+					if n.Alias != nil {
+						colName = *n.Alias.Aliasname
+					}
+					table = &Table{
+						Rel: &ast.TableName{
+							Catalog: fn.Rel.Catalog,
+							Schema:  fn.Rel.Schema,
+							Name:    fn.Rel.Name,
+						},
+					}
+					if len(fn.Outs) > 0 {
+						for _, arg := range fn.Outs {
+							table.Columns = append(table.Columns, &Column{
+								Name:     arg.Name,
+								DataType: arg.Type.Name,
+							})
+						}
+					}
+					if fn.ReturnType != nil {
+						table.Columns = []*Column{
+							{
+								Name:     colName,
+								DataType: fn.ReturnType.Name,
+							},
+						}
+					}
 				}
 			}
 			if n.Alias != nil {
@@ -590,6 +623,9 @@ func (c *Compiler) sourceTables(qc *QueryCatalog, node ast.Node) ([]*Table, erro
 			fqn, err := ParseTableName(n)
 			if err != nil {
 				return nil, err
+			}
+			if qc == nil {
+				return nil, fmt.Errorf("query catalog is empty")
 			}
 			table, cerr := qc.GetTable(fqn)
 			if cerr != nil {
@@ -640,13 +676,13 @@ func outputColumnRefs(res *ast.ResTarget, tables []*Table, node *ast.ColumnRef) 
 			continue
 		}
 		for _, c := range t.Columns {
+
 			if c.Name == name {
 				found += 1
 				cname := c.Name
 				if res.Name != nil {
 					cname = *res.Name
 				}
-
 				cols = append(cols, &Column{
 					Name:         cname,
 					Type:         c.Type,

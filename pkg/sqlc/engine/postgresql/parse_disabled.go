@@ -8,7 +8,7 @@ import (
 	"io"
 	"runtime"
 
-	"github.com/tkcrm/pgxgen/pkg/sqlc/metadata"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/source"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
 )
 
@@ -27,8 +27,8 @@ func (p *Parser) Parse(r io.Reader) ([]ast.Statement, error) {
 }
 
 // https://www.postgresql.org/docs/current/sql-syntax-lexical.html#SQL-SYNTAX-COMMENTS
-func (p *Parser) CommentSyntax() metadata.CommentSyntax {
-	return metadata.CommentSyntax{
+func (p *Parser) CommentSyntax() source.CommentSyntax {
+	return source.CommentSyntax{
 		Dash:      true,
 		SlashStar: true,
 	}
