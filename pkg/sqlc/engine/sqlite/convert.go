@@ -6,8 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/antlr/antlr4/runtime/Go/antlr/v4"
-
+	"github.com/antlr4-go/antlr/v4"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/debug"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/engine/sqlite/parser"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
