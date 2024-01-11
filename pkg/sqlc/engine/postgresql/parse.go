@@ -1,6 +1,3 @@
-//go:build !windows && cgo
-// +build !windows,cgo
-
 package postgresql
 
 import (
@@ -10,8 +7,8 @@ import (
 	"strings"
 
 	nodes "github.com/pganalyze/pg_query_go/v4"
-	"github.com/pganalyze/pg_query_go/v4/parser"
 
+	"github.com/tkcrm/pgxgen/pkg/sqlc/engine/postgresql/parser"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/source"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/ast"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlerr"
@@ -154,7 +151,7 @@ func (p *Parser) Parse(r io.Reader) ([]ast.Statement, error) {
 	if err != nil {
 		return nil, err
 	}
-	tree, err := nodes.Parse(string(contents))
+	tree, err := Parse(string(contents))
 	if err != nil {
 		pErr := normalizeErr(err)
 		return nil, pErr
