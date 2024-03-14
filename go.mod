@@ -31,7 +31,7 @@ require (
 	github.com/cristalhq/flagx v0.5.0
 	github.com/fatih/structtag v1.2.0
 	github.com/google/cel-go v0.18.2
-	github.com/jackc/pgx/v5 v5.5.1
+	github.com/jackc/pgx/v5 v5.5.4
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20240111081109-0236944eab41
 	github.com/stretchr/testify v1.8.4
 	github.com/tetratelabs/wazero v1.6.0
