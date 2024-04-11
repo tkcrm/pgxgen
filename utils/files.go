@@ -18,7 +18,7 @@ func ExistsPath(path string) bool {
 
 func CreatePath(path string) error {
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
-		if err := os.MkdirAll(path, 0755); err != nil {
+		if err := os.MkdirAll(path, 0o755); err != nil {
 			return err
 		}
 	}

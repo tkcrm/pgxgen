@@ -74,12 +74,7 @@ func (s *typescript) generateTypescript(args []string) error {
 				continue
 			}
 
-			file, err := os.ReadFile(filepath.Join(config.Path, item.Name()))
-			if err != nil {
-				return err
-			}
-
-			for key, value := range structs.GetStructs(string(file)) {
+			for key, value := range structs.GetStructsByFilePath(filepath.Join(config.Path, item.Name())) {
 				_structs[key] = value
 			}
 

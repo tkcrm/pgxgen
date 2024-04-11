@@ -3,12 +3,16 @@ package structs
 import (
 	"fmt"
 	"sort"
+
+	"github.com/gobeam/stringy"
 )
 
 type StructField struct {
 	Name string
 	Type string
 	Tags map[string]string
+
+	exprData *fieldExprData
 }
 
 func (s *StructField) GetGoTag() string {
@@ -28,4 +32,8 @@ func (s *StructField) GetGoTag() string {
 	}
 
 	return tag
+}
+
+func (s StructField) IsExported() bool {
+	return s.Name == stringy.New(s.Name).UcFirst()
 }

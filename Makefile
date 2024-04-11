@@ -1,4 +1,4 @@
-install:
+install: gen
 	go install ./cmd/pgxgen
 
 upgrade:
@@ -13,3 +13,9 @@ test:
 
 copysqlc:
 	go run cmd/copysqlc/main.go
+
+fmt:
+	gofumpt -l -w .
+
+gen:
+	@templ generate

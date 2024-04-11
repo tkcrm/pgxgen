@@ -49,6 +49,8 @@ export class {{.Name}}s{{ $.ExportModelSuffix}} extends Model({
     if(v) {
       this.draft = draft(v);
       this.formInstance?.updateFormValues(this.draft?.data.getInitialValues)
+    } else {
+      this.draft = undefined;
     }
   }
 
@@ -65,9 +67,9 @@ export class {{.Name}}s{{ $.ExportModelSuffix}} extends Model({
 
   @modelAction
   clearTempData(): void {
-    this.setGetResponse(undefined);
-    this.setDraft(undefined);
     this.setFormInstance(undefined);
+    this.setDraft(undefined);
+    this.setGetResponse(undefined);
   }
 
   @modelAction

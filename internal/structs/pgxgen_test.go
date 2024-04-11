@@ -7,6 +7,11 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/davecgh/go-spew/spew"
+	"github.com/tkcrm/pgxgen/internal/structs"
+	"github.com/tkcrm/pgxgen/utils"
 )
 
 type structParameters struct {
@@ -125,4 +130,31 @@ func Test_UpdateStruct(t *testing.T) {
 		w.WriteString(line)
 		w.WriteString("bun.BaseModel `bun:\"table:users,alias:u\"`\n\n")
 	}
+}
+
+func TestGetStructsOld(t *testing.T) {
+	data, err := utils.ReadFile("./teststruct.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Now()
+	res := structs.GetStructsOld(string(data))
+	spew.Dump(res)
+	fmt.Println(time.Since(now))
+}
+
+func TestGetStructs(t *testing.T) {
+	now := time.Now()
+	res := structs.GetStructsByFilePath("../../testdata/teststructs/teststructs.go")
+	spew.Dump(res)
+	fmt.Println(time.Since(now))
+}
+
+func TestGetStructsRemoveUnexported(t *testing.T) {
+	now := time.Now()
+	res := structs.GetStructsByFilePath("../../testdata/teststructs/unexported.go")
+	res.RemoveUnexportedFields()
+	spew.Dump(res)
+	fmt.Println(time.Since(now))
 }

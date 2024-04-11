@@ -14,9 +14,9 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.18 // indirect
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/tkcrm/modules v0.0.0-20240108190415-64d66743be2e
+	github.com/tkcrm/modules v0.0.0-20240113212347-51acdcd00c7a
 	golang.org/x/sync v0.6.0
-	golang.org/x/tools v0.16.1
+	golang.org/x/tools v0.17.0
 	google.golang.org/protobuf v1.32.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -27,11 +27,12 @@ require (
 )
 
 require (
+	github.com/a-h/templ v0.2.543
 	github.com/antlr4-go/antlr/v4 v4.13.0
 	github.com/cristalhq/flagx v0.5.0
 	github.com/fatih/structtag v1.2.0
 	github.com/google/cel-go v0.18.2
-	github.com/jackc/pgx/v5 v5.5.1
+	github.com/jackc/pgx/v5 v5.5.2
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20240111081109-0236944eab41
 	github.com/stretchr/testify v1.8.4
 	github.com/tetratelabs/wazero v1.6.0
@@ -48,7 +49,7 @@ require (
 	github.com/pganalyze/pg_query_go/v5 v5.1.0 // indirect
 	github.com/pingcap/failpoint v0.0.0-20220801062533-2eaa32854a6c // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/wasilibs/wazerox v0.0.0-20240105014115-75455786b41e // indirect
 	golang.org/x/net v0.20.0 // indirect

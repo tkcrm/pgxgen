@@ -7,5 +7,6 @@ type GoConstants struct {
 type GoConstantsTables map[string]GoConstantsTablesItem
 
 type GoConstantsTablesItem struct {
-	OutputDir string `yaml:"output_dir"`
+	OutputDir          string `yaml:"output_dir"`
+	IncludeColumnNames bool   `yaml:"include_column_names"`
 }
