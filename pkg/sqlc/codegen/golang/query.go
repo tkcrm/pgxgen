@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/tkcrm/pgxgen/pkg/sqlc/codegen/golang/opts"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/metadata"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/plugin"
 )
@@ -15,7 +16,7 @@ type QueryValue struct {
 	DBName      string // The name of the field in the database. Only set if Struct==nil.
 	Struct      *Struct
 	Typ         string
-	SQLDriver   SQLDriver
+	SQLDriver   opts.SQLDriver
 
 	// Column is kept so late in the generation process around to differentiate
 	// between mysql slices and pg arrays
