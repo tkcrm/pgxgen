@@ -132,7 +132,7 @@ func replaceImports(str string, sqlcModelParam config.SqlcModels, modelFileStruc
 		matches := r2.FindStringSubmatch(str)
 		if len(matches) == 3 {
 			packageImports := matches[2]
-			var re2 = regexp.MustCompile(`(\s+(.*)\n?)`)
+			re2 := regexp.MustCompile(`(\s+(.*)\n?)`)
 			rs2 := re2.FindAllStringSubmatch(packageImports, -1)
 			imports := make([]string, 0, len(rs2))
 			for _, item := range rs2 {

@@ -1,9 +1,12 @@
 package structs
 
 type StructParameters struct {
-	Name    string
-	Imports []string
-	Fields  []*StructField
+	ExternalPackage string
+	Name            string
+	Imports         []string
+	Fields          []*StructField
+
+	originalName string
 }
 
 func (s *StructParameters) ExistFieldIndex(name string) int {

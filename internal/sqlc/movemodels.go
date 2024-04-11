@@ -22,14 +22,8 @@ func (s *sqlc) moveModels(
 	modelFileStructs, alreadyMoved := (*modelsMoved)[cfg.SchemaDir]
 
 	if !alreadyMoved {
-		// get sqlc model file content
-		modelFileContent, err := utils.ReadFile(modelPath)
-		if err != nil {
-			return err
-		}
-
 		// get structs from model file
-		modelFileStructs = structs.GetStructs(string(modelFileContent))
+		modelFileStructs = structs.GetStructsByFilePath(modelPath)
 
 		// replace package name in model file
 		if err := s.replace(

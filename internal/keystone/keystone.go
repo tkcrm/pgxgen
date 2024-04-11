@@ -1,14 +1,10 @@
 package keystone
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 
@@ -53,45 +49,12 @@ func (s *keystone) generateKeystone() error {
 			return err
 		}
 
-		// get models file content
-		fileContent, err := utils.ReadFile(params.InputFilePath)
-		if err != nil {
-			return err
-		}
-
 		// get structs from go file
-		modelStructs := structs.GetStructs(string(fileContent))
+		modelStructs := structs.GetStructsByFilePath(params.InputFilePath)
+		modelStructs.RemoveUnexportedFields()
 
 		// get all types from ModelsOutputDir
 		scalarTypes := make(structs.Types)
-		dirItems, err := os.ReadDir(filepath.Dir(params.InputFilePath))
-		if err != nil {
-			return err
-		}
-
-		allStructs := make(structs.Structs)
-
-		for _, item := range dirItems {
-			if item.IsDir() {
-				continue
-			}
-			path := filepath.Join(filepath.Dir(params.InputFilePath), item.Name())
-
-			file, err := utils.ReadFile(path)
-			if err != nil {
-				return err
-			}
-
-			for key, value := range structs.GetStructs(string(file)) {
-				allStructs[key] = value
-			}
-
-			for key, value := range s.getScalarTypes(string(file)) {
-				scalarTypes[key] = value
-			}
-		}
-
-		structs.FillMissedTypes(allStructs, modelStructs, scalarTypes)
 
 		for _, modelName := range params.SkipModels {
 			delete(modelStructs, modelName)
@@ -103,36 +66,6 @@ func (s *keystone) generateKeystone() error {
 	}
 
 	return nil
-}
-
-func (s *keystone) getScalarTypes(file_models_str string) structs.Types {
-	types := make(structs.Types)
-	r := bufio.NewReader(strings.NewReader(file_models_str))
-
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			s.logger.Fatal(err)
-		}
-
-		if strings.Contains(line, "struct {") {
-			continue
-		}
-		r := regexp.MustCompile(`^type (\w+) ([^\s]+)`)
-		match := r.FindStringSubmatch(line)
-
-		if len(match) == 3 {
-			types[match[1]] = structs.TypesParameters{
-				Name: match[1],
-				Type: match[2],
-			}
-		}
-	}
-
-	return types
 }
 
 func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st structs.Structs, sct structs.Types) error {
@@ -150,8 +83,10 @@ func compileMobxKeystoneModels(ver string, cfg config.GenKeystoneFromStruct, st 
 	}
 
 	structs := structs.ConvertStructsToSlice(st)
-	if err := structs.Sort(strings.Split(cfg.Sort, ",")...); err != nil {
-		return err
+	if cfg.Sort != "" {
+		if err := structs.Sort(strings.Split(cfg.Sort, ",")...); err != nil {
+			return err
+		}
 	}
 
 	tctx := tmplKeystoneCtx{
@@ -244,7 +179,7 @@ func getKeystoneType(cfg config.GenKeystoneFromStruct, st structs.Structs, sct s
 	tp = ""
 	switch t {
 	case "int", "int8", "int16", "int32",
-		"uint", "uint8", "uint16", "uint32":
+		"uint", "uint8", "uint16", "uint32", "pgtype.Int2":
 		tp = "types.integer"
 		if !isNullable {
 			tp += ",0"
@@ -266,7 +201,7 @@ func getKeystoneType(cfg config.GenKeystoneFromStruct, st structs.Structs, sct s
 		if !isNullable {
 			tp += ",0"
 		}
-	case "string":
+	case "string", "pgtype.Text":
 		tp = "types.string"
 		if !isNullable {
 			tp += ",\"\""
@@ -276,7 +211,7 @@ func getKeystoneType(cfg config.GenKeystoneFromStruct, st structs.Structs, sct s
 		if !isNullable {
 			tp += ",false"
 		}
-	case "bun.NullTime", "time.Time", "pgtype.Time":
+	case "bun.NullTime", "time.Time", "pgtype.Time", "pgtype.Timestamp", "timestamppb.Timestamp":
 		tp = "types.dateString"
 		if !isNullable {
 			tp += ",\"\""
@@ -286,9 +221,12 @@ func getKeystoneType(cfg config.GenKeystoneFromStruct, st structs.Structs, sct s
 		if !isNullable {
 			tp += ",\"\""
 		}
-	case "map[string]interface{}", "pgtype.JSONB":
+	case "map[string]interface{}", "map[string]any", "pgtype.JSONB":
 		tp = "Record<string, any>"
 		typeWrap = typeWrapUnchecked + "({})"
+	case "[]byte":
+		tp = "Record<string, any>"
+		typeWrap = typeWrapUnchecked + "()"
 	default:
 		_, okst := st[t]
 		existScalarItem, oksct := sct[t]

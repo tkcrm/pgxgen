@@ -1,12 +1,13 @@
 package goconstatnts
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"path/filepath"
 	"time"
 
-	"github.com/tkcrm/modules/pkg/templates"
-	"github.com/tkcrm/pgxgen/internal/assets"
+	"github.com/tkcrm/pgxgen/internal/assets/templates"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/schema"
 	"github.com/tkcrm/pgxgen/pkg/logger"
@@ -32,17 +33,6 @@ func New(logger logger.Logger, config config.Config) IGoConstants {
 }
 
 const defaultConstatsFileName = "constants_gen.go"
-
-type GenTableNamesParamsItem struct {
-	TableNamePreffix string
-	TableName        string
-}
-
-type ConstantParamsItem struct {
-	Package string
-	Version string
-	Tables  []GenTableNamesParamsItem
-}
 
 func (s *goConstants) GenerateConstants() error {
 	for _, cfg := range s.config.Pgxgen.Sqlc {
@@ -90,7 +80,15 @@ func (s *goConstants) GenerateConstants() error {
 					if t.Rel.Name != tableName {
 						continue
 					}
-					if err := params.addConstantItem(s.config.Pgxgen.Version, table.OutputDir, tableName); err != nil {
+
+					columnNames := make([]string, 0, len(t.Columns))
+					if table.IncludeColumnNames {
+						for _, column := range t.Columns {
+							columnNames = append(columnNames, column.Name)
+						}
+					}
+
+					if err := params.addConstantItem(s.config.Pgxgen.Version, table.OutputDir, tableName, columnNames); err != nil {
 						return err
 					}
 				}
@@ -98,25 +96,12 @@ func (s *goConstants) GenerateConstants() error {
 		}
 
 		for outputDir, item := range params.ConstantsParams {
-			tpl := templates.New()
-			tpl.AddFunc("isNotEmptyArray", func(arr []GenTableNamesParamsItem) bool {
-				return len(arr) > 0
-			})
-
-			compiledRes, err := tpl.Compile(templates.CompileParams{
-				TemplateName: "crudConstants",
-				TemplateType: templates.TextTemplateType,
-				FS:           assets.TemplatesFS,
-				FSPaths: []string{
-					"templates/crud-constants.go.tmpl",
-				},
-				Data: item,
-			})
-			if err != nil {
-				return fmt.Errorf("tpl.Compile error: %w", err)
+			buf := new(bytes.Buffer)
+			if err := templates.Constatnts(item).Render(context.Background(), buf); err != nil {
+				return err
 			}
 
-			compiledRes, err = utils.UpdateGoImports(compiledRes)
+			compiledRes, err := utils.UpdateGoImports(buf.Bytes())
 			if err != nil {
 				return fmt.Errorf("UpdateGoImports error: %w", err)
 			}

@@ -18,6 +18,10 @@ func (st *StructSlice) ExistStructIndex(name string) (int, *StructParameters) {
 }
 
 func (st *StructSlice) Sort(priorityNames ...string) error {
+	if len(priorityNames) == 0 {
+		return nil
+	}
+
 	names := make([]string, 0, len(*st))
 	for _, name := range priorityNames {
 		existStructIndex, _ := st.ExistStructIndex(name)

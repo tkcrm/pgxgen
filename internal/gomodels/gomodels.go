@@ -1,10 +1,8 @@
 package gomodels
 
 import (
-	"bufio"
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -114,14 +112,8 @@ func (s *gomodels) generateModels(cfg config.GenModels) error {
 	}
 
 	for index, filePath := range filePaths {
-		// get models.go file content
-		fileContent, err := utils.ReadFile(filePath)
-		if err != nil {
-			return fmt.Errorf("read file error: %w", err)
-		}
-
 		// get structs from go file
-		_structs := structs.GetStructs(string(fileContent))
+		_structs := structs.GetStructsByFilePath(filePath)
 
 		// filter structs by exclude_structs params
 		if len(cfg.ExcludeStructs) > 0 {
@@ -159,7 +151,7 @@ func (s *gomodels) generateModels(cfg config.GenModels) error {
 		}
 
 		// get all types from ModelsOutputDir
-		scalarTypes := make(structs.Types)
+		// scalarTypes := make(structs.Types)
 		dirItems, err := os.ReadDir(config.GetModelsOutputDir())
 		if err != nil {
 			return fmt.Errorf("read dir error: %w", err)
@@ -171,17 +163,17 @@ func (s *gomodels) generateModels(cfg config.GenModels) error {
 			}
 			path := filepath.Join(config.GetModelsOutputDir(), item.Name())
 
-			file, err := utils.ReadFile(path)
-			if err != nil {
-				return fmt.Errorf("read file error: %w", err)
-			}
+			// file, err := utils.ReadFile(path)
+			// if err != nil {
+			// 	return fmt.Errorf("read file error: %w", err)
+			// }
 
-			for key, value := range structs.GetStructs(string(file)) {
+			for key, value := range structs.GetStructsByFilePath(path) {
 				_structs[key] = value
 			}
-			for key, value := range s.getScalarTypes(string(file)) {
-				scalarTypes[key] = value
-			}
+			// for key, value := range s.getScalarTypes(string(file)) {
+			// 	scalarTypes[key] = value
+			// }
 		}
 
 		if config.DeleteOriginalFiles {
@@ -194,36 +186,36 @@ func (s *gomodels) generateModels(cfg config.GenModels) error {
 	return nil
 }
 
-func (s *gomodels) getScalarTypes(fileContent string) structs.Types {
-	types := make(structs.Types)
-	r := bufio.NewReader(strings.NewReader(fileContent))
+// func (s *gomodels) getScalarTypes(fileContent string) structs.Types {
+// 	types := make(structs.Types)
+// 	r := bufio.NewReader(strings.NewReader(fileContent))
 
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			s.logger.Fatal(err)
-		}
+// 	for {
+// 		line, err := r.ReadString('\n')
+// 		if err != nil {
+// 			if err == io.EOF {
+// 				break
+// 			}
+// 			s.logger.Fatal(err)
+// 		}
 
-		if strings.Contains(line, "struct {") {
-			continue
-		}
+// 		if strings.Contains(line, "struct {") {
+// 			continue
+// 		}
 
-		r := regexp.MustCompile(`^type (\w+) ([^\s]+)`)
-		match := r.FindStringSubmatch(line)
+// 		r := regexp.MustCompile(`^type (\w+) ([^\s]+)`)
+// 		match := r.FindStringSubmatch(line)
 
-		if len(match) == 3 {
-			types[match[1]] = structs.TypesParameters{
-				Name: match[1],
-				Type: match[2],
-			}
-		}
-	}
+// 		if len(match) == 3 {
+// 			types[match[1]] = structs.TypesParameters{
+// 				Name: match[1],
+// 				Type: match[2],
+// 			}
+// 		}
+// 	}
 
-	return types
-}
+// 	return types
+// }
 
 func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error {
 	// rename structs
