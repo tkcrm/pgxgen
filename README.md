@@ -16,7 +16,7 @@ pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional impro
 
 ### Requirements
 
-- `Go 1.21+`
+- `Go 1.22.2+`
 
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
@@ -51,7 +51,7 @@ At root of your project create a `pgxgen.yaml`. Example of configuration below.
 > Example: `pgxgen --pgxgen-config pgxgen-new.yaml`
 
 ```yaml
-version: 1
+version: "1"
 sqlc:
   - # directory with migrations. required
     schema_dir: sql/migrations
@@ -125,6 +125,7 @@ sqlc:
       tables:
         users:
           output_dir: internal/store/users/repo_users
+          include_column_names: true
 
 # modification of existing models. not required
 gen_models:
@@ -293,14 +294,14 @@ At root of your project create a `sqlc.yaml` file with the configuration describ
 > Example: `pgxgen --sqlc-config sqlc-new.yaml`
 
 ```yaml
-version: 2
+version: "2"
 sql:
   - schema: "sql/migrations"
     queries: "sql/queries"
     engine: "postgresql"
     gen:
       go:
-        sql_package: "pgx/v4"
+        sql_package: "pgx/v5"
         out: "internal/store"
         emit_prepared_queries: false
         emit_json_tags: true
