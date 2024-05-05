@@ -38,7 +38,7 @@ func (s *generateConstantsParams) addConstantItem(version, outputDir, tableName 
 	}); !ok {
 		re := regexp.MustCompile(`[\_\-0-9]`)
 		tableNamePrffix := re.ReplaceAllString(tableName, " ")
-		tableNamePrffix = stringy.New(tableNamePrffix).CamelCase()
+		tableNamePrffix = stringy.New(tableNamePrffix).CamelCase().Get()
 		tableNamePrffix = stringy.New(tableNamePrffix).UcFirst()
 
 		params.Tables = append(params.Tables, templates.ConstantsTableNamesParamsItem{
@@ -49,7 +49,7 @@ func (s *generateConstantsParams) addConstantItem(version, outputDir, tableName 
 		if len(columnNames) > 0 {
 			for _, columnName := range columnNames {
 				columnNamePrffix := re.ReplaceAllString(tableName+"_"+columnName, " ")
-				columnNamePrffix = stringy.New(columnNamePrffix).CamelCase()
+				columnNamePrffix = stringy.New(columnNamePrffix).CamelCase().Get()
 				columnNamePrffix = stringy.New(columnNamePrffix).UcFirst()
 
 				params.ColumnNames = append(params.ColumnNames, templates.ConstantsColumnNamesParamsItem{

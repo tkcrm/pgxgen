@@ -133,7 +133,7 @@ func Test_UpdateStruct(t *testing.T) {
 }
 
 func TestGetStructsOld(t *testing.T) {
-	data, err := utils.ReadFile("./teststruct.go")
+	data, err := utils.ReadFile("../../testdata/teststructs/teststructs.go")
 	if err != nil {
 		t.Fatal(err)
 	}

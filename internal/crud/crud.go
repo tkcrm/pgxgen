@@ -418,7 +418,7 @@ func (s *crud) processFind(cfg config.CrudParams, p processParams) error {
 	if err := s.processWhereParam(p, METHOD_FIND, &lastIndex); err != nil {
 		return err
 	}
-	if order := getOrderByParams(p.methodParams, p.table); order != nil {
+	if order := getOrderByParams(p.methodParams); order != nil {
 		p.builder.WriteString(fmt.Sprintf(" ORDER BY %s %s", order.By, order.Direction))
 	}
 	if p.methodParams.Limit {
@@ -466,7 +466,7 @@ func (s *crud) processExists(cfg config.CrudParams, p processParams) error {
 
 func (s *crud) processWhereParam(p processParams, method config.MethodType, lastIndex *int) error {
 	// process where params
-	if params := getWhereParams(p.methodParams, p.table, method); len(params) > 0 {
+	if params := getWhereParams(p.methodParams, method); len(params) > 0 {
 		// Sort params
 		paramsKeys := make([]string, 0, len(params))
 		for k := range params {
@@ -513,8 +513,8 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 	}
 
 	// process where additional params
-	if params := getWhereAddtitionalParams(p.methodParams, p.table, method); len(params) > 0 {
-		whereParamsLen := len(getWhereParams(p.methodParams, p.table, method))
+	if params := getWhereAddtitionalParams(p.methodParams, method); len(params) > 0 {
+		whereParamsLen := len(getWhereParams(p.methodParams, method))
 
 		for paramIndex, param := range params {
 			if paramIndex == 0 && whereParamsLen == 0 {
@@ -574,7 +574,7 @@ func (s *crud) getMethodName(cfg config.CrudParams, methodType config.MethodType
 		methodName = fmt.Sprintf("%s %s", methodType.String(), tableName)
 	}
 
-	methodName = stringy.New(methodName).CamelCase()
+	methodName = stringy.New(methodName).CamelCase().Get()
 
 	if !slices.Contains([]config.MethodType{METHOD_FIND, METHOD_TOTAL}, methodType) {
 		if strings.HasSuffix(methodName, "s") {
@@ -597,7 +597,7 @@ func getPrimaryColumn(columns []string, table, column string) (string, error) {
 	return primaryColumn, nil
 }
 
-func getWhereParams(method config.Method, table string, methodType config.MethodType) map[string]config.WhereParamsItem {
+func getWhereParams(method config.Method, methodType config.MethodType) map[string]config.WhereParamsItem {
 	params := make(map[string]config.WhereParamsItem)
 
 	methodLower := strings.ToLower(methodType.String())
@@ -621,7 +621,7 @@ func getWhereParams(method config.Method, table string, methodType config.Method
 	return params
 }
 
-func getWhereAddtitionalParams(method config.Method, table string, methodType config.MethodType) []string {
+func getWhereAddtitionalParams(method config.Method, methodType config.MethodType) []string {
 	params := make([]string, len(method.WhereAdditional))
 
 	methodLower := strings.ToLower(methodType.String())
@@ -638,7 +638,7 @@ func getWhereAddtitionalParams(method config.Method, table string, methodType co
 	return params
 }
 
-func getOrderByParams(method config.Method, table string) *config.OrderParam {
+func getOrderByParams(method config.Method) *config.OrderParam {
 	if method.Order.By == "" {
 		return nil
 	}
