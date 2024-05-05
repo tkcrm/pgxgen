@@ -574,7 +574,7 @@ func (s *crud) getMethodName(cfg config.CrudParams, methodType config.MethodType
 		methodName = fmt.Sprintf("%s %s", methodType.String(), tableName)
 	}
 
-	methodName = stringy.New(methodName).CamelCase().Get()
+	methodName = stringy.New(methodName).CamelCase().UcFirst()
 
 	if !slices.Contains([]config.MethodType{METHOD_FIND, METHOD_TOTAL}, methodType) {
 		if strings.HasSuffix(methodName, "s") {
