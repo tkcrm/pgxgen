@@ -6,17 +6,17 @@ require (
 	github.com/cubicdaiya/gonp v1.0.4
 	github.com/davecgh/go-spew v1.1.1
 	github.com/go-sql-driver/mysql v1.8.1
-	github.com/gobeam/stringy v0.0.6
+	github.com/gobeam/stringy v0.0.7
 	github.com/google/go-cmp v0.6.0
 	github.com/jackc/pgx/v4 v4.18.3
 	github.com/jinzhu/inflection v1.0.0
 	github.com/lib/pq v1.10.9
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
-	github.com/tkcrm/modules v0.0.0-20240309201610-ce17a6cd6af6
+	github.com/tkcrm/modules v0.0.0-20240504201808-caa8f8d56cb5
 	golang.org/x/sync v0.7.0
 	golang.org/x/tools v0.20.0
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.34.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -85,8 +85,8 @@ require (
 	golang.org/x/crypto v0.22.0 // indirect
 	golang.org/x/exp v0.0.0-20240409090435-93d18d7e34b8 // indirect
 	golang.org/x/mod v0.17.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	google.golang.org/grpc v1.63.2
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

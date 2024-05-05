@@ -25,7 +25,7 @@ var DefaultTmplFuncs = template.FuncMap{
 		return stringy.New(str).SnakeCase().ToLower()
 	},
 	"camel_case": func(str string) string {
-		return stringy.New(str).CamelCase()
+		return stringy.New(str).CamelCase().Get()
 	},
 	"lcfirst": func(str string) string {
 		if str == "ID" {
