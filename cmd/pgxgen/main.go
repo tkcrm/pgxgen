@@ -2,9 +2,9 @@ package main
 
 import (
 	"os"
-	"strings"
 
 	"github.com/cristalhq/acmd"
+	"github.com/cristalhq/flagx"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/gomodels"
@@ -15,12 +15,26 @@ import (
 	"github.com/tkcrm/pgxgen/pkg/logger"
 )
 
-var version = "v0.3.2"
+var (
+	appName = "pgxgen"
+	version = "v0.3.3"
+)
 
 func main() {
 	logger := logger.New()
 
-	cfg, err := config.LoadConfig(version)
+	// custom config file path
+	var cf config.Flags
+	fset := flagx.NewFlagSet(appName, os.Stdout)
+	fset.String(&cf.PgxgenConfigFilePath, "pgxgen-config", "", "pgxgen.yaml", "absolute or relative path to sqlc.yaml file")
+	fset.String(&cf.SqlcConfigFilePath, "sqlc-config", "", "sqlc.yaml", "absolute or relative path to pgxgen.yaml file")
+
+	// parse flags
+	if err := fset.Parse(os.Args[1:]); err != nil {
+		logger.Fatalf("failed to parse flags: %s", err)
+	}
+
+	cfg, err := config.LoadConfig(cf, version)
 	if err != nil {
 		logger.Fatalf("load config error: %s", err)
 	}
@@ -63,26 +77,10 @@ func main() {
 		AppDescription:  "Generate GO models, DB CRUD, Mobx Keystone models and typescript code based on DDL",
 		PostDescription: "pgxgen crud",
 		Version:         version,
-		Args:            filterFlags(),
+		Args:            append([]string{os.Args[0]}, fset.Args()...),
 	})
 
 	if err := r.Run(); err != nil {
 		logger.Fatalf("error: %s", err)
 	}
-}
-
-// filterFlags filter os.Args from `pgxgen-config` and `sqlc-config` flags
-func filterFlags() []string {
-	res := []string{}
-	args := os.Args
-	for i := 0; i < len(args); i++ {
-		if strings.Contains(args[i], "pgxgen-config") ||
-			strings.Contains(args[i], "sqlc-config") {
-			i++
-			continue
-		}
-		res = append(res, args[i])
-	}
-
-	return res
 }

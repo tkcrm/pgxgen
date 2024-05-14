@@ -43,6 +43,8 @@ func (s *sqlc) Generate(_ context.Context, args []string) error {
 func (s *sqlc) process(args []string) error {
 	timeStart := time.Now()
 
+	args = append(args, "-f", s.config.ConfigPaths.SqlcConfigFilePath)
+
 	// generate sqlc code
 	genResult := sqlcpkg.Run(args)
 	if genResult != 0 {

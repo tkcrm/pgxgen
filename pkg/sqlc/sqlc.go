@@ -10,14 +10,14 @@ func Run(args []string) int {
 	return cmd.Do(args, os.Stdin, os.Stdout, os.Stderr)
 }
 
-func GetCatalogs() (cmd.GetCatalogResult, error) {
-	return cmd.GetCatalogs()
+func GetCatalogs(configFilePath string) (cmd.GetCatalogResult, error) {
+	return cmd.GetCatalogs(configFilePath)
 }
 
 func GetCatalogByOutputDir(catalogs cmd.GetCatalogResult, outputDir string) (cmd.GetCatalogResultItem, error) {
 	return cmd.GetCatalogByOutputDir(catalogs, outputDir)
 }
 
-func GetCatalogBySchemaDir(outputDir string) (cmd.GetCatalogResultItem, error) {
-	return cmd.GetCatalogBySchemaDir(outputDir)
+func GetCatalogBySchemaDir(configFilePath, outputDir string) (cmd.GetCatalogResultItem, error) {
+	return cmd.GetCatalogBySchemaDir(configFilePath, outputDir)
 }
