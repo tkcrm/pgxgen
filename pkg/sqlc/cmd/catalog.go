@@ -48,7 +48,7 @@ func getConfigPathCustom(stderr io.Writer, filePath string) (string, string) {
 	}
 }
 
-func GetCatalogs() (res GetCatalogResult, err error) {
+func GetCatalogs(configFilePath string) (res GetCatalogResult, err error) {
 	// define variables
 	var b bytes.Buffer
 	stderr := bufio.NewWriter(&b)
@@ -59,7 +59,7 @@ func GetCatalogs() (res GetCatalogResult, err error) {
 		}
 	}()
 
-	dir, filename := getConfigPathCustom(stderr, "")
+	dir, filename := getConfigPathCustom(stderr, configFilePath)
 	e := Env{
 		DryRun: false,
 	}
@@ -193,9 +193,9 @@ func GetCatalogByOutputDir(catalogs GetCatalogResult, outputDir string) (GetCata
 	return item, nil
 }
 
-func GetCatalogBySchemaDir(schemaDir string) (GetCatalogResultItem, error) {
+func GetCatalogBySchemaDir(configFilePath, schemaDir string) (GetCatalogResultItem, error) {
 	res := GetCatalogResultItem{}
-	catalogs, err := GetCatalogs()
+	catalogs, err := GetCatalogs(configFilePath)
 	if err != nil {
 		return res, fmt.Errorf("get catalogs error: %w", err)
 	}
