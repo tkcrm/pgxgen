@@ -70,7 +70,7 @@ func (s *goConstants) GenerateConstants() error {
 				return fmt.Errorf("can not find output dir for path: %s", table.OutputDir)
 			}
 
-			catalog, err := s.schema.GetSchema(schemaDir)
+			catalog, err := s.schema.GetSchema(s.config.ConfigPaths.SqlcConfigFilePath, schemaDir)
 			if err != nil {
 				return err
 			}

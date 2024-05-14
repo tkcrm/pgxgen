@@ -1,49 +1,36 @@
 package config
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/cristalhq/flagx"
 	"github.com/tkcrm/pgxgen/pkg/logger"
 	"gopkg.in/yaml.v2"
 )
 
 type Config struct {
-	Sqlc     Sqlc
-	Pgxgen   Pgxgen
-	loadErrs []error
+	ConfigPaths Flags
+	Sqlc        Sqlc
+	Pgxgen      Pgxgen
+	loadErrs    []error
 }
 
-type configFlags struct {
-	sqlcConfigFilePath   string
-	pgxgenConfigFilePath string
-}
-
-func (c *configFlags) Flags() *flag.FlagSet {
-	fset := flagx.NewFlagSet("pgxgen config", os.Stderr)
-	fset.String(&c.sqlcConfigFilePath, "sqlc-config", "", "sqlc.yaml", "absolute or relative path to sqlc.yaml file")
-	fset.String(&c.pgxgenConfigFilePath, "pgxgen-config", "", "pgxgen.yaml", "absolute or relative path to pgxgen.yaml file")
-	return fset.AsStdlib()
+type Flags struct {
+	SqlcConfigFilePath   string
+	PgxgenConfigFilePath string
 }
 
 // LoadConfig return common config with sqlc and pgxgen data
-func LoadConfig(version string) (Config, error) {
+func LoadConfig(cf Flags, version string) (Config, error) {
 	cfg := Config{
-		loadErrs: make([]error, 0),
-	}
-
-	// parse config flags
-	var cf configFlags
-	if err := cf.Flags().Parse(os.Args[1:]); err != nil {
-		return cfg, fmt.Errorf("failed to parse flags: %w", err)
+		ConfigPaths: cf,
+		loadErrs:    make([]error, 0),
 	}
 
 	// load sqlc config
 	var sqlcConfig Sqlc
-	sqlcConfigFile, err := os.ReadFile(cf.sqlcConfigFilePath)
+	sqlcConfigFile, err := os.ReadFile(cf.SqlcConfigFilePath)
 	if err != nil {
 		cfg.loadErrs = append(cfg.loadErrs, fmt.Errorf("failed to read sqlc config file: %w", err))
 	} else {
@@ -65,7 +52,7 @@ func LoadConfig(version string) (Config, error) {
 
 	// load pgxgen config
 	var pgxgenConfig Pgxgen
-	pgxgenConfigFile, err := os.ReadFile(cf.pgxgenConfigFilePath)
+	pgxgenConfigFile, err := os.ReadFile(cf.PgxgenConfigFilePath)
 	if err != nil {
 		cfg.loadErrs = append(cfg.loadErrs, fmt.Errorf("failed to read pgxgen config file: %w", err))
 	} else {

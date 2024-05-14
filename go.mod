@@ -26,7 +26,7 @@ require (
 )
 
 require (
-	github.com/a-h/templ v0.2.663
+	github.com/a-h/templ v0.2.680
 	github.com/antlr4-go/antlr/v4 v4.13.0
 	github.com/cristalhq/flagx v0.5.0
 	github.com/fatih/structtag v1.2.0

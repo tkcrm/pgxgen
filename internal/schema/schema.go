@@ -6,7 +6,7 @@ import (
 )
 
 type ISchema interface {
-	GetSchema(outputDir string) (cmd.GetCatalogResultItem, error)
+	GetSchema(sqlcConfigPath, outputDir string) (cmd.GetCatalogResultItem, error)
 }
 
 type schema struct {
@@ -20,12 +20,12 @@ func New() ISchema {
 	}
 }
 
-func (s *schema) GetSchema(schemaDir string) (cmd.GetCatalogResultItem, error) {
+func (s *schema) GetSchema(sqlcConfigPath, schemaDir string) (cmd.GetCatalogResultItem, error) {
 	if item, ok := s.catalogs[schemaDir]; ok {
 		return item, nil
 	}
 
-	res, err := sqlc.GetCatalogBySchemaDir(schemaDir)
+	res, err := sqlc.GetCatalogBySchemaDir(sqlcConfigPath, schemaDir)
 	if err != nil {
 		return cmd.GetCatalogResultItem{}, err
 	}
