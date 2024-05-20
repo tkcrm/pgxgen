@@ -299,7 +299,7 @@ func parseTypeSpec(node *ast.File, sp *StructParameters, spec *ast.TypeSpec) err
 				log.Fatal(err)
 			}
 
-			if fTypeData.typeName == "" {
+			if fTypeData == nil || fTypeData.typeName == "" {
 				continue
 			}
 

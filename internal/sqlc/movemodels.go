@@ -19,15 +19,24 @@ func (s *sqlc) moveModels(
 	files []fs.DirEntry,
 	modelPath, modelFileDir, modelFileName string,
 ) error {
+	// move model file
+	currentDir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+
+	newPathDir := filepath.Join(currentDir, cfg.SqlcModels.Move.OutputDir)
+	oldPathDir := filepath.Join(currentDir, modelPath)
+
 	modelFileStructs, alreadyMoved := (*modelsMoved)[cfg.SchemaDir]
 
 	if !alreadyMoved {
 		// get structs from model file
-		modelFileStructs = structs.GetStructsByFilePath(modelPath)
+		modelFileStructs = structs.GetStructsByFilePath(oldPathDir)
 
 		// replace package name in model file
 		if err := s.replace(
-			modelPath,
+			oldPathDir,
 			func(c config.Config, str string) (string, error) {
 				return replacePackageName(str, cfg.SqlcModels)
 			},
@@ -59,20 +68,11 @@ func (s *sqlc) moveModels(
 
 	// delete models.go if already moved
 	if alreadyMoved {
-		if err := utils.RemoveFile(modelPath); err != nil {
-			return fmt.Errorf("remove file %s error: %w", modelPath, err)
+		if err := utils.RemoveFile(oldPathDir); err != nil {
+			return fmt.Errorf("remove file %s error: %w", oldPathDir, err)
 		}
 		return nil
 	}
-
-	// move model file
-	currentDir, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-
-	newPathDir := filepath.Join(currentDir, cfg.SqlcModels.Move.OutputDir)
-	oldPathDir := filepath.Join(currentDir, modelPath)
 
 	// create dir if new path not exists
 	if err := utils.CreatePath(newPathDir); err != nil {
@@ -89,7 +89,7 @@ func (s *sqlc) moveModels(
 	if err := os.Rename(oldPathDir, newPathFile); err != nil {
 		return fmt.Errorf(
 			"failed to move file from %s to %s: %w",
-			modelPath,
+			oldPathDir,
 			newPathFile,
 			err,
 		)
