@@ -17,7 +17,7 @@ import (
 
 var (
 	appName = "pgxgen"
-	version = "v0.3.4"
+	version = "v0.3.5"
 )
 
 func main() {

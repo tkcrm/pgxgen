@@ -69,6 +69,7 @@ type GetPathsResponse struct {
 	QueriesPaths []string
 	OutPaths     []string
 	SchemaPaths  []string
+	Engines      []string
 }
 
 func (s GetPathsResponse) GetModelPathByIndex(index int) string {
@@ -90,6 +91,7 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
 			res.OutPaths = append(res.OutPaths, p.Path)
 			res.SchemaPaths = append(res.SchemaPaths, p.Schema)
+			res.Engines = append(res.Engines, p.Engine)
 		}
 	}
 
@@ -105,6 +107,7 @@ func (s *Sqlc) GetPaths() GetPathsResponse {
 			res.QueriesPaths = append(res.QueriesPaths, p.Queries)
 			res.OutPaths = append(res.OutPaths, p.Gen.Go.Out)
 			res.SchemaPaths = append(res.SchemaPaths, p.Schema)
+			res.Engines = append(res.Engines, p.Engine)
 		}
 	}
 
@@ -168,4 +171,25 @@ func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string)
 	}
 
 	return filteredModelPaths, nil
+}
+
+func GetEnginesByScheme(gpr GetPathsResponse, inSchemaDir string) ([]string, error) {
+	engines := []string{}
+	for index, item := range gpr.SchemaPaths {
+		absFirst, err := filepath.Abs(item)
+		if err != nil {
+			return nil, err
+		}
+
+		absSecond, err := filepath.Abs(inSchemaDir)
+		if err != nil {
+			return nil, err
+		}
+
+		if absFirst == absSecond {
+			engines = append(engines, gpr.Engines[index])
+		}
+	}
+
+	return engines, nil
 }
