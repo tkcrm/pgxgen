@@ -93,11 +93,15 @@ sqlc:
               skip_columns:
                 - id
                 - updated_at
+              column_values:
+                created_at: now()
               returning: "*"
             update:
               skip_columns:
                 - id
                 - created_at
+              column_values:
+                updated_at: now()
               returning: "*"
             find:
               where:
