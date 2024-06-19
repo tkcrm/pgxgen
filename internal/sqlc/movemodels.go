@@ -54,7 +54,7 @@ func (s *sqlc) moveModels(
 		}
 
 		// replace imports in generated files by sqlc
-		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" {
+		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" || file.Name() == "batch.go" {
 			if err := s.replace(
 				filepath.Join(modelFileDir, file.Name()),
 				func(c config.Config, str string) (string, error) {

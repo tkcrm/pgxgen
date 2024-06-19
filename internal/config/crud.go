@@ -31,6 +31,7 @@ type Method struct {
 	Where           map[string]WhereParamsItem `yaml:"where"`
 	WhereAdditional []string                   `yaml:"where_additional"`
 	SkipColumns     []string                   `yaml:"skip_columns"`
+	ColumnValues    map[string]string          `yaml:"column_values"`
 
 	// For find method
 	Limit bool       `yaml:"limit"`

@@ -32,10 +32,30 @@ func (t tables) getTableMetaData(tableName string) *tableMetaData {
 	return nil
 }
 
+type engineType string
+
+func (e engineType) String() string {
+	return string(e)
+}
+
+func (s engineType) Valid() bool {
+	switch s {
+	case EnginesPostgres, EnginesMysql:
+		return true
+	}
+	return false
+}
+
+const (
+	EnginesPostgres engineType = "postgresql"
+	EnginesMysql    engineType = "mysql"
+)
+
 type processParams struct {
 	builder      *strings.Builder
 	table        string
 	metaData     tableMetaData
 	methodParams config.Method
 	tableParams  config.TableParams
+	engine       engineType
 }
