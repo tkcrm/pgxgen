@@ -318,7 +318,7 @@ func (s *crud) processCreate(cfg config.CrudParams, p processParams) error {
 
 	p.builder.WriteString(")")
 	if p.methodParams.Returning != "" {
-		p.builder.WriteString("\n\tRETURNING *")
+		p.builder.WriteString("\n\tRETURNING " + p.methodParams.Returning)
 	}
 	p.builder.WriteString(";\n\n")
 
@@ -387,7 +387,7 @@ func (s *crud) processUpdate(cfg config.CrudParams, p processParams) error {
 	}
 
 	if p.methodParams.Returning != "" {
-		p.builder.WriteString("\n\tRETURNING *")
+		p.builder.WriteString("\n\tRETURNING " + p.methodParams.Returning)
 	}
 	p.builder.WriteString(";\n\n")
 
