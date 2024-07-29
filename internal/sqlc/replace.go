@@ -106,6 +106,12 @@ func replaceImports(str string, sqlcModelParam config.SqlcModels, modelFileStruc
 			break
 		}
 
+		re = regexp.MustCompile(fmt.Sprintf(`(?sm)\s+\w+\s+%s\s+`, item.Name))
+		if re.MatchString(str) {
+			existsSomeModelStruct = true
+			break
+		}
+
 		for _, field := range item.Fields {
 			re := regexp.MustCompile(fmt.Sprintf(`(?sm)\s+\w+\s+%s\s+`, field.Name))
 			if re.MatchString(str) {

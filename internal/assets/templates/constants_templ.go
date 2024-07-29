@@ -84,6 +84,16 @@ func (s ColumnName) StructName() string {
   v := stringy.New(string(s)).CamelCase().Get()
 	v = stringy.New(v).UcFirst()
   return strings.ReplaceAll(v, "Id", "ID")
+}
+
+type ColumnNames []ColumnName
+
+func (s ColumnNames) Strings() []string {
+  res := make([]string, len(s))
+  for idx, colName := range s {
+    res[idx] = colName.String()
+  }
+  return res
 }`)
 	content.WriteString("\nconst (\n")
 
@@ -94,8 +104,8 @@ func (s ColumnName) StructName() string {
 	content.WriteString(")\n\n")
 
 	for _, tableName := range p.Tables {
-		content.WriteString(fmt.Sprintf("func %sColumnNames() []ColumnName {\n", stringy.New(stringy.New(tableName.Name).CamelCase().Get()).UcFirst()))
-		content.WriteString("return []ColumnName{\n")
+		content.WriteString(fmt.Sprintf("func %sColumnNames() ColumnNames {\n", stringy.New(stringy.New(tableName.Name).CamelCase().Get()).UcFirst()))
+		content.WriteString("return ColumnNames{\n")
 		for _, item := range p.GetColumnsForTable(tableName.Name) {
 			content.WriteString(fmt.Sprintf("ColumnName%s,\n", item.NamePreffix))
 		}
