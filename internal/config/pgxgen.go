@@ -31,11 +31,17 @@ type SqlcModels struct {
 	Move                     SqlcModelsMove `yaml:"move"`
 }
 
+type SqlcModelsMoveImports struct {
+	Path   string `yaml:"path"`
+	GoType string `yaml:"go_type"`
+}
+
 type SqlcModelsMove struct {
-	OutputDir      string `yaml:"output_dir"`
-	OutputFileName string `yaml:"output_file_name"`
-	PackageName    string `yaml:"package_name"`
-	PackagePath    string `yaml:"package_path"`
+	OutputDir      string                  `yaml:"output_dir"`
+	OutputFileName string                  `yaml:"output_file_name"`
+	PackageName    string                  `yaml:"package_name"`
+	PackagePath    string                  `yaml:"package_path"`
+	Imports        []SqlcModelsMoveImports `yaml:"imports"`
 }
 
 func (s SqlcModelsMove) Validate() error {

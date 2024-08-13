@@ -2,6 +2,9 @@ package sqlc
 
 import (
 	"fmt"
+	"go/format"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -9,13 +12,12 @@ import (
 	"strings"
 
 	"github.com/tkcrm/pgxgen/internal/config"
-	"github.com/tkcrm/pgxgen/internal/structs"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 func (s *sqlc) moveModels(
 	cfg config.PgxgenSqlc,
-	modelsMoved *map[string]structs.Structs,
+	modelsMoved *map[string]*moveModelsData,
 	files []fs.DirEntry,
 	modelPath, modelFileDir, modelFileName string,
 ) error {
@@ -31,17 +33,54 @@ func (s *sqlc) moveModels(
 	modelFileStructs, alreadyMoved := (*modelsMoved)[cfg.SchemaDir]
 
 	if !alreadyMoved {
-		// get structs from model file
-		modelFileStructs = structs.GetStructsByFilePath(oldPathDir)
+		modelFileData, err := utils.ReadFile(oldPathDir)
+		if err != nil {
+			return fmt.Errorf("failed to model read file: %w", err)
+		}
 
-		// replace package name in model file
-		if err := s.replace(
-			oldPathDir,
-			func(c config.Config, str string) (string, error) {
-				return replacePackageName(str, cfg.SqlcModels)
-			},
-		); err != nil {
-			return fmt.Errorf("replacePackageName error: %w", err)
+		fset := token.NewFileSet()
+		node, err := parser.ParseFile(fset, "", modelFileData, parser.ParseComments)
+		if err != nil {
+			return fmt.Errorf("failed to parse ast of model file: %w", err)
+		}
+
+		modelFileStructs = &moveModelsData{
+			fileSet:    fset,
+			fileAst:    node,
+			filePath:   newPathDir,
+			importPath: cfg.SqlcModels.Move.PackagePath,
+		}
+
+		replacePackageName(cfg.SqlcModels, modelFileStructs)
+
+		// create dir if new path not exists
+		if err := utils.CreatePath(newPathDir); err != nil {
+			return fmt.Errorf("create new dir error: %w", err)
+		}
+
+		// move file to a new directory
+		fileName := modelFileName
+		if cfg.SqlcModels.Move.OutputFileName != "" {
+			fileName = cfg.SqlcModels.Move.OutputFileName
+		}
+
+		newPathFile := filepath.Join(newPathDir, fileName)
+
+		// create new file
+		outputFile, err := os.Create(newPathFile)
+		if err != nil {
+			return fmt.Errorf("failed to create file: %w", err)
+		}
+		defer outputFile.Close()
+
+		// write file
+		if err := format.Node(outputFile, fset, node); err != nil {
+			return fmt.Errorf("failed to write file: %w", err)
+		}
+
+		// remove old file
+		if err := utils.RemoveFile(oldPathDir); err != nil {
+			return fmt.Errorf("remove file %s error: %w", oldPathDir, err)
 		}
 	}
 
@@ -54,7 +93,9 @@ func (s *sqlc) moveModels(
 		}
 
 		// replace imports in generated files by sqlc
-		if strings.HasSuffix(file.Name(), ".sql.go") || file.Name() == "querier.go" || file.Name() == "batch.go" {
+		if strings.HasSuffix(file.Name(), ".sql.go") ||
+			file.Name() == "querier.go" ||
+			file.Name() == "batch.go" {
 			if err := s.replace(
 				filepath.Join(modelFileDir, file.Name()),
 				func(c config.Config, str string) (string, error) {
@@ -72,27 +113,6 @@ func (s *sqlc) moveModels(
 			return fmt.Errorf("remove file %s error: %w", oldPathDir, err)
 		}
 		return nil
-	}
-
-	// create dir if new path not exists
-	if err := utils.CreatePath(newPathDir); err != nil {
-		return fmt.Errorf("create new dir error: %w", err)
-	}
-
-	// move file to new directory
-	fileName := modelFileName
-	if cfg.SqlcModels.Move.OutputFileName != "" {
-		fileName = cfg.SqlcModels.Move.OutputFileName
-	}
-
-	newPathFile := filepath.Join(newPathDir, fileName)
-	if err := os.Rename(oldPathDir, newPathFile); err != nil {
-		return fmt.Errorf(
-			"failed to move file from %s to %s: %w",
-			oldPathDir,
-			newPathFile,
-			err,
-		)
 	}
 
 	(*modelsMoved)[cfg.SchemaDir] = modelFileStructs
