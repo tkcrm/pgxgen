@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
+	"runtime"
 
-	"github.com/cristalhq/acmd"
-	"github.com/cristalhq/flagx"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/gomodels"
@@ -13,6 +13,7 @@ import (
 	"github.com/tkcrm/pgxgen/internal/typescript"
 	"github.com/tkcrm/pgxgen/internal/ver"
 	"github.com/tkcrm/pgxgen/pkg/logger"
+	"github.com/urfave/cli/v2"
 )
 
 var (
@@ -20,67 +21,127 @@ var (
 	version = "v0.3.5"
 )
 
-func main() {
-	logger := logger.New()
+func getBuildVersion() string {
+	return fmt.Sprintf(
+		"\nrelease: %s\ngo version: %s",
+		version,
+		runtime.Version(),
+	)
+}
 
-	// custom config file path
-	var cf config.Flags
-	fset := flagx.NewFlagSet(appName, os.Stdout)
-	fset.String(&cf.PgxgenConfigFilePath, "pgxgen-config", "", "pgxgen.yaml", "absolute or relative path to sqlc.yaml file")
-	fset.String(&cf.SqlcConfigFilePath, "sqlc-config", "", "sqlc.yaml", "absolute or relative path to pgxgen.yaml file")
-
-	// parse flags
-	if err := fset.Parse(os.Args[1:]); err != nil {
-		logger.Fatalf("failed to parse flags: %s", err)
+func loadConfig(c *cli.Context) (config.Config, error) {
+	cf := config.Flags{
+		PgxgenConfigFilePath: c.String("pgxgen-config"),
+		SqlcConfigFilePath:   c.String("sqlc-config"),
 	}
 
 	cfg, err := config.LoadConfig(cf, version)
 	if err != nil {
-		logger.Fatalf("load config error: %s", err)
+		return cfg, fmt.Errorf("load config error: %w", err)
 	}
 
-	cmds := []acmd.Command{
-		{
-			Name:        "crud",
-			Description: "generate crud sql's",
-			ExecFunc:    crud.CmdFunc(logger, cfg),
+	return cfg, nil
+}
+
+func main() {
+	logger := logger.New()
+
+	app := &cli.App{
+		Name:    appName,
+		Version: getBuildVersion(),
+		Usage:   "Generate GO models, DB CRUD, Mobx Keystone models and typescript code based on DDL",
+		Suggest: true,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:  "pgxgen-config",
+				Usage: "Absolute or relative path to pgxgen.yaml file",
+				Value: "pgxgen.yaml",
+			},
+			&cli.StringFlag{
+				Name:  "sqlc-config",
+				Usage: "Absolute or relative path to sqlc.yaml file",
+				Value: "sqlc.yaml",
+			},
 		},
-		{
-			Name:        "gomodels",
-			Description: "generate golang models based on existed structs",
-			ExecFunc:    gomodels.CmdFunc(logger, cfg),
-		},
-		{
-			Name:        "keystone",
-			Description: "generate mobx keystone models",
-			ExecFunc:    keystone.CmdFunc(logger, cfg),
-		},
-		{
-			Name:        "ts",
-			Description: "generate types for typescript, based on go structs",
-			ExecFunc:    typescript.CmdFunc(logger, cfg),
-		},
-		{
-			Name:        "sqlc",
-			Description: "generate sqlc code",
-			ExecFunc:    sqlc.CmdFunc(logger, cfg),
-		},
-		{
-			Name:        "check-version",
-			Description: "check for new version",
-			ExecFunc:    ver.CmdFunc(logger, cfg),
+		Commands: []*cli.Command{
+			{
+				Name:  "crud",
+				Usage: "Generate crud sql's",
+				Action: func(c *cli.Context) error {
+					cfg, err := loadConfig(c)
+					if err != nil {
+						return err
+					}
+					return crud.CmdFunc(c, logger, cfg)
+				},
+			},
+			{
+				Name:  "gomodels",
+				Usage: "Generate golang models based on existed structs",
+				Action: func(c *cli.Context) error {
+					cfg, err := loadConfig(c)
+					if err != nil {
+						return err
+					}
+					return gomodels.CmdFunc(c, logger, cfg)
+				},
+			},
+			{
+				Name:  "keystone",
+				Usage: "Generate mobx keystone models",
+				Action: func(c *cli.Context) error {
+					cfg, err := loadConfig(c)
+					if err != nil {
+						return err
+					}
+					return keystone.CmdFunc(c, logger, cfg)
+				},
+			},
+			{
+				Name:  "ts",
+				Usage: "Generate types for typescript, based on go structs",
+				Action: func(c *cli.Context) error {
+					cfg, err := loadConfig(c)
+					if err != nil {
+						return err
+					}
+					return typescript.CmdFunc(c, logger, cfg)
+				},
+			},
+			{
+				Name:  "sqlc",
+				Usage: "Generate sqlc code",
+				Action: func(c *cli.Context) error {
+					cfg, err := loadConfig(c)
+					if err != nil {
+						return err
+					}
+					return sqlc.CmdFunc(c, logger, cfg)
+				},
+			},
+			{
+				Name:  "check-version",
+				Usage: "Check for a new version",
+				Action: func(c *cli.Context) error {
+					cfg, err := loadConfig(c)
+					if err != nil {
+						return err
+					}
+					return ver.CmdFunc(c, logger, cfg)
+				},
+			},
+			{
+				Name:  "version",
+				Usage: "Print the version",
+				Action: func(c *cli.Context) error {
+					fmt.Printf("%s version%s\n", appName, c.App.Version)
+					return nil
+				},
+			},
 		},
 	}
 
-	r := acmd.RunnerOf(cmds, acmd.Config{
-		AppName:         "pgxgen",
-		AppDescription:  "Generate GO models, DB CRUD, Mobx Keystone models and typescript code based on DDL",
-		PostDescription: "pgxgen crud",
-		Version:         version,
-		Args:            append([]string{os.Args[0]}, fset.Args()...),
-	})
-
-	if err := r.Run(); err != nil {
+	if err := app.Run(os.Args); err != nil {
 		logger.Fatalf("error: %s", err)
 	}
 }

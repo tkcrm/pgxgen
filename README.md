@@ -28,18 +28,24 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 
 Print all available commands
 
-```bash
+```shell
 pgxgen help
-```
 
-### Version
+COMMANDS:
+   crud           Generate crud sql's
+   gomodels       Generate golang models based on existed structs
+   keystone       Generate mobx keystone models
+   ts             Generate types for typescript, based on go structs
+   sqlc           Generate sqlc code
+   check-version  Check for a new version
+   version        Print the version
+   help, h        Shows a list of commands or help for one command
 
-```bash
-# Print current version
-pgxgen version
-
-# Check for new version
-pgxgen check-version
+GLOBAL OPTIONS:
+   --pgxgen-config value  Absolute or relative path to pgxgen.yaml file (default: "pgxgen.yaml")
+   --sqlc-config value    Absolute or relative path to sqlc.yaml file (default: "sqlc.yaml")
+   --help, -h             show help
+   --version, -v          print the version
 ```
 
 ### Configure `pgxgen`
@@ -253,36 +259,12 @@ gen_typescript_from_structs:
       - "GetOrganizationRequest"
 ```
 
-### Generate `CRUD` queries for existing tables
-
-```bash
-pgxgen crud
-```
-
-### Generate models based on sqlc models
-
-```bash
-pgxgen gomodels
-```
-
-### Generate keystone models based on go models
-
-```bash
-pgxgen keystone
-```
-
-#### Install `@tkcrm/ui` in your frontend
+### Install `@tkcrm/ui` in your frontend
 
 If you generate mobx keystone models install `@tkcrm/ui` in your frontend project
 
 ```bash
 npm i @tkcrm/ui --save-dev
-```
-
-### Generate typescript types based on go structs
-
-```bash
-pgxgen ts
 ```
 
 ### Configure `sqlc`
@@ -319,14 +301,3 @@ sql:
         emit_enum_valid_method: true
         emit_all_enum_values: true
 ```
-
-### Generate `sqlc`
-
-```bash
-pgxgen sqlc generate
-```
-
-## Roadmap
-
-- Generate models without sqlc
-- Generate `.proto` files with CRUD services

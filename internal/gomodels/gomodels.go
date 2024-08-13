@@ -146,7 +146,7 @@ func (s *gomodels) generateModels(cfg config.GenModels) error {
 			return fmt.Errorf("processStructs error: %w", err)
 		}
 
-		if err := s.compileGoModels(config, _structs, filePath); err != nil {
+		if err := s.compileGoModels(config, _structs); err != nil {
 			return fmt.Errorf("compileGoModels error: %w", err)
 		}
 
@@ -403,7 +403,7 @@ func (s *gomodels) processStructs(c config.GenModels, st *structs.Structs) error
 	return nil
 }
 
-func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs, path string) error {
+func (s *gomodels) compileGoModels(c config.GenModels, st structs.Structs) error {
 	if c.OutputDir == "" {
 		return fmt.Errorf("config error: undefined output_dir")
 	}

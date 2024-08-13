@@ -39,11 +39,11 @@ type tmplTypescriptCtx struct {
 	ExportTypeSuffix string
 }
 
-func (s *typescript) Generate(_ context.Context, args []string) error {
+func (s *typescript) Generate(_ context.Context, _ []string) error {
 	s.logger.Infof("generate typescript code")
 	timeStart := time.Now()
 
-	if err := s.generateTypescript(args); err != nil {
+	if err := s.generateTypescript(); err != nil {
 		return err
 	}
 
@@ -52,7 +52,7 @@ func (s *typescript) Generate(_ context.Context, args []string) error {
 	return nil
 }
 
-func (s *typescript) generateTypescript(args []string) error {
+func (s *typescript) generateTypescript() error {
 	for _, config := range s.config.Pgxgen.GenTypescriptFromStructs {
 		if config.OutputDir == "" {
 			return fmt.Errorf("output dir is empty")
@@ -149,7 +149,7 @@ func (s *typescript) compileTypescript(c config.GenTypescriptFromStructs, st str
 		return strings.Contains(t, "*")
 	})
 	tpl.AddFunc("getType", func(t string) string {
-		return getTypescriptType(st, t)
+		return getTypescriptType(t)
 	})
 
 	// tmpl := template.Must(
@@ -211,7 +211,7 @@ func (s *typescript) compileTypescript(c config.GenTypescriptFromStructs, st str
 	return nil
 }
 
-func getTypescriptType(st structs.StructSlice, t string) (tp string) {
+func getTypescriptType(t string) (tp string) {
 	t = strings.ReplaceAll(t, "*", "")
 
 	tp = ""
