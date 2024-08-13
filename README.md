@@ -28,11 +28,11 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 
 Print all available commands
 
-```shell
+```text
 pgxgen help
 
 COMMANDS:
-   crud           Generate crud sql's
+   crud           Generate crud sqls
    gomodels       Generate golang models based on existed structs
    keystone       Generate mobx keystone models
    ts             Generate types for typescript, based on go structs
@@ -73,6 +73,11 @@ sqlc:
         package_name: models
         # required. full path to new models directory
         package_path: github.com/company/project/internal/models
+        # optional. add custom imports to generated code by sqlc
+        imports:
+          - path: github.com/company/project/internal/models # required
+            # optional. use path if this type detected in file
+            go_type: MyStruct
 
     # generate crud sql for tables
     crud:

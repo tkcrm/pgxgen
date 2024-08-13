@@ -1,17 +1,19 @@
 package sqlc
 
 import (
-	"bufio"
+	"bytes"
 	"fmt"
-	"io"
+	"go/ast"
+	"go/parser"
+	"go/printer"
+	"go/token"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/tkcrm/pgxgen/internal/config"
-	"github.com/tkcrm/pgxgen/internal/structs"
 	"github.com/tkcrm/pgxgen/utils"
+	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/imports"
 )
 
@@ -29,7 +31,7 @@ var replaceTypesMap map[string]string = map[string]string{
 func (s *sqlc) replace(path string, fn replaceFunc) error {
 	file, err := utils.ReadFile(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read file from path \"%s\": %w", path, err)
 	}
 
 	result, err := fn(s.config, string(file))
@@ -39,7 +41,7 @@ func (s *sqlc) replace(path string, fn replaceFunc) error {
 
 	formatedFileContent, err := imports.Process(path, []byte(result), nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to format file content: %w", err)
 	}
 
 	formattedPath := filepath.Join(path)
@@ -60,10 +62,10 @@ func replaceStructTypes(c config.Config, str string) (string, error) {
 }
 
 // replacePackageName - replace package name for golang file
-func replacePackageName(str string, sqlcModelParam config.SqlcModels) (res string, err error) {
+func replacePackageName(sqlcModelParam config.SqlcModels, modelData *moveModelsData) {
 	outputDirPath := strings.Split(sqlcModelParam.Move.OutputDir, "/")
 	if len(outputDirPath) == 0 {
-		return str, nil
+		return
 	}
 
 	packageName := outputDirPath[len(outputDirPath)-1]
@@ -71,88 +73,82 @@ func replacePackageName(str string, sqlcModelParam config.SqlcModels) (res strin
 		packageName = sqlcModelParam.Move.PackageName
 	}
 
-	r := bufio.NewReader(strings.NewReader(str))
+	modelData.fileAst.Name.Name = packageName
+}
 
-	for {
-		line, err := r.ReadString('\n')
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-			return "", err
+type moveModelsData struct {
+	fileSet    *token.FileSet
+	fileAst    *ast.File
+	filePath   string
+	importPath string
+}
+
+func replaceImports(fileBody string, sqlcModelParam config.SqlcModels, modelData *moveModelsData) (string, error) {
+	fset := token.NewFileSet()
+	node, err := parser.ParseFile(fset, "", fileBody, parser.ParseComments)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse file: %w", err)
+	}
+
+	for _, typeName := range modelData.extractTypes() {
+		replaced := replaceTypeInAST(node, typeName, modelData.fileAst.Name.Name)
+		if replaced {
+			astutil.AddImport(fset, node, modelData.importPath)
 		}
+	}
 
-		if strings.HasPrefix(line, "package") {
-			res += "package " + packageName
+	for _, item := range sqlcModelParam.Move.Imports {
+		var addImport bool
+		if item.GoType != "" {
+			addImport = replaceTypeInAST(node, item.GoType, modelData.fileAst.Name.Name)
 		} else {
-			res += line
+			addImport = true
+		}
+
+		if addImport {
+			astutil.AddImport(fset, node, item.Path)
 		}
 	}
 
-	return res, nil
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, fset, node); err != nil {
+		return "", fmt.Errorf("failed to print file: %w", err)
+	}
+
+	fileBody = buf.String()
+
+	return fileBody, nil
 }
 
-func replaceImports(str string, sqlcModelParam config.SqlcModels, modelFileStructs structs.Structs) (res string, err error) {
-	outputDirPath := strings.Split(sqlcModelParam.Move.OutputDir, "/")
-	if len(outputDirPath) == 0 {
-		return str, nil
-	}
+func replaceTypeInAST(node *ast.File, typeName, packageAlias string) bool {
+	replaced := false
 
-	var existsSomeModelStruct bool
-	for _, item := range modelFileStructs {
-		re := regexp.MustCompile(fmt.Sprintf(`(?sm)\([\[\]\*]+%s[\,\){]+`, item.Name))
-		if re.MatchString(str) {
-			existsSomeModelStruct = true
-			break
+	ast.Inspect(node, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.Ident:
+			if x.Name == typeName {
+				x.Name = packageAlias + "." + typeName
+				replaced = true
+			}
 		}
+		return true
+	})
 
-		re = regexp.MustCompile(fmt.Sprintf(`(?sm)\s+\w+\s+%s\s+`, item.Name))
-		if re.MatchString(str) {
-			existsSomeModelStruct = true
-			break
-		}
+	return replaced
+}
 
-		for _, field := range item.Fields {
-			re := regexp.MustCompile(fmt.Sprintf(`(?sm)\s+\w+\s+%s\s+`, field.Name))
-			if re.MatchString(str) {
-				existsSomeModelStruct = true
-				break
+func (s *moveModelsData) extractTypes() []string {
+	var types []string
+
+	for _, decl := range s.fileAst.Decls {
+		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					types = append(types, typeSpec.Name.Name)
+				}
 			}
 		}
 	}
-	if !existsSomeModelStruct {
-		return str, nil
-	}
 
-	r := regexp.MustCompile(`import (\"\w+\")`)
-	r2 := regexp.MustCompile(`(?sm)^import \(\s(([^\)]+)\s)+\)`)
-
-	if r.MatchString(str) {
-		matches := r.FindStringSubmatch(str)
-		if len(matches) > 1 {
-			res = r.ReplaceAllString(str, getNewImports(matches[1:], sqlcModelParam.Move.PackagePath))
-		}
-	}
-
-	if r2.MatchString(str) {
-		matches := r2.FindStringSubmatch(str)
-		if len(matches) == 3 {
-			packageImports := matches[2]
-			re2 := regexp.MustCompile(`(\s+(.*)\n?)`)
-			rs2 := re2.FindAllStringSubmatch(packageImports, -1)
-			imports := make([]string, 0, len(rs2))
-			for _, item := range rs2 {
-				imports = append(imports, item[2])
-			}
-
-			res = r2.ReplaceAllString(str, getNewImports(imports, sqlcModelParam.Move.PackagePath))
-		}
-	}
-
-	return res, nil
-}
-
-func getNewImports(existImports []string, packagePath string) string {
-	existImports = append(existImports, fmt.Sprintf(". \"%s\"", packagePath))
-	return fmt.Sprintf("import(\n%s\n)", strings.Join(existImports, "\n"))
+	return types
 }

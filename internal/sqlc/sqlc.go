@@ -13,7 +13,6 @@ import (
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/goconstatnts"
-	"github.com/tkcrm/pgxgen/internal/structs"
 	"github.com/tkcrm/pgxgen/pkg/logger"
 	sqlcpkg "github.com/tkcrm/pgxgen/pkg/sqlc"
 )
@@ -71,7 +70,7 @@ func (s *sqlc) process(args []string) error {
 		}
 	}
 
-	modelsMoved := map[string]structs.Structs{}
+	modelsMoved := map[string]*moveModelsData{}
 
 	// process sqlc model params
 	for _, cfg := range s.config.Pgxgen.Sqlc {
@@ -116,6 +115,7 @@ func (s *sqlc) process(args []string) error {
 				if param.ReplaceSqlcNullableTypes &&
 					(strings.HasSuffix(file.Name(), ".sql.go") ||
 						file.Name() == "querier.go" ||
+						file.Name() == "batch.go" ||
 						file.Name() == modelFileName) {
 					if err := s.replace(
 						filepath.Join(modelFileDir, file.Name()),
@@ -136,7 +136,7 @@ func (s *sqlc) process(args []string) error {
 					modelFileDir,
 					modelFileName,
 				); err != nil {
-					return fmt.Errorf("moveModels error: %w", err)
+					return fmt.Errorf("move models error: %w", err)
 				}
 			}
 		}
