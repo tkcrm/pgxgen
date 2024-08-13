@@ -6,23 +6,11 @@ import (
 )
 
 type Logger interface {
-	// Debug(...any)
-	// Debugf(template string, args ...any)
-
 	Info(...any)
 	Infof(template string, args ...any)
 
-	// Warn(...any)
-	// Warnf(template string, args ...any)
-
-	// Error(...any)
-	// Errorf(template string, args ...any)
-
 	Fatal(...any)
 	Fatalf(template string, args ...any)
-
-	// Panic(...any)
-	// Panicf(template string, args ...any)
 }
 
 type logger struct {

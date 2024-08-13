@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"runtime/trace"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/dbmanager"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/migrations"
-	"github.com/tkcrm/pgxgen/pkg/sqlc/quickdb"
-	pb "github.com/tkcrm/pgxgen/pkg/sqlc/quickdb/v1"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/sqlpath"
 )
 
@@ -88,20 +88,16 @@ func CreateDB(ctx context.Context, dir, filename, querySetName string, o *Option
 		ddl = append(ddl, migrations.RemoveRollbackStatements(string(contents)))
 	}
 
-	client, err := quickdb.NewClientFromConfig(conf.Cloud)
-	if err != nil {
-		return fmt.Errorf("client error: %w", err)
-	}
-
-	resp, err := client.CreateEphemeralDatabase(ctx, &pb.CreateEphemeralDatabaseRequest{
+	now := time.Now().UTC().UnixNano()
+	client := dbmanager.NewClient(conf.Servers)
+	resp, err := client.CreateDatabase(ctx, &dbmanager.CreateDatabaseRequest{
 		Engine:     string(queryset.Engine),
-		Region:     quickdb.GetClosestRegion(),
 		Migrations: ddl,
+		Prefix:     fmt.Sprintf("sqlc_createdb_%d", now),
 	})
 	if err != nil {
 		return fmt.Errorf("managed: create database: %w", err)
 	}
-	fmt.Fprintln(os.Stderr, "WARNING: This database will be removed in two minutes")
 	fmt.Println(resp.Uri)
 	return nil
 }

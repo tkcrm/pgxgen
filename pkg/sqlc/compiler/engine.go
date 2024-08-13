@@ -6,13 +6,12 @@ import (
 
 	"github.com/tkcrm/pgxgen/pkg/sqlc/analyzer"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/config"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/dbmanager"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/engine/dolphin"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/engine/postgresql"
 	pganalyze "github.com/tkcrm/pgxgen/pkg/sqlc/engine/postgresql/analyzer"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/engine/sqlite"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/opts"
-	"github.com/tkcrm/pgxgen/pkg/sqlc/quickdb"
-	pb "github.com/tkcrm/pgxgen/pkg/sqlc/quickdb/v1"
 	"github.com/tkcrm/pgxgen/pkg/sqlc/sql/catalog"
 )
 
@@ -23,7 +22,7 @@ type Compiler struct {
 	parser   Parser
 	result   *Result
 	analyzer analyzer.Analyzer
-	client   pb.QuickClient
+	client   dbmanager.Client
 
 	schema []string
 }
@@ -32,10 +31,7 @@ func NewCompiler(conf config.SQL, combo config.CombinedSettings) (*Compiler, err
 	c := &Compiler{conf: conf, combo: combo}
 
 	if conf.Database != nil && conf.Database.Managed {
-		client, err := quickdb.NewClientFromConfig(combo.Global.Cloud)
-		if err != nil {
-			return nil, fmt.Errorf("client error: %w", err)
-		}
+		client := dbmanager.NewClient(combo.Global.Servers)
 		c.client = client
 	}
 
@@ -88,5 +84,8 @@ func (c *Compiler) Result() *Result {
 func (c *Compiler) Close(ctx context.Context) {
 	if c.analyzer != nil {
 		c.analyzer.Close(ctx)
+	}
+	if c.client != nil {
+		c.client.Close(ctx)
 	}
 }
