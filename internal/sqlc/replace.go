@@ -41,6 +41,7 @@ func (s *sqlc) replace(path string, fn replaceFunc) error {
 
 	formatedFileContent, err := imports.Process(path, []byte(result), nil)
 	if err != nil {
+		fmt.Println(result)
 		return fmt.Errorf("failed to format file content: %w", err)
 	}
 
@@ -81,6 +82,22 @@ type moveModelsData struct {
 	fileAst    *ast.File
 	filePath   string
 	importPath string
+}
+
+func (s *moveModelsData) extractTypes() []string {
+	var types []string
+
+	for _, decl := range s.fileAst.Decls {
+		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
+			for _, spec := range genDecl.Specs {
+				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
+					types = append(types, typeSpec.Name.Name)
+				}
+			}
+		}
+	}
+
+	return types
 }
 
 func replaceImports(fileBody string, sqlcModelParam config.SqlcModels, modelData *moveModelsData) (string, error) {
@@ -125,30 +142,79 @@ func replaceTypeInAST(node *ast.File, typeName, packageAlias string) bool {
 
 	ast.Inspect(node, func(n ast.Node) bool {
 		switch x := n.(type) {
-		case *ast.Ident:
-			if x.Name == typeName {
-				x.Name = packageAlias + "." + typeName
+		// Processing structure fields
+		case *ast.Field:
+			// Recursive replacement in complex types (pointers, slices, etc.)
+			if replaceTypeInExpr(x.Type, typeName, packageAlias) {
+				replaced = true
+			}
+
+		// Handling parameters and return types of functions
+		case *ast.FuncType:
+			// Processing function parameters
+			for _, param := range x.Params.List {
+				if replaceTypeInExpr(param.Type, typeName, packageAlias) {
+					replaced = true
+				}
+			}
+			// Processing the return values of the function
+			if x.Results != nil {
+				for _, result := range x.Results.List {
+					if replaceTypeInExpr(result.Type, typeName, packageAlias) {
+						replaced = true
+					}
+				}
+			}
+
+		// Handling assignments and function calls within a function body
+		case *ast.AssignStmt:
+			for _, expr := range x.Rhs {
+				if replaceTypeInExpr(expr, typeName, packageAlias) {
+					replaced = true
+				}
+			}
+		case *ast.CallExpr:
+			for _, arg := range x.Args {
+				if replaceTypeInExpr(arg, typeName, packageAlias) {
+					replaced = true
+				}
+			}
+
+		// Handling variables and constants
+		case *ast.ValueSpec:
+			if replaceTypeInExpr(x.Type, typeName, packageAlias) {
+				replaced = true
+			}
+
+		// Processing type definition
+		case *ast.TypeSpec:
+			if replaceTypeInExpr(x.Type, typeName, packageAlias) {
 				replaced = true
 			}
 		}
+
 		return true
 	})
 
 	return replaced
 }
 
-func (s *moveModelsData) extractTypes() []string {
-	var types []string
-
-	for _, decl := range s.fileAst.Decls {
-		if genDecl, ok := decl.(*ast.GenDecl); ok && genDecl.Tok == token.TYPE {
-			for _, spec := range genDecl.Specs {
-				if typeSpec, ok := spec.(*ast.TypeSpec); ok {
-					types = append(types, typeSpec.Name.Name)
-				}
-			}
+// replaceTypeInExpr replaces types in complex expressions (pointers, slices, arrays, etc.)
+func replaceTypeInExpr(expr ast.Expr, typeName, packageAlias string) bool {
+	switch e := expr.(type) {
+	case *ast.Ident:
+		if e.Name == typeName {
+			e.Name = packageAlias + "." + typeName
+			return true
 		}
+	case *ast.StarExpr:
+		return replaceTypeInExpr(e.X, typeName, packageAlias)
+	case *ast.ArrayType:
+		return replaceTypeInExpr(e.Elt, typeName, packageAlias)
+	case *ast.SliceExpr:
+		return replaceTypeInExpr(e.X, typeName, packageAlias)
+	case *ast.CompositeLit:
+		return replaceTypeInExpr(e.Type, typeName, packageAlias)
 	}
-
-	return types
+	return false
 }
