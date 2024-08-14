@@ -18,7 +18,7 @@ import (
 
 var (
 	appName = "pgxgen"
-	version = "v0.3.6"
+	version = "v0.3.7"
 )
 
 func getBuildVersion() string {
