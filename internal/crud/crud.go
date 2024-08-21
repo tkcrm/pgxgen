@@ -484,7 +484,7 @@ func (s *crud) processTotal(cfg config.CrudParams, p processParams) error {
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
-	p.builder.WriteString("SELECT count(*) as total FROM ")
+	p.builder.WriteString("SELECT count(1) as total FROM ")
 	p.builder.WriteString(p.table)
 	lastIndex := 1
 	if err := s.processWhereParam(p, METHOD_TOTAL, &lastIndex); err != nil {
@@ -502,13 +502,13 @@ func (s *crud) processExists(cfg config.CrudParams, p processParams) error {
 	}
 
 	p.builder.WriteString(fmt.Sprintf("-- name: %s :one\n", methodName))
-	p.builder.WriteString("SELECT EXISTS (SELECT * FROM ")
+	p.builder.WriteString("SELECT EXISTS (SELECT 1 FROM ")
 	p.builder.WriteString(p.table)
 	lastIndex := 1
 	if err := s.processWhereParam(p, METHOD_EXISTS, &lastIndex); err != nil {
 		return err
 	}
-	p.builder.WriteString(")::boolean;\n\n")
+	p.builder.WriteString(" LIMIT 1)::boolean;\n\n")
 
 	return nil
 }
