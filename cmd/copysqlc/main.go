@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,28 +13,29 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }
 
 func run() error {
 	var sqlcInternalPathFlag string
-	flag.StringVar(&sqlcInternalPathFlag, "path", "../../../dev/sqlc/internal", "path to local sqlc internal directory")
+	flag.StringVar(&sqlcInternalPathFlag, "path", "../sqlc/internal", "path to local sqlc internal directory")
 
 	flag.Parse()
 
 	sqlcInternalPath, err := filepath.Abs(sqlcInternalPathFlag)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get absolute path: %v", err)
 	}
 
 	if !utils.ExistsPath(sqlcInternalPath) {
-		log.Fatalf("sqlcInternalPath %s does not exists", sqlcInternalPath)
+		return fmt.Errorf("sqlcInternalPath %s does not exists", sqlcInternalPath)
 	}
 
 	pwdDir, err := os.Getwd()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get current working directory: %v", err)
 	}
 
 	sqlcPkgDir := filepath.Join(pwdDir, "pkg/sqlc")
@@ -45,12 +45,12 @@ func run() error {
 	// get catalog.go file content to buffer
 	catalogGoFileContent, err := utils.ReadFile(catalogGoPathFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to read catalog go file: %v", err)
 	}
 	defer func() {
 		// restore catalog.go
 		if err := restoreCatalogGo(catalogGoPath, catalogGoFileContent); err != nil {
-			log.Printf("failed to restore catalog go file: %v", err)
+			fmt.Printf("failed to restore catalog go file: %v\n", err)
 		}
 	}()
 
