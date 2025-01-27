@@ -10,7 +10,7 @@ import templruntime "github.com/a-h/templ/runtime"
 
 import (
 	"fmt"
-	"github.com/gobeam/stringy"
+	"github.com/tkcrm/pgxgen/utils"
 	"strings"
 )
 
@@ -102,7 +102,7 @@ func (s ColumnNames) Strings() []string {
 	content.WriteString(")\n\n")
 
 	for _, tableName := range p.Tables {
-		content.WriteString(fmt.Sprintf("func %sColumnNames() ColumnNames {\n", stringy.New(stringy.New(tableName.Name).CamelCase().Get()).UcFirst()))
+		content.WriteString(fmt.Sprintf("func %sColumnNames() ColumnNames {\n", utils.ToPascalCase(tableName.Name)))
 		content.WriteString("return ColumnNames{\n")
 		for _, item := range p.GetColumnsForTable(tableName.Name) {
 			content.WriteString(fmt.Sprintf("ColumnName%s,\n", item.NamePreffix))
