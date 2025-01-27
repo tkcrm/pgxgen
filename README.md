@@ -16,7 +16,7 @@ pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional impro
 
 ### Requirements
 
-- `Go 1.22.2+`
+- `Go 1.23+`
 
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
