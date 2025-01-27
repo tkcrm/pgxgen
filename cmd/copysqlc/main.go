@@ -20,7 +20,7 @@ func main() {
 
 func run() error {
 	var sqlcInternalPathFlag string
-	flag.StringVar(&sqlcInternalPathFlag, "path", "../../../dev/sqlc/internal", "path to sqlc internal repository")
+	flag.StringVar(&sqlcInternalPathFlag, "path", "../../../dev/sqlc/internal", "path to local sqlc internal directory")
 
 	flag.Parse()
 
@@ -47,34 +47,26 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
-	// delete old files
-	if err := deleteOldFiles(sqlcPkgDir); err != nil {
+	defer func() {
+		// restore catalog.go
 		if err := restoreCatalogGo(catalogGoPath, catalogGoFileContent); err != nil {
 			log.Printf("failed to restore catalog go file: %v", err)
 		}
+	}()
+
+	// delete old files
+	if err := deleteOldFiles(sqlcPkgDir); err != nil {
 		return fmt.Errorf("failed to delete old files: %v", err)
 	}
 
 	// copy new files
 	if err := copyFiles(sqlcInternalPath, sqlcPkgDir); err != nil {
-		if err := restoreCatalogGo(catalogGoPath, catalogGoFileContent); err != nil {
-			log.Printf("failed to restore catalog go file: %v", err)
-		}
 		return fmt.Errorf("failed to copy new files: %v", err)
 	}
 
 	// rename go package
 	if err := renameGoPackage(sqlcPkgDir); err != nil {
-		if err := restoreCatalogGo(catalogGoPath, catalogGoFileContent); err != nil {
-			log.Printf("failed to restore catalog go file: %v", err)
-		}
 		return fmt.Errorf("failed to rename go package: %v", err)
-	}
-
-	// restore catalog.go
-	if err := restoreCatalogGo(catalogGoPath, catalogGoFileContent); err != nil {
-		log.Printf("failed to restore catalog go file: %v", err)
 	}
 
 	fmt.Println("files successfully copied")
