@@ -12,10 +12,13 @@ test:
 	go test -v ./...
 
 copysqlc:
-	go run cmd/copysqlc/main.go
+	go run cmd/copysqlc/main.go $(filter-out $@,$(MAKECMDGOALS))
 
 fmt:
 	gofumpt -l -w .
 
 gen:
 	@templ generate
+
+%:
+	@:
