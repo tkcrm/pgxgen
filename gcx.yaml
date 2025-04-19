@@ -16,8 +16,3 @@ builds:
       - -trimpath
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.buildDate={{.Date}}
-
-archives:
-  - formats:
-      - tar.gz
-    name_template: "pgxgen_{{.Version}}_{{.Os}}_{{.Arch}}"

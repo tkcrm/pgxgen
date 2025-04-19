@@ -36,7 +36,7 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 ### Or Install via script
 
 ```bash
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/tkcrm/pgxgen/refs/heads/master/scripts/install.sh)"
+/bin/bash -c "$(curl -fsSL 'https://raw.githubusercontent.com/tkcrm/pgxgen/refs/heads/master/scripts/install.sh)'"
 ```
 
 ## Usage
