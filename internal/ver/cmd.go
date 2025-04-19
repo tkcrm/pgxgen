@@ -9,7 +9,7 @@ import (
 )
 
 func CmdFunc(c *cli.Context, l logger.Logger, cfg config.Config) error {
-	resp, err := CheckLastestReleaseVersion(c.Context, cfg.Pgxgen.Version)
+	resp, err := CheckAndUpdateVersion(c.Context, cfg.Pgxgen.Version)
 	if err != nil {
 		return fmt.Errorf("check latest release version error: %s", err)
 	}

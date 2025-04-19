@@ -79,11 +79,10 @@ tar -xzf "$ASSET_NAME" || {
 echo "Removing archive $ASSET_NAME..."
 rm "$ASSET_NAME"
 
-# Find the extracted binary file recursively, excluding the archive
-EXTRACTED_BINARY=$(find . -type f -name "${TARGET_BINARY}*" ! -name "*.tar.gz" | head -n 1)
-
-if [ -z "$EXTRACTED_BINARY" ]; then
-  echo "Error: No binary file found after extraction."
+# Find the extracted binary file in current directory
+EXTRACTED_BINARY="${TARGET_BINARY}_${PLATFORM}_${ARCH}"
+if [ ! -f "$EXTRACTED_BINARY" ]; then
+  echo "Error: Binary file $EXTRACTED_BINARY not found in current directory."
   exit 1
 fi
 

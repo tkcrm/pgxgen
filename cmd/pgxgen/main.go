@@ -18,7 +18,7 @@ import (
 
 var (
 	appName = "pgxgen"
-	version = "v0.3.8"
+	version = "v0.3.10"
 )
 
 func getBuildVersion() string {
@@ -120,8 +120,8 @@ func main() {
 				},
 			},
 			{
-				Name:  "check-version",
-				Usage: "Check for a new version",
+				Name:  "update",
+				Usage: "Update pgxgen to the latest version",
 				Action: func(c *cli.Context) error {
 					cfg, err := loadConfig(c)
 					if err != nil {

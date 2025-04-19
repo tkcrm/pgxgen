@@ -34,10 +34,8 @@ _test
 # Visual Studio Code
 .vscode
 
-#protos/*.go
 build
-.env
-Dockerfile-dev
+dist
 
 go.work
 go.work.sum
