@@ -18,8 +18,25 @@ pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional impro
 
 - `Go 1.23+`
 
+### From Source Code
+
+```bash
+git clone https://github.com/tkcrm/pgxgen.git
+cd pgxgen
+go build -o bin/pgxgen ./cmd/pgxgen
+sudo ./bin/pgxgen
+```
+
+### Or Install via go install
+
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
+```
+
+### Or Install via script
+
+```bash
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/tkcrm/pgxgen/refs/heads/master/scripts/install.sh)"
 ```
 
 ## Usage
