@@ -68,12 +68,6 @@ fi
 echo "Downloading binary from $ASSET_URL"
 curl -L --silent -o "$ASSET_NAME" "$ASSET_URL"
 
-# Ensure the extracted file is executable
-if [ ! -x "$ASSET_NAME" ]; then
-  echo "Error: Extracted file is not executable."
-  exit 1
-fi
-
 # Check install directory
 if [ ! -d "$INSTALL_DIR" ]; then
   echo "Directory $INSTALL_DIR does not exist."
