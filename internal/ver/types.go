@@ -10,6 +10,11 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 Current version: %s
 Latest version: %s`
 
+type GithubAsset struct {
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+}
+
 type GithubLatestRelesaseResponse struct {
 	URL       string `json:"url"`
 	AssetsURL string `json:"assets_url"`
@@ -44,7 +49,7 @@ type GithubLatestRelesaseResponse struct {
 	Prerelease      bool          `json:"prerelease"`
 	CreatedAt       time.Time     `json:"created_at"`
 	PublishedAt     time.Time     `json:"published_at"`
-	Assets          []interface{} `json:"assets"`
+	Assets          []GithubAsset `json:"assets"`
 	TarballURL      string        `json:"tarball_url"`
 	ZipballURL      string        `json:"zipball_url"`
 	Body            string        `json:"body"`

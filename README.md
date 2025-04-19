@@ -41,22 +41,16 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 
 ## Usage
 
-### Help
-
-Print all available commands
-
 ```text
-pgxgen help
-
 COMMANDS:
-   crud           Generate crud sqls
-   gomodels       Generate golang models based on existed structs
-   keystone       Generate mobx keystone models
-   ts             Generate types for typescript, based on go structs
-   sqlc           Generate sqlc code
-   check-version  Check for a new version
-   version        Print the version
-   help, h        Shows a list of commands or help for one command
+   crud      Generate crud sql's
+   gomodels  Generate golang models based on existed structs
+   keystone  Generate mobx keystone models
+   ts        Generate types for typescript, based on go structs
+   sqlc      Generate sqlc code
+   update    Update pgxgen to the latest version
+   version   Print the version
+   help, h   Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
    --pgxgen-config value  Absolute or relative path to pgxgen.yaml file (default: "pgxgen.yaml")
