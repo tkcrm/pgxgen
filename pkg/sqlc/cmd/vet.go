@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/tkcrm/pgxgen/pkg/sqlc/constants"
 	"io"
 	"log"
 	"os"
@@ -14,8 +15,6 @@ import (
 	"slices"
 	"strings"
 	"time"
-
-	"github.com/tkcrm/pgxgen/pkg/sqlc/constants"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/google/cel-go/cel"

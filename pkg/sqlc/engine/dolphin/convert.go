@@ -727,10 +727,6 @@ func (c *cc) convertCaseExpr(n *pcast.CaseExpr) ast.Node {
 	}
 }
 
-func (c *cc) convertChangeStmt(n *pcast.ChangeStmt) ast.Node {
-	return todo(n)
-}
-
 func (c *cc) convertCleanupTableLockStmt(n *pcast.CleanupTableLockStmt) ast.Node {
 	return todo(n)
 }
@@ -993,7 +989,30 @@ func (c *cc) convertLockTablesStmt(n *pcast.LockTablesStmt) ast.Node {
 }
 
 func (c *cc) convertMatchAgainst(n *pcast.MatchAgainst) ast.Node {
-	return todo(n)
+	searchTerm := c.convert(n.Against)
+
+	stringSearchTerm := &ast.TypeCast{
+		Arg: searchTerm,
+		TypeName: &ast.TypeName{
+			Name: "text", // Use 'text' type which maps to string in Go
+		},
+		Location: n.OriginTextPosition(),
+	}
+
+	matchOperation := &ast.A_Const{
+		Val: &ast.String{Str: "MATCH_AGAINST"},
+	}
+
+	return &ast.A_Expr{
+		Name: &ast.List{
+			Items: []ast.Node{
+				&ast.String{Str: "AGAINST"},
+			},
+		},
+		Lexpr:    matchOperation,
+		Rexpr:    stringSearchTerm,
+		Location: n.OriginTextPosition(),
+	}
 }
 
 func (c *cc) convertMaxValueExpr(n *pcast.MaxValueExpr) ast.Node {
@@ -1182,7 +1201,12 @@ func (c *cc) convertSetOprType(n *pcast.SetOprType) (op ast.SetOperation, all bo
 func (c *cc) convertSetOprSelectList(n *pcast.SetOprSelectList) ast.Node {
 	selectStmts := make([]*ast.SelectStmt, len(n.Selects))
 	for i, node := range n.Selects {
-		selectStmts[i] = c.convertSelectStmt(node.(*pcast.SelectStmt))
+		switch node := node.(type) {
+		case *pcast.SelectStmt:
+			selectStmts[i] = c.convertSelectStmt(node)
+		case *pcast.SetOprSelectList:
+			selectStmts[i] = c.convertSetOprSelectList(node).(*ast.SelectStmt)
+		}
 	}
 
 	op, all := c.convertSetOprType(n.AfterSetOperator)
@@ -1495,9 +1519,6 @@ func (c *cc) convert(node pcast.Node) ast.Node {
 
 	case *pcast.CaseExpr:
 		return c.convertCaseExpr(n)
-
-	case *pcast.ChangeStmt:
-		return c.convertChangeStmt(n)
 
 	case *pcast.CleanupTableLockStmt:
 		return c.convertCleanupTableLockStmt(n)

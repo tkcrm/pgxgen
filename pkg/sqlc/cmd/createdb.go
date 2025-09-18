@@ -67,7 +67,7 @@ func CreateDB(ctx context.Context, dir, filename, querySetName string, o *Option
 	}
 
 	switch queryset.Engine {
-	case config.EngineMySQL, config.EngineSQLite:
+	case config.EngineMySQL:
 		// pass
 	case config.EnginePostgreSQL:
 		// pass
