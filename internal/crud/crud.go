@@ -182,7 +182,7 @@ func (s *crud) generateSQLForEachTable(crudParams config.CrudParams, params []ge
 
 			metaData := tablesData.getTableMetaData(tableName)
 			if metaData == nil {
-				return nil, fmt.Errorf("database does not exist table: \"%s\"", tableName)
+				return nil, fmt.Errorf("database does not exist table: %s", tableName)
 			}
 
 			// Sort methods

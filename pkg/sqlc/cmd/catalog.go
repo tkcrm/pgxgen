@@ -146,7 +146,7 @@ func GetCatalogs(configFilePath string) (res GetCatalogResult, err error) {
 			}
 
 			c.Catalog().Schemas = utils.FilterArray(c.Catalog().Schemas, func(i *catalog.Schema) bool {
-				return i.Name == "public"
+				return i.Name == c.Catalog().DefaultSchema
 			})
 
 			item := GetCatalogResultItem{
