@@ -305,10 +305,16 @@ func (s *crud) processCreate(cfg config.CrudParams, p processParams) error {
 		}
 
 		switch p.engine {
-		case EnginesPostgres:
-			p.builder.WriteString(fmt.Sprintf("$%d", lastIndex))
-		case EnginesMysql:
-			p.builder.WriteString("?")
+		case EngineTypePostgres:
+			_, err := fmt.Fprintf(p.builder, "$%d", lastIndex)
+			if err != nil {
+				return err
+			}
+		case EngineTypeMysql, EngineTypeSqlite:
+			_, err := fmt.Fprintf(p.builder, "?")
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("engine %s is not supported", p.engine)
 		}
@@ -368,10 +374,16 @@ func (s *crud) processUpdate(cfg config.CrudParams, p processParams) error {
 		}
 
 		switch p.engine {
-		case EnginesPostgres:
-			p.builder.WriteString(fmt.Sprintf("%s=$%d", name, lastIndex))
-		case EnginesMysql:
-			p.builder.WriteString(fmt.Sprintf("%s=?", name))
+		case EngineTypePostgres:
+			_, err := fmt.Fprintf(p.builder, "%s=$%d", name, lastIndex)
+			if err != nil {
+				return err
+			}
+		case EngineTypeMysql, EngineTypeSqlite:
+			_, err := fmt.Fprintf(p.builder, "%s=?", name)
+			if err != nil {
+				return err
+			}
 		default:
 			return fmt.Errorf("engine %s is not supported", p.engine)
 		}
@@ -549,10 +561,16 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 				}
 
 				switch p.engine {
-				case EnginesPostgres:
-					p.builder.WriteString(fmt.Sprintf("%s%s$%d", param, operator, *lastIndex))
-				case EnginesMysql:
-					p.builder.WriteString(fmt.Sprintf("%s%s?", param, operator))
+				case EngineTypePostgres:
+					_, err := fmt.Fprintf(p.builder, "%s%s$%d", param, operator, *lastIndex)
+					if err != nil {
+						return err
+					}
+				case EngineTypeMysql, EngineTypeSqlite:
+					_, err := fmt.Fprintf(p.builder, "%s%s?", param, operator)
+					if err != nil {
+						return err
+					}
 				default:
 					return fmt.Errorf("engine %s is not supported", p.engine)
 				}

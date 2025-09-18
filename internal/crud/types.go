@@ -34,22 +34,23 @@ func (t tables) getTableMetaData(tableName string) *tableMetaData {
 
 type engineType string
 
+const (
+	EngineTypePostgres engineType = "postgresql"
+	EngineTypeMysql    engineType = "mysql"
+	EngineTypeSqlite   engineType = "sqlite"
+)
+
 func (e engineType) String() string {
 	return string(e)
 }
 
 func (s engineType) Valid() bool {
 	switch s {
-	case EnginesPostgres, EnginesMysql:
+	case EngineTypePostgres, EngineTypeMysql, EngineTypeSqlite:
 		return true
 	}
 	return false
 }
-
-const (
-	EnginesPostgres engineType = "postgresql"
-	EnginesMysql    engineType = "mysql"
-)
 
 type processParams struct {
 	builder      *strings.Builder
