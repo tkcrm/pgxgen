@@ -1,6 +1,6 @@
 module github.com/tkcrm/pgxgen
 
-go 1.24.0
+go 1.25.1
 
 require (
 	github.com/cubicdaiya/gonp v1.0.4

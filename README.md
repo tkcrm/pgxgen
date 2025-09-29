@@ -2,7 +2,6 @@
 
 pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional improvements.
 
-- Instead null types like `sql.NullString` used nil type `*string` by default
 - Generate CRUD for existing tables in postgresql database
 - Json tags: Omit empty and hide
 - Use Sqlc only for generating models
@@ -16,7 +15,7 @@ pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional impro
 
 ### Requirements
 
-- `Go 1.23+`
+- `Go 1.25+`
 
 ### From Source Code
 

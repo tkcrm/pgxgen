@@ -49,11 +49,11 @@ ASSET_NAME=$(echo "$RELEASE_INFO" | jq -r --arg platform "$PLATFORM" --arg arch 
 ')
 
 if [ -z "$ASSET_NAME" ]; then
-  echo "No binary found for platform $PLATFORM and architecture $ARCH"
+  echo "No archive found for platform $PLATFORM and architecture $ARCH"
   exit 1
 fi
 
-echo "Found binary: $ASSET_NAME"
+echo "Found archive: $ASSET_NAME"
 
 # Get the download URL for the asset
 ASSET_URL=$(echo "$RELEASE_INFO" | jq -r --arg asset "$ASSET_NAME" '
@@ -68,14 +68,45 @@ fi
 echo "Downloading binary from $ASSET_URL"
 curl -L --silent -o "$ASSET_NAME" "$ASSET_URL"
 
+# Extract the archive
+echo "Extracting archive..."
+tar -xzf "$ASSET_NAME" || {
+  echo "Failed to extract archive."
+  exit 1
+}
+
+# Remove the downloaded archive after extraction
+echo "Removing archive $ASSET_NAME..."
+rm "$ASSET_NAME"
+
+# The extracted directory name matches the archive name without .tar.gz
+EXTRACTED_DIR="${ASSET_NAME%.tar.gz}"
+BINARY_PATH="${EXTRACTED_DIR}/${TARGET_BINARY}"
+
+if [ ! -f "$BINARY_PATH" ]; then
+  echo "Error: Binary file $BINARY_PATH not found after extraction."
+  exit 1
+fi
+
+echo "Found binary at: $BINARY_PATH"
+
+# Move the binary from subdirectory to current directory
+mv "$BINARY_PATH" "$TARGET_BINARY"
+
+# Remove the extracted directory
+rm -rf "$EXTRACTED_DIR"
+
+# Ensure the binary is executable
+if [ ! -x "$TARGET_BINARY" ]; then
+  echo "Error: Binary file is not executable."
+  exit 1
+fi
+
 # Check install directory
 if [ ! -d "$INSTALL_DIR" ]; then
   echo "Directory $INSTALL_DIR does not exist."
   exit 1
 fi
-
-echo "Renaming $ASSET_NAME to $TARGET_BINARY..."
-mv "$ASSET_NAME" "$TARGET_BINARY"
 
 if [ -f "$INSTALL_DIR/$TARGET_BINARY" ]; then
   echo "Removing existing binary from $INSTALL_DIR..."

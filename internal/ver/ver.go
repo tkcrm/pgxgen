@@ -7,8 +7,10 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"golang.org/x/mod/semver"
@@ -90,7 +92,8 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	arch := runtime.GOARCH
 
 	// Form asset name
-	assetName := fmt.Sprintf("pgxgen_%s_%s", platform, arch)
+	dirName := fmt.Sprintf("pgxgen_v%s_%s_%s", strings.TrimPrefix(latestRelease.TagName, "v"), platform, arch)
+	assetName := dirName + ".tar.gz"
 
 	// Get download URL from release assets
 	var downloadURL string
@@ -117,44 +120,33 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	}
 
 	// Save archive
-	// archivePath := filepath.Join(tempDir, assetName)
-	// archiveFile, err := os.Create(archivePath)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to create archive file: %w", err)
-	// }
-	// defer archiveFile.Close()
+	archivePath := filepath.Join(tempDir, assetName)
+	archiveFile, err := os.Create(archivePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create archive file: %w", err)
+	}
+	defer archiveFile.Close()
 
-	// if _, err := io.Copy(archiveFile, downloadResp.Body); err != nil {
-	// 	return nil, fmt.Errorf("failed to save archive: %w", err)
-	// }
+	if _, err := io.Copy(archiveFile, downloadResp.Body); err != nil {
+		return nil, fmt.Errorf("failed to save archive: %w", err)
+	}
 
-	// // Extract archive
-	// cmd := exec.Command("tar", "-xzf", archivePath, "-C", tempDir)
-	// if err := cmd.Run(); err != nil {
-	// 	return nil, fmt.Errorf("failed to extract tar.gz archive: %w", err)
-	// }
+	// Extract archive
+	cmd := exec.Command("tar", "-xzf", archivePath, "-C", tempDir)
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("failed to extract tar.gz archive: %w", err)
+	}
 
 	// Find extracted binary
-	binaryName := fmt.Sprintf("pgxgen_%s_%s", platform, arch)
+	binaryName := "pgxgen"
 	if platform == "windows" {
 		binaryName += ".exe"
 	}
-
-	newBinaryPath := filepath.Join(tempDir, binaryName)
-
-	tempFile, err := os.Create(newBinaryPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer tempFile.Close()
-
-	if _, err := io.Copy(tempFile, downloadResp.Body); err != nil {
-		return nil, fmt.Errorf("failed to save binary bile: %w", err)
-	}
+	newBinaryPath := filepath.Join(tempDir, dirName, "pgxgen")
 
 	// Check if file exists
 	if _, err := os.Stat(newBinaryPath); err != nil {
-		return nil, fmt.Errorf("binary not found in temp dir: %w", err)
+		return nil, fmt.Errorf("binary not found in archive: %w", err)
 	}
 
 	// Make new binary executable
