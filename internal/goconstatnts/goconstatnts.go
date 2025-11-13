@@ -35,13 +35,20 @@ func New(logger logger.Logger, config config.Config) IGoConstants {
 const defaultConstatsFileName = "constants_gen.go"
 
 func (s *goConstants) GenerateConstants() error {
+	sqlcAbsFilePath, err := filepath.Abs(s.config.ConfigPaths.SqlcConfigFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to get sqlc config abs file path: %w", err)
+	}
+
+	sqlcDir := filepath.Dir(sqlcAbsFilePath)
+
 	for _, cfg := range s.config.Pgxgen.Sqlc {
 		if len(cfg.GoConstants.Tables) == 0 {
 			return nil
 		}
 
 		if err := cfg.Validate(); err != nil {
-			return err
+			return fmt.Errorf("validation error: %w", err)
 		}
 
 		s.logger.Infof("generate constants for schema: %s", cfg.SchemaDir)
@@ -54,25 +61,28 @@ func (s *goConstants) GenerateConstants() error {
 			for index, path := range s.config.Sqlc.GetPaths().OutPaths {
 				absPath1, err := filepath.Abs(table.OutputDir)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to get absolute path: %w", err)
 				}
 
 				absPath2, err := filepath.Abs(path)
 				if err != nil {
-					return err
+					return fmt.Errorf("failed to get absolute path: %w", err)
 				}
 				if absPath1 == absPath2 {
 					schemaDir = s.config.Sqlc.GetPaths().SchemaPaths[index]
 					break
 				}
 			}
+
+			schemaDir = filepath.Join(sqlcDir, schemaDir)
+
 			if schemaDir == "" {
-				return fmt.Errorf("can not find output dir for path: %s", table.OutputDir)
+				return fmt.Errorf("can not find schema dir for output dir: %s", table.OutputDir)
 			}
 
 			catalog, err := s.schema.GetSchema(s.config.ConfigPaths.SqlcConfigFilePath, schemaDir)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get schema: %w", err)
 			}
 
 			for _, schema := range catalog.Catalog.Schemas {
@@ -88,8 +98,10 @@ func (s *goConstants) GenerateConstants() error {
 						}
 					}
 
-					if err := params.addConstantItem(s.config.Pgxgen.Version, table.OutputDir, tableName, columnNames); err != nil {
-						return err
+					outputDir := filepath.Join(sqlcDir, table.OutputDir)
+
+					if err := params.addConstantItem(s.config.Pgxgen.Version, outputDir, tableName, columnNames); err != nil {
+						return fmt.Errorf("failed to add constant item: %w", err)
 					}
 				}
 			}
@@ -98,7 +110,7 @@ func (s *goConstants) GenerateConstants() error {
 		for outputDir, item := range params.ConstantsParams {
 			buf := new(bytes.Buffer)
 			if err := templates.Constatnts(item).Render(context.Background(), buf); err != nil {
-				return err
+				return fmt.Errorf("failed to render constants template: %w", err)
 			}
 
 			compiledRes, err := utils.UpdateGoImports(buf.Bytes())
