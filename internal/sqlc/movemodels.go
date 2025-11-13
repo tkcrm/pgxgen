@@ -21,14 +21,16 @@ func (s *sqlc) moveModels(
 	files []fs.DirEntry,
 	modelPath, modelFileDir, modelFileName string,
 ) error {
-	// move model file
-	currentDir, err := os.Getwd()
+	sqlcAbsFilePath, err := filepath.Abs(s.config.ConfigPaths.SqlcConfigFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get sqlc config abs file path: %w", err)
 	}
 
-	newPathDir := filepath.Join(currentDir, cfg.SqlcModels.Move.OutputDir)
-	oldPathDir := filepath.Join(currentDir, modelPath)
+	sqlcDir := filepath.Dir(sqlcAbsFilePath)
+
+	// move model file
+	newPathDir := filepath.Join(sqlcDir, cfg.SqlcModels.Move.OutputDir)
+	oldPathDir := filepath.Join(sqlcDir, modelPath)
 
 	modelFileStructs, alreadyMoved := (*modelsMoved)[cfg.SchemaDir]
 

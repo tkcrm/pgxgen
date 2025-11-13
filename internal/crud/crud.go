@@ -3,6 +3,7 @@ package crud
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -22,6 +23,8 @@ type crud struct {
 	logger   logger.Logger
 	config   config.Config
 	catalogs map[string]cmd.GetCatalogResultItem
+
+	pgxgenFileDir string
 }
 
 func New(logger logger.Logger, cfg config.Config) generator.IGenerator {
@@ -40,6 +43,13 @@ func (s *crud) Generate(_ context.Context, args []string) error {
 		if err := cfg.Validate(); err != nil {
 			return fmt.Errorf("config validation error: %w", err)
 		}
+
+		pgxgenAbsFilePath, err := filepath.Abs(s.config.ConfigPaths.PgxgenConfigFilePath)
+		if err != nil {
+			return fmt.Errorf("failed to get sqlc config abs file path: %w", err)
+		}
+
+		s.pgxgenFileDir = filepath.Dir(pgxgenAbsFilePath)
 
 		// get queries paths for current schema
 		queriesPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "queries")
@@ -628,8 +638,10 @@ func (s *crud) saveFile(cfg config.PgxgenSqlc, data []byte, tableName, path stri
 		return fmt.Errorf("empty table name")
 	}
 
+	outputDir := filepath.Join(s.pgxgenFileDir, path)
+
 	fileName := fmt.Sprintf("%s_gen.sql", tableName)
-	if err := utils.SaveFile(path, fileName, data); err != nil {
+	if err := utils.SaveFile(outputDir, fileName, data); err != nil {
 		return fmt.Errorf("SaveFile error: %w", err)
 	}
 
