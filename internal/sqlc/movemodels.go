@@ -1,6 +1,7 @@
 package sqlc
 
 import (
+	"bytes"
 	"fmt"
 	"go/format"
 	"go/parser"
@@ -75,8 +76,16 @@ func (s *sqlc) moveModels(
 		}
 		defer outputFile.Close()
 
-		// write file
-		if err := format.Node(outputFile, fset, node); err != nil {
+		// write file with comments added
+		var buf bytes.Buffer
+		if err := format.Node(&buf, fset, node); err != nil {
+			return fmt.Errorf("failed to format node: %w", err)
+		}
+
+		// Add @name comments to struct closing braces
+		output := addStructCommentsToText(buf.String())
+
+		if _, err := outputFile.WriteString(output); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
 		}
 
@@ -120,4 +129,13 @@ func (s *sqlc) moveModels(
 	(*modelsMoved)[cfg.SchemaDir] = modelFileStructs
 
 	return nil
+}
+
+// addStructCommentsToText adds @name comments to struct closing braces in text
+func addStructCommentsToText(content string) string {
+	// Match: type StructName struct { ... }
+	// Replace closing } with } // @name StructName
+	re := regexp.MustCompile(`(?s)type\s+(\w+)\s+struct\s*\{(.*?)\n\}`)
+	return re.ReplaceAllString(content, `type $1 struct {$2
+} // @name $1`)
 }
