@@ -82,8 +82,13 @@ func (s *sqlc) moveModels(
 			return fmt.Errorf("failed to format node: %w", err)
 		}
 
-		// Add @name comments to struct closing braces
-		output := addStructCommentsToText(buf.String())
+		var output string
+		if cfg.SqlcModels.IncludeStructComments {
+			// Add @name comments to struct closing braces
+			output = addStructCommentsToText(buf.String())
+		} else {
+			output = buf.String()
+		}
 
 		if _, err := outputFile.WriteString(output); err != nil {
 			return fmt.Errorf("failed to write file: %w", err)
