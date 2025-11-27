@@ -29,12 +29,12 @@ require (
 	github.com/google/cel-go v0.26.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/pganalyze/pg_query_go/v6 v6.1.0
-	github.com/pingcap/tidb/pkg/parser v0.0.0-20251113153032-42fc9552be13
+	github.com/pingcap/tidb/pkg/parser v0.0.0-20251127074526-25a5b9bacd00
 	github.com/stretchr/testify v1.11.1
 	github.com/tetratelabs/wazero v1.10.1
 	github.com/urfave/cli/v2 v2.27.7
 	github.com/wasilibs/go-pgquery v0.0.0-20250409022910-10ac41983c07
-	modernc.org/sqlite v1.40.0
+	modernc.org/sqlite v1.40.1
 )
 
 require (
@@ -54,9 +54,9 @@ require (
 	github.com/wasilibs/wazero-helpers v0.0.0-20250123031827-cd30c44769bb // indirect
 	github.com/xrash/smetrics v0.0.0-20250705151800-55b8f293f342 // indirect
 	golang.org/x/net v0.47.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20251111163417-95abcf5c77ba // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
-	modernc.org/libc v1.66.10 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20251124214823-79d6a2a48846 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251124214823-79d6a2a48846 // indirect
+	modernc.org/libc v1.67.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
@@ -78,12 +78,12 @@ require (
 	github.com/riza-io/grpc-go v0.2.0
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.27.1 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/exp v0.0.0-20251023183803-a4bb9ffd2546 // indirect
+	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39 // indirect
 	golang.org/x/mod v0.30.0
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/text v0.31.0
-	google.golang.org/grpc v1.76.0
+	google.golang.org/grpc v1.77.0
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )

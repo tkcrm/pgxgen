@@ -74,6 +74,8 @@ sqlc:
     models:
       # replace nullable types. ex: sql.NullInt32 -> *int32
       replace_sqlc_nullable_types: true
+      # include comments for structs. useful for swagger generation
+      include_struct_comments: false
       # move sqlc models to another package and directory
       move: # required
         output_dir: internal/models

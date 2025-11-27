@@ -28,6 +28,7 @@ func (s PgxgenSqlc) Validate() error {
 
 type SqlcModels struct {
 	ReplaceSqlcNullableTypes bool           `yaml:"replace_sqlc_nullable_types"`
+	IncludeStructComments    bool           `yaml:"include_struct_comments"`
 	Move                     SqlcModelsMove `yaml:"move"`
 }
 
