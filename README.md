@@ -1,5 +1,10 @@
 # pgxgen
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/tkcrm/pgxgen.svg)](https://pkg.go.dev/github.com/tkcrm/pgxgen)
+[![Go Version](https://img.shields.io/badge/go-1.25-blue)](https://go.dev/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tkcrm/pgxgen)](https://goreportcard.com/report/github.com/tkcrm/pgxgen)
+[![License](https://img.shields.io/github/license/tkcrm/pgxgen)](LICENSE)
+
 pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional improvements.
 
 - Generate CRUD for existing tables in postgresql database
