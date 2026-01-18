@@ -1,0 +1,599 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "pgxgen configuration",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "string",
+      "enum": ["1"],
+      "description": "Configuration version"
+    },
+    "sqlc": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/sqlcConfig"
+      }
+    },
+    "gen_models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/genModelsConfig"
+      }
+    },
+    "gen_keystone_models": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/genKeystoneModelsConfig"
+      }
+    },
+    "gen_typescript_from_structs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/genTypescriptConfig"
+      }
+    }
+  },
+  "definitions": {
+    "sqlcConfig": {
+      "type": "object",
+      "properties": {
+        "schema_dir": {
+          "type": "string",
+          "description": "Directory with migrations. Required."
+        },
+        "models": {
+          "$ref": "#/definitions/modelsConfig"
+        },
+        "crud": {
+          "$ref": "#/definitions/crudConfig"
+        },
+        "constants": {
+          "$ref": "#/definitions/constantsConfig"
+        }
+      },
+      "required": ["schema_dir"]
+    },
+    "modelsConfig": {
+      "type": "object",
+      "properties": {
+        "replace_sqlc_nullable_types": {
+          "type": "boolean",
+          "description": "Replace nullable types. Ex: sql.NullInt32 -> *int32"
+        },
+        "include_struct_comments": {
+          "type": "boolean",
+          "description": "Include comments for structs. Useful for swagger generation"
+        },
+        "move": {
+          "type": "object",
+          "properties": {
+            "output_dir": {
+              "type": "string",
+              "description": "Output directory for models"
+            },
+            "output_file_name": {
+              "type": "string",
+              "description": "Output file name. Default: models.go"
+            },
+            "package_name": {
+              "type": "string",
+              "description": "New package name. By default based on output_dir"
+            },
+            "package_path": {
+              "type": "string",
+              "description": "Full path to new models directory. Required."
+            },
+            "imports": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string",
+                    "description": "Import path. Required."
+                  },
+                  "go_type": {
+                    "type": "string",
+                    "description": "Use path if this type detected in file"
+                  }
+                },
+                "required": ["path"]
+              }
+            }
+          },
+          "required": ["output_dir", "package_path"]
+        }
+      }
+    },
+    "crudConfig": {
+      "type": "object",
+      "properties": {
+        "auto_remove_generated_files": {
+          "type": "boolean",
+          "description": "Auto remove generated files ending with _gen.sql"
+        },
+        "exclude_table_name_from_methods": {
+          "type": "boolean",
+          "description": "Instead [ActionName][TableName] will be [ActionName]. Example: GetUser -> Get"
+        },
+        "tables": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/tableConfig"
+          }
+        }
+      }
+    },
+    "tableConfig": {
+      "type": "object",
+      "properties": {
+        "output_dir": {
+          "type": "string",
+          "description": "Output directory for generated SQL"
+        },
+        "primary_column": {
+          "type": "string",
+          "description": "Primary key column name"
+        },
+        "methods": {
+          "type": "object",
+          "properties": {
+            "get": {
+              "$ref": "#/definitions/getMethodConfig"
+            },
+            "find": {
+              "$ref": "#/definitions/findMethodConfig"
+            },
+            "create": {
+              "$ref": "#/definitions/createMethodConfig"
+            },
+            "update": {
+              "$ref": "#/definitions/updateMethodConfig"
+            },
+            "delete": {
+              "$ref": "#/definitions/deleteMethodConfig"
+            },
+            "total": {
+              "$ref": "#/definitions/totalMethodConfig"
+            },
+            "exists": {
+              "$ref": "#/definitions/existsMethodConfig"
+            }
+          },
+          "additionalProperties": {
+            "$ref": "#/definitions/customMethodConfig"
+          }
+        }
+      }
+    },
+    "getMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        }
+      }
+    },
+    "findMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        },
+        "skip_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to skip in result"
+        },
+        "where": {
+          "$ref": "#/definitions/whereConfig"
+        },
+        "where_additional": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional WHERE clauses"
+        },
+        "order": {
+          "$ref": "#/definitions/orderConfig"
+        },
+        "limit": {
+          "type": "boolean",
+          "description": "Enable LIMIT parameter"
+        },
+        "offset": {
+          "type": "boolean",
+          "description": "Enable OFFSET parameter"
+        }
+      }
+    },
+    "createMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        },
+        "skip_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to skip in INSERT"
+        },
+        "column_values": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Default column values. Ex: created_at: now()"
+        },
+        "returning": {
+          "type": "string",
+          "description": "RETURNING clause. Use '*' for all columns"
+        }
+      }
+    },
+    "updateMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        },
+        "skip_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columns to skip in UPDATE"
+        },
+        "column_values": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Default column values. Ex: updated_at: now()"
+        },
+        "returning": {
+          "type": "string",
+          "description": "RETURNING clause. Use '*' for all columns"
+        }
+      }
+    },
+    "deleteMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        }
+      }
+    },
+    "totalMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        }
+      }
+    },
+    "existsMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        },
+        "where": {
+          "$ref": "#/definitions/whereConfig"
+        }
+      }
+    },
+    "customMethodConfig": {
+      "type": ["object", "null"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Custom method name"
+        },
+        "skip_columns": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "where": {
+          "$ref": "#/definitions/whereConfig"
+        },
+        "where_additional": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "order": {
+          "$ref": "#/definitions/orderConfig"
+        },
+        "limit": {
+          "type": "boolean"
+        },
+        "offset": {
+          "type": "boolean"
+        },
+        "column_values": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "returning": {
+          "type": "string"
+        }
+      }
+    },
+    "whereConfig": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "operator": {
+            "type": "string",
+            "description": "Comparison operator. Ex: '!=', '>', '<'"
+          },
+          "value": {
+            "type": "string",
+            "description": "Value or expression. Ex: 'IS NULL', '= $1'"
+          }
+        }
+      }
+    },
+    "orderConfig": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "type": "string",
+          "description": "Column to order by"
+        },
+        "direction": {
+          "type": "string",
+          "enum": ["ASC", "DESC"],
+          "description": "Sort direction"
+        }
+      }
+    },
+    "constantsConfig": {
+      "type": "object",
+      "properties": {
+        "tables": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "output_dir": {
+                "type": "string"
+              },
+              "include_column_names": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
+      }
+    },
+    "genModelsConfig": {
+      "type": "object",
+      "properties": {
+        "input_file_path": {
+          "type": "string",
+          "description": "Path to a specific file"
+        },
+        "input_dir": {
+          "type": "string",
+          "description": "Input directory. Will process all .go files"
+        },
+        "delete_original_files": {
+          "type": "boolean",
+          "description": "Delete specific file or all files in dir. Default: false"
+        },
+        "output_dir": {
+          "type": "string",
+          "description": "Output directory. Required."
+        },
+        "output_file_name": {
+          "type": "string",
+          "description": "Output file name. Required."
+        },
+        "package_name": {
+          "type": "string",
+          "description": "Package name. Default: last item in output_dir"
+        },
+        "imports": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional imports"
+        },
+        "use_uint_for_ids": {
+          "type": "boolean",
+          "description": "Use uint64 instead int64 for all fields ending with ID"
+        },
+        "use_uint_for_ids_exceptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "struct_name": { "type": "string" },
+              "field_names": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "add_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "struct_name": { "type": "string" },
+              "position": {
+                "type": "string",
+                "description": "Position: start, end, or 'after FieldName'"
+              },
+              "field_name": { "type": "string" },
+              "type": { "type": "string" },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "value": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "update_all_struct_fields": {
+          "type": "object",
+          "properties": {
+            "by_field": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/fieldUpdateConfig" }
+            },
+            "by_type": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/typeUpdateConfig" }
+            }
+          }
+        },
+        "update_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "struct_name": { "type": "string" },
+              "field_name": { "type": "string" },
+              "new_parameters": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "type": { "type": "string" },
+                  "match_with_current_tags": { "type": "boolean" },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": { "type": "string" },
+                        "value": { "type": "string" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "delete_fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "struct_name": { "type": "string" },
+              "field_names": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            }
+          }
+        },
+        "rename": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "exclude_structs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "struct_name": { "type": "string" }
+            }
+          }
+        },
+        "include_structs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "struct_name": { "type": "string" }
+            }
+          }
+        }
+      },
+      "required": ["output_dir", "output_file_name"]
+    },
+    "fieldUpdateConfig": {
+      "type": "object",
+      "properties": {
+        "field_name": { "type": "string" },
+        "new_field_name": { "type": "string" },
+        "new_type": { "type": "string" },
+        "match_with_current_tags": { "type": "boolean" },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "typeUpdateConfig": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string" },
+        "new_type": { "type": "string" },
+        "match_with_current_tags": { "type": "boolean" },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "value": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "genKeystoneModelsConfig": {
+      "type": "object",
+      "properties": {
+        "input_file_path": { "type": "string" },
+        "output_dir": { "type": "string" },
+        "output_file_name": { "type": "string" },
+        "decorator_model_name_prefix": { "type": "string" },
+        "with_setter": { "type": "boolean" },
+        "export_model_suffix": { "type": "string" },
+        "prettier_code": { "type": "boolean" },
+        "sort": { "type": "string" },
+        "skip_models": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "genTypescriptConfig": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "output_dir": { "type": "string" },
+        "output_file_name": { "type": "string" },
+        "prettier_code": { "type": "boolean" },
+        "export_type_prefix": { "type": "string" },
+        "export_type_suffix": { "type": "string" },
+        "include_struct_names_regexp": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "exclude_struct_names_regexp": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
