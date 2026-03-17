@@ -158,7 +158,7 @@ func (g *Generator) buildTemplateData(
 			templateFile = "delete"
 		}
 		where := cloneWhere(methodCfg.Where)
-		if tableConfig.PrimaryColumn != "" && len(where) == 0 {
+		if tableConfig.PrimaryColumn != "" {
 			if where == nil {
 				where = make(map[string]config.WhereParamConfig)
 			}
@@ -169,7 +169,7 @@ func (g *Generator) buildTemplateData(
 	case "get":
 		templateFile = "get"
 		where := cloneWhere(methodCfg.Where)
-		if tableConfig.PrimaryColumn != "" && len(where) == 0 {
+		if tableConfig.PrimaryColumn != "" {
 			if where == nil {
 				where = make(map[string]config.WhereParamConfig)
 			}
