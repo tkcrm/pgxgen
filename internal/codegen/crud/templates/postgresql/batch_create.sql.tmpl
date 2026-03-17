@@ -1,0 +1,4 @@
+-- name: {{ .MethodName }} :copyfrom
+INSERT INTO {{ .TableName }} ({{ joinNames .Columns }})
+VALUES ({{ joinPlaceholders .Columns }});
+

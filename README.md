@@ -5,210 +5,204 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/tkcrm/pgxgen)](https://goreportcard.com/report/github.com/tkcrm/pgxgen)
 [![License](https://img.shields.io/github/license/tkcrm/pgxgen)](LICENSE)
 
-pgxgen uses [`sqlc`](https://github.com/sqlc-dev/sqlc) with additional improvements.
+Code generation tool for PostgreSQL, MySQL, and SQLite. Generates CRUD SQL, Go models, and [sqlc](https://github.com/sqlc-dev/sqlc) query code from a single config file.
 
-- Generate CRUD SQL for existing tables (PostgreSQL, MySQL, SQLite)
-- Generate Go models for all tables from SQL schema
-- Json tags: Omit empty and hide
-- Update generated models with additional parameters: add / update fields and tags
+## Features
 
-> You can use [this repository](https://github.com/sxwebdev/pgxgen-example) which explains how to use `pgxgen` tool in your project
+- **One config** — `pgxgen.yaml` replaces both `pgxgen.yaml` and `sqlc.yaml`
+- **CRUD generation** — template-based SQL with soft delete, batch insert support
+- **Go models** — structs with json/db tags, custom tags, type overrides, enum generation
+- **sqlc integration** — auto-generates `sqlc.yaml` and runs sqlc
+- **Multi-engine** — PostgreSQL + MySQL + SQLite in one project
+- **Per-table repos** or **single repo** layout
+- **Watch mode**, **dry-run**, **validation**, **interactive init**
 
 ## Install
-
-### Requirements
-
-- `Go 1.26+`
-
-### From Source Code
-
-```bash
-git clone https://github.com/tkcrm/pgxgen.git
-cd pgxgen
-go build -o bin/pgxgen ./cmd/pgxgen
-sudo ./bin/pgxgen
-```
-
-### Or Install via go install
 
 ```bash
 go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 ```
 
-### Or Install via script
+Or from source:
 
 ```bash
-/bin/bash -c "$(curl -fsSL 'https://raw.githubusercontent.com/tkcrm/pgxgen/refs/heads/master/scripts/install.sh')"
+git clone https://github.com/tkcrm/pgxgen.git
+cd pgxgen && go build -o pgxgen ./cmd/pgxgen
 ```
 
-## Usage
+## Quick start
 
-```text
-COMMANDS:
-   crud               Generate crud sql's
-   generate models    Generate Go models for all tables from SQL schema
-   sqlc               Generate sqlc code
-   update             Update pgxgen to the latest version
-   version            Print the version
-   help, h            Shows a list of commands or help for one command
+```bash
+# Create config interactively
+pgxgen init
 
-GLOBAL OPTIONS:
-   --pgxgen-config value  Absolute or relative path to pgxgen.yaml file (default: "pgxgen.yaml")
-   --sqlc-config value    Absolute or relative path to sqlc.yaml file (default: "sqlc.yaml")
-   --help, -h             show help
-   --version, -v          print the version
+# Or generate an example config
+pgxgen example > pgxgen.yaml
+
+# Generate everything
+pgxgen generate
+
+# Preview without writing
+pgxgen generate --dry-run
 ```
 
-### Configure `pgxgen`
-
-At root of your project create a `pgxgen.yaml`. Example of configuration below.
-
-> You can specify a different name, but must use this flag: `--pgxgen-config [new_name.yaml]`
->
-> Example: `pgxgen --pgxgen-config pgxgen-new.yaml`
-
-```yaml
-version: "1"
-sqlc:
-  - # directory with migrations. required
-    schema_dir: sql/migrations
-    models:
-      # replace nullable types. ex: sql.NullInt32 -> *int32
-      replace_sqlc_nullable_types: true
-      # include comments for structs. useful for swagger generation
-      include_struct_comments: false
-      # move sqlc models to another package and directory
-      move: # required
-        output_dir: internal/models
-        # default: models.go
-        output_file_name: models_gen.go
-        # new package name. by default based on `output_dir`
-        package_name: models
-        # required. full path to new models directory
-        package_path: github.com/company/project/internal/models
-        # optional. add custom imports to generated code by sqlc
-        imports:
-          - path: github.com/company/project/internal/models # required
-            # optional. use path if this type detected in file
-            go_type: MyStruct
-
-    # generate crud sql for tables
-    crud:
-      # Auto remove generated files, ended with _gen.sql
-      auto_remove_generated_files: true
-      # Instead [ActionName][TableName] will be [ActionName]
-      # Example GetUser -> Get; FindUsers -> Find, etc.
-      # You can user `name` field for manual overwriting method name
-      exclude_table_name_from_methods: false
-      tables:
-        user:
-          # Not required. If you do not specify this value, then the sql file will be generated in each folder for all tables
-          output_dir: sql/queries/users
-          primary_column: id
-          methods:
-            # get
-            # find
-            # create
-            # update
-            # delete
-            # total
-            # exists
-            create:
-              skip_columns:
-                - id
-                - updated_at
-              column_values:
-                created_at: now()
-              returning: "*"
-            update:
-              skip_columns:
-                - id
-                - created_at
-              column_values:
-                updated_at: now()
-              returning: "*"
-            find:
-              where:
-                user_id:
-                  operator: "!="
-                deleted_at:
-                  value: "IS NULL"
-              where_additional:
-                - (NOT @is_is_active::boolean OR "is_active" = @is_active)
-              order:
-                by: created_at
-                direction: DESC
-              limit: true
-            get:
-              # Not required. By default this method will be GetUser
-              name: GetUserByID
-            delete:
-            total:
-            exists:
-              where:
-                email:
-
-    # go constants
-    constants:
-      tables:
-        users:
-          output_dir: internal/store/users/repo_users
-          include_column_names: true
-
-# generate Go models for all tables from SQL schema
-generate:
-  models:
-    - # directory with SQL schema/migration files. required
-      schema_dir: sql/migrations
-      # database engine: postgresql, mysql, sqlite. default: postgresql
-      engine: postgresql
-      # output directory for generated models. required
-      output_dir: internal/models
-      # output file name. default: models.go
-      output_file_name: models.go
-      # Go package name. required
-      package_name: models
-      # SQL driver package: pgx/v5, pgx/v4, database/sql. default: database/sql
-      sql_package: pgx/v5
-      # emit json struct tags
-      emit_json_tags: true
-      # emit db struct tags
-      emit_db_tags: true
-      # use pointers for nullable types instead of sql.Null*
-      emit_pointers_for_null: false
-```
-
-### Configure `sqlc`
-
-At root of your project create a `sqlc.yaml` file with the configuration described below.
-
-> Configuration available [here](https://docs.sqlc.dev/en/stable/reference/config.html)
-
-#### Configuration `sqlc.yaml` file example
-
-> You can specify a different name, but must use this flag: `--sqlc-config [new_name.yaml]`
->
-> Example: `pgxgen --sqlc-config sqlc-new.yaml`
+## Configuration
 
 ```yaml
 version: "2"
-sql:
-  - schema: "sql/migrations"
-    queries: "sql/queries"
-    engine: "postgresql"
-    gen:
-      go:
-        sql_package: "pgx/v5"
-        out: "internal/store"
-        emit_prepared_queries: false
-        emit_json_tags: true
-        emit_exported_queries: false
-        emit_db_tags: true
+
+schemas:
+  - name: main
+    engine: postgresql
+    schema_dir: sql/migrations
+
+    models:
+      output_dir: internal/models
+      output_file_name: models_gen.go
+      package_name: models
+      package_path: github.com/your-org/project/internal/models
+      replace_nullable_types: true
+      emit_json_tags: true
+      emit_db_tags: true
+
+    sqlc:
+      defaults:
+        sql_package: pgx/v5
         emit_interface: true
-        emit_exact_table_names: false
+        emit_json_tags: true
+        emit_db_tags: true
         emit_empty_slices: true
         emit_result_struct_pointers: true
-        emit_params_struct_pointers: false
         emit_enum_valid_method: true
         emit_all_enum_values: true
+      overrides:
+        rename: { d: Params }
+        types:
+          - db_type: uuid
+            go_type: "github.com/google/uuid.UUID"
+          - db_type: uuid
+            nullable: true
+            go_type: "github.com/google/uuid.NullUUID"
+        columns:
+          - column: users.email
+            go_struct_tag: 'validate:"required,email"'
+
+    defaults:
+      queries_dir_prefix: sql/queries
+      output_dir_prefix: internal/store/repos
+      crud:
+        auto_clean: true
+        exclude_table_name: true
+        methods:
+          create:
+            skip_columns: [id, updated_at]
+            returning: "*"
+            column_values: { created_at: "now()" }
+      constants:
+        include_column_names: true
+
+    tables:
+      users:
+        primary_column: id
+        # soft_delete:
+        #   column: deleted_at
+        crud:
+          methods:
+            create:
+              skip_columns: [id, updated_at]
+              column_values: { created_at: "now()" }
+              returning: "*"
+            update:
+              skip_columns: [id, created_at]
+              column_values: { updated_at: "now()" }
+              returning: "*"
+            get: { name: GetByID }
+            delete: {}
+            find:
+              order: { by: created_at, direction: DESC }
+              limit: true
+            total: {}
+            exists:
+              where: { email: {} }
 ```
+
+### Path patterns
+
+**Per-table repos** (each table gets its own directory):
+
+```yaml
+defaults:
+  queries_dir_prefix: sql/queries # → sql/queries/{table}
+  output_dir_prefix: internal/store/repos # → internal/store/repos/repo_{table}
+```
+
+**Single repo** (all tables in one directory):
+
+```yaml
+defaults:
+  queries_dir: sql/queries
+  output_dir: internal/store
+```
+
+### CRUD methods
+
+| Method         | SQL                                | sqlc type                          |
+| -------------- | ---------------------------------- | ---------------------------------- |
+| `create`       | INSERT                             | `:one` (with returning) or `:exec` |
+| `update`       | UPDATE                             | `:one` (with returning) or `:exec` |
+| `delete`       | DELETE (or UPDATE for soft delete) | `:exec`                            |
+| `get`          | SELECT ... LIMIT 1                 | `:one`                             |
+| `find`         | SELECT with WHERE, ORDER, LIMIT    | `:many`                            |
+| `total`        | SELECT count(1)                    | `:one`                             |
+| `exists`       | SELECT EXISTS                      | `:one`                             |
+| `batch_create` | INSERT (copyfrom/multi-values)     | `:copyfrom`                        |
+
+### Soft delete
+
+```yaml
+tables:
+  posts:
+    soft_delete:
+      column: deleted_at
+    crud:
+      methods:
+        delete: {} # → UPDATE SET deleted_at = now() WHERE id = $1
+        get: {} # → auto adds WHERE deleted_at IS NULL
+        find: {} # → auto adds WHERE deleted_at IS NULL
+```
+
+## Commands
+
+| Command                     | Description                                            |
+| --------------------------- | ------------------------------------------------------ |
+| `pgxgen generate`           | Generate everything (crud + models + sqlc + constants) |
+| `pgxgen generate crud`      | Generate CRUD SQL only                                 |
+| `pgxgen generate models`    | Generate Go models only                                |
+| `pgxgen generate --dry-run` | Preview changes without writing                        |
+| `pgxgen validate`           | Validate config and schema (for CI)                    |
+| `pgxgen watch`              | Watch schema files, regenerate on changes              |
+| `pgxgen init`               | Create config interactively                            |
+| `pgxgen example`            | Print example config with all features                 |
+| `pgxgen migrate`            | Migrate v1 config to v2                                |
+| `pgxgen update`             | Self-update to latest version                          |
+
+## Migration from v1
+
+```bash
+pgxgen migrate --in-place --sqlc-config sqlc.yaml
+rm sqlc.yaml
+pgxgen generate
+```
+
+## JSON Schema
+
+IDE autocompletion is available via [schemas/pgxgen-schema-v2.json](schemas/pgxgen-schema.json):
+
+```yaml
+# yaml-language-server: $schema=https://raw.githubusercontent.com/tkcrm/pgxgen/master/schemas/pgxgen-schema.json
+version: "2"
+```
+
+## License
+
+[MIT](LICENSE)

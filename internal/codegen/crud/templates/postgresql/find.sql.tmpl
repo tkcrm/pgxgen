@@ -1,0 +1,7 @@
+-- name: {{ .MethodName }} :many
+SELECT * FROM {{ .TableName }}
+{{- if .WhereClause }} {{ .WhereClause }}{{ end }}
+{{- if .SoftDeleteWhere }}{{ if .WhereClause }} AND {{ else }} WHERE {{ end }}{{ .SoftDeleteColumn }} IS NULL{{ end }}
+{{- if .OrderClause }} {{ .OrderClause }}{{ end }}
+{{- if .LimitClause }} {{ .LimitClause }}{{ end }};
+
