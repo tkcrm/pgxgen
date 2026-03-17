@@ -33,9 +33,12 @@ _test
 
 # Visual Studio Code
 .vscode
+.claude
 
 build
 dist
 
 go.work
 go.work.sum
+
+/pgxgen

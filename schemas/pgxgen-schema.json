@@ -20,18 +20,6 @@
         "$ref": "#/definitions/genModelsConfig"
       }
     },
-    "gen_keystone_models": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/genKeystoneModelsConfig"
-      }
-    },
-    "gen_typescript_from_structs": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/genTypescriptConfig"
-      }
-    }
   },
   "definitions": {
     "sqlcConfig": {
@@ -556,42 +544,6 @@
               "value": { "type": "string" }
             }
           }
-        }
-      }
-    },
-    "genKeystoneModelsConfig": {
-      "type": "object",
-      "properties": {
-        "input_file_path": { "type": "string" },
-        "output_dir": { "type": "string" },
-        "output_file_name": { "type": "string" },
-        "decorator_model_name_prefix": { "type": "string" },
-        "with_setter": { "type": "boolean" },
-        "export_model_suffix": { "type": "string" },
-        "prettier_code": { "type": "boolean" },
-        "sort": { "type": "string" },
-        "skip_models": {
-          "type": "array",
-          "items": { "type": "string" }
-        }
-      }
-    },
-    "genTypescriptConfig": {
-      "type": "object",
-      "properties": {
-        "path": { "type": "string" },
-        "output_dir": { "type": "string" },
-        "output_file_name": { "type": "string" },
-        "prettier_code": { "type": "boolean" },
-        "export_type_prefix": { "type": "string" },
-        "export_type_suffix": { "type": "string" },
-        "include_struct_names_regexp": {
-          "type": "array",
-          "items": { "type": "string" }
-        },
-        "exclude_struct_names_regexp": {
-          "type": "array",
-          "items": { "type": "string" }
         }
       }
     }

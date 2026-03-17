@@ -11,8 +11,6 @@ pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional impro
 - Json tags: Omit empty and hide
 - Use Sqlc only for generating models
 - Update generated models with additinal parameters: add / update fields and tags
-- Generate models for [`Mobx Keystone`](https://github.com/xaviergonz/mobx-keystone)
-- Generate typescript code based on go structs
 
 > You can use [this repository](https://github.com/sxwebdev/pgxgen-example) which explains how to use `pgxgen` tool in your project
 
@@ -49,8 +47,6 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 COMMANDS:
    crud      Generate crud sql's
    gomodels  Generate golang models based on existed structs
-   keystone  Generate mobx keystone models
-   ts        Generate types for typescript, based on go structs
    sqlc      Generate sqlc code
    update    Update pgxgen to the latest version
    version   Print the version
@@ -240,53 +236,6 @@ gen_models:
     include_structs:
       - struct_name: "User"
 
-gen_keystone_models:
-  - input_file_path: "internal/models/models_gen.go"
-    output_dir: "frontend/src/stores/models"
-    # default: models.ts
-    output_file_name: "models.ts"
-    # default: empty
-    decorator_model_name_prefix: "frontend/"
-    # set method .withSetter() for all fields
-    with_setter: true
-    export_model_suffix: "Model"
-    # prettier code. nodejs must be installed on your pc
-    prettier_code: true
-    # sort output models
-    # you can specify only those structures that need to be generated
-    # in the first place and omit all the rest
-    sort: "UserRole,Users"
-    # skip models
-    skip_models:
-      - NullUserRole
-    # params are currently unavailable
-    params:
-      - struct_name: "users"
-        field_name: "organization"
-        field_params:
-          - with_setter: false
-
-gen_typescript_from_structs:
-  - path: "pb"
-    output_dir: "frontend/src/stores/models"
-    output_file_name: "requests.d.ts"
-    prettier_code: true
-    export_type_prefix: "Store"
-    export_type_suffix: "Gen"
-    include_struct_names_regexp:
-      - "^\\w*Request$"
-      - "^\\w*Response$"
-    exclude_struct_names_regexp:
-      - "GetUserRequest"
-      - "GetOrganizationRequest"
-```
-
-### Install `@tkcrm/ui` in your frontend
-
-If you generate mobx keystone models install `@tkcrm/ui` in your frontend project
-
-```bash
-npm i @tkcrm/ui --save-dev
 ```
 
 ### Configure `sqlc`
