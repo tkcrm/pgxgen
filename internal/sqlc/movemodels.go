@@ -22,16 +22,16 @@ func (s *sqlc) moveModels(
 	files []fs.DirEntry,
 	modelPath, modelFileDir, modelFileName string,
 ) error {
-	sqlcAbsFilePath, err := filepath.Abs(s.config.ConfigPaths.SqlcConfigFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to get sqlc config abs file path: %w", err)
-	}
-
-	sqlcDir := filepath.Dir(sqlcAbsFilePath)
+	pgxgenConfigDir := filepath.Dir(s.config.ConfigPaths.PgxgenConfigFilePath)
 
 	// move model file
-	newPathDir := filepath.Join(sqlcDir, cfg.SqlcModels.Move.OutputDir)
-	oldPathDir := filepath.Join(sqlcDir, modelPath)
+	// cfg.SqlcModels.Move.OutputDir is relative to pgxgen config dir
+	newPathDir := resolveRelativePath(pgxgenConfigDir, cfg.SqlcModels.Move.OutputDir)
+	// modelPath is already resolved (absolute or relative to CWD) by GetPathsByScheme
+	oldPathDir, err := filepath.Abs(modelPath)
+	if err != nil {
+		return fmt.Errorf("failed to get abs model path: %w", err)
+	}
 
 	modelFileStructs, alreadyMoved := (*modelsMoved)[cfg.SchemaDir]
 
@@ -134,6 +134,13 @@ func (s *sqlc) moveModels(
 	(*modelsMoved)[cfg.SchemaDir] = modelFileStructs
 
 	return nil
+}
+
+func resolveRelativePath(baseDir, p string) string {
+	if baseDir == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(baseDir, p)
 }
 
 // addStructCommentsToText adds @name comments to struct closing braces in text

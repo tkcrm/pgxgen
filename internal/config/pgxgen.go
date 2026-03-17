@@ -5,9 +5,41 @@ import (
 )
 
 type Pgxgen struct {
-	Version                  string                     `yaml:"version"`
-	Sqlc                     []PgxgenSqlc               `yaml:"sqlc"`
-	GenModels []GenModels `yaml:"gen_models"`
+	Version  string         `yaml:"version"`
+	Sqlc     []PgxgenSqlc   `yaml:"sqlc"`
+	Generate GenerateConfig `yaml:"generate"`
+}
+
+type GenerateConfig struct {
+	Models []GenerateModelsConfig `yaml:"models"`
+}
+
+type GenerateModelsConfig struct {
+	SchemaDir           string `yaml:"schema_dir"`
+	Engine              string `yaml:"engine"`
+	OutputDir           string `yaml:"output_dir"`
+	OutputFileName      string `yaml:"output_file_name"`
+	PackageName         string `yaml:"package_name"`
+	SqlPackage          string `yaml:"sql_package"`
+	EmitJsonTags        bool   `yaml:"emit_json_tags"`
+	EmitDbTags          bool   `yaml:"emit_db_tags"`
+	EmitPointersForNull bool   `yaml:"emit_pointers_for_null"`
+}
+
+func (c GenerateModelsConfig) GetOutputFileName() string {
+	if c.OutputFileName != "" {
+		return c.OutputFileName
+	}
+	return "models.go"
+}
+
+func (c GenerateModelsConfig) Validate() error {
+	return validation.ValidateStruct(
+		&c,
+		validation.Field(&c.SchemaDir, validation.Required),
+		validation.Field(&c.OutputDir, validation.Required),
+		validation.Field(&c.PackageName, validation.Required),
+	)
 }
 
 type PgxgenSqlc struct {

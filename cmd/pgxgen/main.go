@@ -7,7 +7,7 @@ import (
 
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/crud"
-	"github.com/tkcrm/pgxgen/internal/gomodels"
+	"github.com/tkcrm/pgxgen/internal/genmodels"
 	"github.com/tkcrm/pgxgen/internal/sqlc"
 	"github.com/tkcrm/pgxgen/internal/ver"
 	"github.com/tkcrm/pgxgen/pkg/logger"
@@ -44,6 +44,14 @@ func loadConfig(c *cli.Context) (config.Config, error) {
 func main() {
 	logger := logger.New()
 
+	crudAction := func(c *cli.Context) error {
+		cfg, err := loadConfig(c)
+		if err != nil {
+			return err
+		}
+		return crud.CmdFunc(c, logger, cfg)
+	}
+
 	app := &cli.App{
 		Name:    appName,
 		Version: getBuildVersion(),
@@ -64,24 +72,32 @@ func main() {
 		Commands: []*cli.Command{
 			{
 				Name:  "crud",
-				Usage: "Generate crud sql's",
+				Usage: "DEPRECATED: use 'pgxgen generate crud' instead",
 				Action: func(c *cli.Context) error {
-					cfg, err := loadConfig(c)
-					if err != nil {
-						return err
-					}
-					return crud.CmdFunc(c, logger, cfg)
+					fmt.Fprintln(os.Stderr, "WARNING: 'pgxgen crud' is deprecated, use 'pgxgen generate crud' instead")
+					return crudAction(c)
 				},
 			},
 			{
-				Name:  "gomodels",
-				Usage: "Generate golang models based on existed structs",
-				Action: func(c *cli.Context) error {
-					cfg, err := loadConfig(c)
-					if err != nil {
-						return err
-					}
-					return gomodels.CmdFunc(c, logger, cfg)
+				Name:  "generate",
+				Usage: "Generate code from schema",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "crud",
+						Usage: "Generate crud sql's",
+						Action: crudAction,
+					},
+					{
+						Name:  "models",
+						Usage: "Generate Go models for all tables from SQL schema",
+						Action: func(c *cli.Context) error {
+							cfg, err := loadConfig(c)
+							if err != nil {
+								return err
+							}
+							return genmodels.CmdFunc(c, logger, cfg)
+						},
+					},
 				},
 			},
 			{
