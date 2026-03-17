@@ -18,7 +18,7 @@ pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional impro
 
 ### Requirements
 
-- `Go 1.25+`
+- `Go 1.26+`
 
 ### From Source Code
 
@@ -235,7 +235,6 @@ gen_models:
     # only the listed structures will be used
     include_structs:
       - struct_name: "User"
-
 ```
 
 ### Configure `sqlc`
