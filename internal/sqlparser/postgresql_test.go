@@ -372,7 +372,7 @@ func TestPostgresArrayColumns(t *testing.T) {
 
 func TestPostgresRealMigration(t *testing.T) {
 	// Use the existing testdata migration file
-	migrationPath := filepath.Join("..", "..", "testdata", "sql", "migrations", "000001_init_ddl.up.sql")
+	migrationPath := filepath.Join("..", "..", "testdata", "sql", "migrations", "postgres", "000001_init_ddl.up.sql")
 	if _, err := os.Stat(migrationPath); os.IsNotExist(err) {
 		t.Skip("migration file not found, skipping")
 	}

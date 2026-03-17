@@ -3,6 +3,7 @@ package sqlparser
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -316,14 +317,14 @@ func TestSqliteMultiFileMigrations(t *testing.T) {
 			body TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
-	`), 0644)
+	`), 0o644)
 
 	// Migration 2: add columns via ALTER TABLE
 	os.WriteFile(filepath.Join(dir, "002.sql"), []byte(`
 		ALTER TABLE todos ADD COLUMN workspace_id TEXT;
 		ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT 'none';
 		ALTER TABLE notes ADD COLUMN workspace_id TEXT;
-	`), 0644)
+	`), 0o644)
 
 	files, err := ResolveSchemaFiles(dir)
 	if err != nil {
@@ -360,23 +361,29 @@ func TestSqliteMultiFileMigrations(t *testing.T) {
 }
 
 func TestSqliteRealMigrations(t *testing.T) {
-	// Use the real testdata migration files
-	migDir := filepath.Join("..", "..", "testdata", "sql", "migrations")
+	migDir := filepath.Join("..", "..", "testdata", "sql", "migrations", "sqlite")
 	if _, err := os.Stat(migDir); os.IsNotExist(err) {
-		t.Skip("testdata migrations not found")
+		t.Skip("testdata sqlite migrations not found")
 	}
 
-	// Only use .up.sql files, sorted
-	entries, _ := os.ReadDir(migDir)
-	var files []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".up.sql") {
-			files = append(files, filepath.Join(migDir, e.Name()))
+	files, err := ResolveSchemaFiles(migDir)
+	if err != nil {
+		t.Fatalf("ResolveSchemaFiles error: %v", err)
+	}
+
+	// Filter only .up.sql
+	var upFiles []string
+	for _, f := range files {
+		if strings.HasSuffix(f, ".up.sql") {
+			upFiles = append(upFiles, f)
 		}
+	}
+	if len(upFiles) == 0 {
+		t.Skip("no SQLite .up.sql migration files found")
 	}
 
 	p := newSqliteParser()
-	cat, err := p.ParseSchema(files)
+	cat, err := p.ParseSchema(upFiles)
 	if err != nil {
 		t.Fatalf("ParseSchema error: %v", err)
 	}
@@ -390,11 +397,24 @@ func TestSqliteRealMigrations(t *testing.T) {
 		tableMap[table.Name] = cols
 	}
 
-	// todos should have: id, user_id, title, description, status, planned_date, completed_at,
-	//                     created_at, updated_at, workspace_id (from 3), priority (from 4),
-	//                     recurrence_rule (from 6), recurrence_parent_id (from 6)
+	// Verify all expected tables exist
+	expectedTables := []string{"inbox", "todos", "notes", "workspaces", "tags", "todo_tags", "note_tags"}
+	for _, name := range expectedTables {
+		if _, ok := tableMap[name]; !ok {
+			t.Errorf("missing table %q", name)
+		}
+	}
+
+	// todos: 9 original + workspace_id (from 3) + priority (from 4) + recurrence_rule + recurrence_parent_id (from 6) = 13
 	todoCols := tableMap["todos"]
-	expectedTodoCols := []string{"workspace_id", "priority", "recurrence_rule", "recurrence_parent_id"}
+	expectedTodoCols := []string{
+		"id", "user_id", "title", "description", "status", "planned_date", "completed_at",
+		"created_at", "updated_at",
+		"workspace_id", "priority", "recurrence_rule", "recurrence_parent_id",
+	}
+	if len(todoCols) != len(expectedTodoCols) {
+		t.Errorf("todos: expected %d columns, got %d: %v", len(expectedTodoCols), len(todoCols), todoCols)
+	}
 	for _, exp := range expectedTodoCols {
 		found := false
 		for _, c := range todoCols {
@@ -404,21 +424,36 @@ func TestSqliteRealMigrations(t *testing.T) {
 			}
 		}
 		if !found {
-			t.Errorf("todos: missing column %q (added via ALTER TABLE). Got columns: %v", exp, todoCols)
+			t.Errorf("todos: missing column %q. Got: %v", exp, todoCols)
 		}
 	}
 
-	// notes should have workspace_id from migration 3
+	// notes: 6 original + workspace_id (from 3) = 7
 	noteCols := tableMap["notes"]
-	found := false
-	for _, c := range noteCols {
-		if c == "workspace_id" {
-			found = true
-			break
+	expectedNoteCols := []string{"id", "user_id", "title", "body", "created_at", "updated_at", "workspace_id"}
+	if len(noteCols) != len(expectedNoteCols) {
+		t.Errorf("notes: expected %d columns, got %d: %v", len(expectedNoteCols), len(noteCols), noteCols)
+	}
+	for _, exp := range expectedNoteCols {
+		found := slices.Contains(noteCols, exp)
+		if !found {
+			t.Errorf("notes: missing column %q. Got: %v", exp, noteCols)
 		}
 	}
-	if !found {
-		t.Errorf("notes: missing column 'workspace_id'. Got columns: %v", noteCols)
+
+	// workspaces: 7 columns
+	if len(tableMap["workspaces"]) != 7 {
+		t.Errorf("workspaces: expected 7 columns, got %d: %v", len(tableMap["workspaces"]), tableMap["workspaces"])
+	}
+
+	// inbox: 6 columns
+	if len(tableMap["inbox"]) != 6 {
+		t.Errorf("inbox: expected 6 columns, got %d: %v", len(tableMap["inbox"]), tableMap["inbox"])
+	}
+
+	// tags: 6 columns
+	if len(tableMap["tags"]) != 6 {
+		t.Errorf("tags: expected 6 columns, got %d: %v", len(tableMap["tags"]), tableMap["tags"])
 	}
 }
 
