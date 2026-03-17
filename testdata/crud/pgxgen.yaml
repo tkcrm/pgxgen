@@ -1,4 +1,4 @@
-version: 1
+version: "1"
 # gen_models:
 #   - delete_sqlc_data: false
 #     models_output_dir: "internal/model"

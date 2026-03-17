@@ -8,9 +8,7 @@ import (
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/crud"
 	"github.com/tkcrm/pgxgen/internal/gomodels"
-	"github.com/tkcrm/pgxgen/internal/keystone"
 	"github.com/tkcrm/pgxgen/internal/sqlc"
-	"github.com/tkcrm/pgxgen/internal/typescript"
 	"github.com/tkcrm/pgxgen/internal/ver"
 	"github.com/tkcrm/pgxgen/pkg/logger"
 	"github.com/urfave/cli/v2"
@@ -49,7 +47,7 @@ func main() {
 	app := &cli.App{
 		Name:    appName,
 		Version: getBuildVersion(),
-		Usage:   "Generate GO models, DB CRUD, Mobx Keystone models and typescript code based on DDL",
+		Usage:   "Generate GO models and DB CRUD based on DDL",
 		Suggest: true,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -84,28 +82,6 @@ func main() {
 						return err
 					}
 					return gomodels.CmdFunc(c, logger, cfg)
-				},
-			},
-			{
-				Name:  "keystone",
-				Usage: "Generate mobx keystone models",
-				Action: func(c *cli.Context) error {
-					cfg, err := loadConfig(c)
-					if err != nil {
-						return err
-					}
-					return keystone.CmdFunc(c, logger, cfg)
-				},
-			},
-			{
-				Name:  "ts",
-				Usage: "Generate types for typescript, based on go structs",
-				Action: func(c *cli.Context) error {
-					cfg, err := loadConfig(c)
-					if err != nil {
-						return err
-					}
-					return typescript.CmdFunc(c, logger, cfg)
 				},
 			},
 			{

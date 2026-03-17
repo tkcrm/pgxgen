@@ -1,4 +1,4 @@
-version: 1
+version: "1"
 gen_models:
   - input_file_path: "../../testdata/gomodels/test_models.go"
     output_dir: "../../testdata/gomodels/gen"

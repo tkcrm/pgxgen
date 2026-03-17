@@ -7,9 +7,7 @@ import (
 type Pgxgen struct {
 	Version                  string                     `yaml:"version"`
 	Sqlc                     []PgxgenSqlc               `yaml:"sqlc"`
-	GenModels                []GenModels                `yaml:"gen_models"`
-	GenKeystoneFromStruct    []GenKeystoneFromStruct    `yaml:"gen_keystone_models"`
-	GenTypescriptFromStructs []GenTypescriptFromStructs `yaml:"gen_typescript_from_structs"`
+	GenModels []GenModels `yaml:"gen_models"`
 }
 
 type PgxgenSqlc struct {
