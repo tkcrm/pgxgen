@@ -14,12 +14,9 @@
         "$ref": "#/definitions/sqlcConfig"
       }
     },
-    "gen_models": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/genModelsConfig"
-      }
-    },
+    "generate": {
+      "$ref": "#/definitions/generateConfig"
+    }
   },
   "definitions": {
     "sqlcConfig": {
@@ -357,195 +354,69 @@
         }
       }
     },
-    "genModelsConfig": {
+    "generateConfig": {
       "type": "object",
+      "description": "Code generation settings",
       "properties": {
-        "input_file_path": {
+        "models": {
+          "type": "array",
+          "description": "Generate Go models for all tables from SQL schema",
+          "items": {
+            "$ref": "#/definitions/generateModelsConfig"
+          }
+        }
+      }
+    },
+    "generateModelsConfig": {
+      "type": "object",
+      "description": "Configuration for generating Go model structs from SQL schema files",
+      "properties": {
+        "schema_dir": {
           "type": "string",
-          "description": "Path to a specific file"
+          "description": "Directory with SQL schema/migration files. Required."
         },
-        "input_dir": {
+        "engine": {
           "type": "string",
-          "description": "Input directory. Will process all .go files"
-        },
-        "delete_original_files": {
-          "type": "boolean",
-          "description": "Delete specific file or all files in dir. Default: false"
+          "enum": ["postgresql", "mysql", "sqlite"],
+          "default": "postgresql",
+          "description": "Database engine. Default: postgresql"
         },
         "output_dir": {
           "type": "string",
-          "description": "Output directory. Required."
+          "description": "Output directory for generated Go models. Required."
         },
         "output_file_name": {
           "type": "string",
-          "description": "Output file name. Required."
+          "default": "models.go",
+          "description": "Output file name. Default: models.go"
         },
         "package_name": {
           "type": "string",
-          "description": "Package name. Default: last item in output_dir"
+          "description": "Go package name for generated file. Required."
         },
-        "imports": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "Additional imports"
+        "sql_package": {
+          "type": "string",
+          "enum": ["pgx/v5", "pgx/v4", "database/sql"],
+          "default": "database/sql",
+          "description": "SQL driver package for type mapping. Default: database/sql"
         },
-        "use_uint_for_ids": {
+        "emit_json_tags": {
           "type": "boolean",
-          "description": "Use uint64 instead int64 for all fields ending with ID"
+          "default": false,
+          "description": "Add json struct tags to generated fields"
         },
-        "use_uint_for_ids_exceptions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "struct_name": { "type": "string" },
-              "field_names": {
-                "type": "array",
-                "items": { "type": "string" }
-              }
-            }
-          }
+        "emit_db_tags": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add db struct tags to generated fields"
         },
-        "add_fields": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "struct_name": { "type": "string" },
-              "position": {
-                "type": "string",
-                "description": "Position: start, end, or 'after FieldName'"
-              },
-              "field_name": { "type": "string" },
-              "type": { "type": "string" },
-              "tags": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": { "type": "string" },
-                    "value": { "type": "string" }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "update_all_struct_fields": {
-          "type": "object",
-          "properties": {
-            "by_field": {
-              "type": "array",
-              "items": { "$ref": "#/definitions/fieldUpdateConfig" }
-            },
-            "by_type": {
-              "type": "array",
-              "items": { "$ref": "#/definitions/typeUpdateConfig" }
-            }
-          }
-        },
-        "update_fields": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "struct_name": { "type": "string" },
-              "field_name": { "type": "string" },
-              "new_parameters": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "type": { "type": "string" },
-                  "match_with_current_tags": { "type": "boolean" },
-                  "tags": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "name": { "type": "string" },
-                        "value": { "type": "string" }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "delete_fields": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "struct_name": { "type": "string" },
-              "field_names": {
-                "type": "array",
-                "items": { "type": "string" }
-              }
-            }
-          }
-        },
-        "rename": {
-          "type": "object",
-          "additionalProperties": { "type": "string" }
-        },
-        "exclude_structs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "struct_name": { "type": "string" }
-            }
-          }
-        },
-        "include_structs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "struct_name": { "type": "string" }
-            }
-          }
+        "emit_pointers_for_null": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use pointers for nullable types instead of sql.Null* wrappers"
         }
       },
-      "required": ["output_dir", "output_file_name"]
-    },
-    "fieldUpdateConfig": {
-      "type": "object",
-      "properties": {
-        "field_name": { "type": "string" },
-        "new_field_name": { "type": "string" },
-        "new_type": { "type": "string" },
-        "match_with_current_tags": { "type": "boolean" },
-        "tags": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "value": { "type": "string" }
-            }
-          }
-        }
-      }
-    },
-    "typeUpdateConfig": {
-      "type": "object",
-      "properties": {
-        "type": { "type": "string" },
-        "new_type": { "type": "string" },
-        "match_with_current_tags": { "type": "boolean" },
-        "tags": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "name": { "type": "string" },
-              "value": { "type": "string" }
-            }
-          }
-        }
-      }
+      "required": ["schema_dir", "output_dir", "package_name"]
     }
   }
 }

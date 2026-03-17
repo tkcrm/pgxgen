@@ -13,16 +13,15 @@ import (
 	cmnutils "github.com/tkcrm/modules/pkg/utils"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/generator"
+	"github.com/tkcrm/pgxgen/internal/schema"
 	"github.com/tkcrm/pgxgen/pkg/logger"
-	"github.com/tkcrm/pgxgen/pkg/sqlc"
-	"github.com/tkcrm/pgxgen/pkg/sqlc/cmd"
 	"github.com/tkcrm/pgxgen/utils"
 )
 
 type crud struct {
 	logger   logger.Logger
 	config   config.Config
-	catalogs map[string]cmd.GetCatalogResultItem
+	catalogs map[string]schema.CatalogResult
 
 	pgxgenFileDir string
 }
@@ -51,19 +50,21 @@ func (s *crud) Generate(_ context.Context, args []string) error {
 
 		s.pgxgenFileDir = filepath.Dir(pgxgenAbsFilePath)
 
+		sqlcConfigDir := filepath.Dir(s.config.ConfigPaths.SqlcConfigFilePath)
+
 		// get queries paths for current schema
-		queriesPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "queries")
+		queriesPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "queries", sqlcConfigDir)
 		if err != nil {
 			return fmt.Errorf("GetPathsByScheme error: %w", err)
 		}
 
-		// get queries paths for current schema
-		outputPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "out")
+		// get output paths for current schema
+		outputPaths, err := config.GetPathsByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, "out", sqlcConfigDir)
 		if err != nil {
 			return fmt.Errorf("GetPathsByScheme error: %w", err)
 		}
 
-		engines, err := config.GetEnginesByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir)
+		engines, err := config.GetEnginesByScheme(s.config.Sqlc.GetPaths(), cfg.SchemaDir, sqlcConfigDir)
 		if err != nil {
 			return fmt.Errorf("GetEnginesByScheme error: %w", err)
 		}
@@ -73,14 +74,14 @@ func (s *crud) Generate(_ context.Context, args []string) error {
 		}
 
 		// get catalogs
-		allCatalogs, err := sqlc.GetCatalogs(s.config.ConfigPaths.SqlcConfigFilePath)
+		allCatalogs, err := schema.GetCatalogs(s.config.Sqlc, sqlcConfigDir)
 		if err != nil {
 			return fmt.Errorf("getCatalogs error: %w", err)
 		}
 
-		s.catalogs = make(map[string]cmd.GetCatalogResultItem, len(outputPaths))
+		s.catalogs = make(map[string]schema.CatalogResult, len(outputPaths))
 		for _, path := range outputPaths {
-			item, err := sqlc.GetCatalogByOutputDir(allCatalogs, path)
+			item, err := schema.GetCatalogByOutputDir(allCatalogs, path)
 			if err != nil {
 				return err
 			}
@@ -110,11 +111,15 @@ func (s *crud) Generate(_ context.Context, args []string) error {
 			}
 
 			for _, p := range s.config.Sqlc.GetPaths().OutPaths {
-				if err := utils.RemoveFiles(p, "_gen.go"); err != nil {
+				resolvedP := p
+				if !filepath.IsAbs(resolvedP) {
+					resolvedP = filepath.Join(sqlcConfigDir, resolvedP)
+				}
+				if err := utils.RemoveFiles(resolvedP, "_gen.go"); err != nil {
 					return fmt.Errorf("remove go generated files error: %w", err)
 				}
 
-				if err := utils.RemoveFiles(p, "_gen.sql.go"); err != nil {
+				if err := utils.RemoveFiles(resolvedP, "_gen.sql.go"); err != nil {
 					return fmt.Errorf("remove go generated files error: %w", err)
 				}
 			}
@@ -256,10 +261,6 @@ func (s *crud) getTableMeta(outputDir string) (tables, error) {
 
 	for _, schema := range catalog.Catalog.Schemas {
 		for _, table := range schema.Tables {
-			if _, ok := groupData[table.Rel.Name]; !ok {
-				groupData[table.Rel.Name] = &tableMetaData{}
-			}
-
 			tableMeta := &tableMetaData{
 				columns: make([]string, len(table.Columns)),
 			}
@@ -268,7 +269,7 @@ func (s *crud) getTableMeta(outputDir string) (tables, error) {
 				tableMeta.columns[i] = column.Name
 			}
 
-			groupData[table.Rel.Name] = tableMeta
+			groupData[table.Name] = tableMeta
 		}
 	}
 
@@ -371,7 +372,7 @@ func (s *crud) processUpdate(cfg config.CrudParams, p processParams) error {
 	for index, name := range filteredColumns {
 		if index > 0 && index < len(filteredColumns) {
 			p.builder.WriteString(", ")
-			if len(p.metaData.columns) > 6 && index%6 == 0 {
+			if len(p.metaData.columns) > columnsPerLineThreshold && index%columnsPerLineThreshold == 0 {
 				p.builder.WriteString("\n\t\t")
 			}
 		}
@@ -493,7 +494,14 @@ func (s *crud) processFind(cfg config.CrudParams, p processParams) error {
 		p.builder.WriteString(fmt.Sprintf(" ORDER BY %s %s", order.By, order.Direction))
 	}
 	if p.methodParams.Limit {
-		p.builder.WriteString(fmt.Sprintf(" LIMIT $%d OFFSET $%d", lastIndex, lastIndex+1))
+		switch p.engine {
+		case EngineTypePostgres:
+			p.builder.WriteString(fmt.Sprintf(" LIMIT $%d OFFSET $%d", lastIndex, lastIndex+1))
+		case EngineTypeMysql, EngineTypeSqlite:
+			p.builder.WriteString(" LIMIT ? OFFSET ?")
+		default:
+			return fmt.Errorf("engine %s is not supported", p.engine)
+		}
 	}
 	p.builder.WriteString(";\n\n")
 	return nil
@@ -530,7 +538,14 @@ func (s *crud) processExists(cfg config.CrudParams, p processParams) error {
 	if err := s.processWhereParam(p, METHOD_EXISTS, &lastIndex); err != nil {
 		return err
 	}
-	p.builder.WriteString(" LIMIT 1)::boolean;\n\n")
+	switch p.engine {
+	case EngineTypePostgres:
+		p.builder.WriteString(" LIMIT 1)::boolean;\n\n")
+	case EngineTypeMysql, EngineTypeSqlite:
+		p.builder.WriteString(" LIMIT 1);\n\n")
+	default:
+		return fmt.Errorf("engine %s is not supported", p.engine)
+	}
 
 	return nil
 }
@@ -538,19 +553,10 @@ func (s *crud) processExists(cfg config.CrudParams, p processParams) error {
 func (s *crud) processWhereParam(p processParams, method config.MethodType, lastIndex *int) error {
 	// process where params
 	if params := getWhereParams(p.methodParams, method); len(params) > 0 {
-		// Sort params
-		paramsKeys := make([]string, 0, len(params))
-		for k := range params {
-			paramsKeys = append(paramsKeys, k)
-		}
-		sort.Strings(paramsKeys)
-
 		firstIter := true
-		for _, param := range paramsKeys {
-			item := params[param]
-
-			if !slices.Contains(p.metaData.columns, param) {
-				return fmt.Errorf("param %s does not exist in table %s", param, p.table)
+		for _, wp := range params {
+			if !slices.Contains(p.metaData.columns, wp.Name) {
+				return fmt.Errorf("param %s does not exist in table %s", wp.Name, p.table)
 			}
 
 			if firstIter {
@@ -564,20 +570,20 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 				p.builder.WriteString(" AND ")
 			}
 
-			if item.Value == "" {
-				operator := item.Operator
+			if wp.Item.Value == "" {
+				operator := wp.Item.Operator
 				if operator == "" {
 					operator = "="
 				}
 
 				switch p.engine {
 				case EngineTypePostgres:
-					_, err := fmt.Fprintf(p.builder, "%s%s$%d", param, operator, *lastIndex)
+					_, err := fmt.Fprintf(p.builder, "%s%s$%d", wp.Name, operator, *lastIndex)
 					if err != nil {
 						return err
 					}
 				case EngineTypeMysql, EngineTypeSqlite:
-					_, err := fmt.Fprintf(p.builder, "%s%s?", param, operator)
+					_, err := fmt.Fprintf(p.builder, "%s%s?", wp.Name, operator)
 					if err != nil {
 						return err
 					}
@@ -587,11 +593,11 @@ func (s *crud) processWhereParam(p processParams, method config.MethodType, last
 
 				*lastIndex++
 			} else {
-				p.builder.WriteString(param)
-				if item.Operator != "" {
-					p.builder.WriteString(fmt.Sprintf(" %s", item.Operator))
+				p.builder.WriteString(wp.Name)
+				if wp.Item.Operator != "" {
+					p.builder.WriteString(fmt.Sprintf(" %s", wp.Item.Operator))
 				}
-				p.builder.WriteString(fmt.Sprintf(" %s", item.Value))
+				p.builder.WriteString(fmt.Sprintf(" %s", wp.Item.Value))
 			}
 			firstIter = false
 		}
@@ -630,15 +636,20 @@ func (s *crud) saveFile(cfg config.PgxgenSqlc, data []byte, tableName, path stri
 		return fmt.Errorf("can not find table params for table: %s", tableName)
 	}
 
-	if tableParams.OutputDir != "" && tableParams.OutputDir != path {
-		return nil
+	if tableParams.OutputDir != "" {
+		// Compare using absolute paths to handle different base directories
+		absTableOut, _ := filepath.Abs(s.resolvePathFromPgxgenDir(tableParams.OutputDir))
+		absPath, _ := filepath.Abs(s.resolvePathFromPgxgenDir(path))
+		if absTableOut != absPath {
+			return nil
+		}
 	}
 
 	if tableName == "" {
 		return fmt.Errorf("empty table name")
 	}
 
-	outputDir := filepath.Join(s.pgxgenFileDir, path)
+	outputDir := s.resolvePathFromPgxgenDir(path)
 
 	fileName := fmt.Sprintf("%s_gen.sql", tableName)
 	if err := utils.SaveFile(outputDir, fileName, data); err != nil {
@@ -646,6 +657,15 @@ func (s *crud) saveFile(cfg config.PgxgenSqlc, data []byte, tableName, path stri
 	}
 
 	return nil
+}
+
+// resolvePathFromPgxgenDir resolves a path: if absolute, returns as-is;
+// if relative, joins with pgxgen config directory.
+func (s *crud) resolvePathFromPgxgenDir(p string) string {
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(s.pgxgenFileDir, p)
 }
 
 // func (s *crud) getMethodParams(methodType config.MethodType, p processParams) config.Method {
@@ -684,45 +704,32 @@ func getPrimaryColumn(columns []string, table, column string) (string, error) {
 	return primaryColumn, nil
 }
 
-func getWhereParams(method config.Method, methodType config.MethodType) map[string]config.WhereParamsItem {
-	params := make(map[string]config.WhereParamsItem)
-
-	methodLower := strings.ToLower(methodType.String())
-
-	// Skip create method
-	if methodLower == "create" {
-		return params
+func getWhereParams(method config.Method, methodType config.MethodType) []whereParam {
+	if strings.ToLower(methodType.String()) == "create" {
+		return nil
 	}
 
-	// Sort params
 	keys := make([]string, 0, len(method.Where))
 	for k := range method.Where {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
-	for _, param := range keys {
-		params[param] = method.Where[param]
+	result := make([]whereParam, 0, len(keys))
+	for _, k := range keys {
+		result = append(result, whereParam{Name: k, Item: method.Where[k]})
 	}
-
-	return params
+	return result
 }
 
 func getWhereAddtitionalParams(method config.Method, methodType config.MethodType) []string {
-	params := make([]string, len(method.WhereAdditional))
-
-	methodLower := strings.ToLower(methodType.String())
-
-	// Skip create method
-	if methodLower == "create" {
-		return params
+	if strings.ToLower(methodType.String()) == "create" {
+		return nil
 	}
-
 	if len(method.WhereAdditional) > 0 {
 		return method.WhereAdditional
 	}
-
-	return params
+	return nil
 }
 
 func getOrderByParams(method config.Method) *config.OrderParam {

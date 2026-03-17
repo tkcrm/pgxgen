@@ -24,12 +24,7 @@ type tableMetaData struct {
 }
 
 func (t tables) getTableMetaData(tableName string) *tableMetaData {
-	for name, metaData := range t {
-		if name == tableName {
-			return metaData
-		}
-	}
-	return nil
+	return t[tableName]
 }
 
 type engineType string
@@ -50,6 +45,13 @@ func (s engineType) Valid() bool {
 		return true
 	}
 	return false
+}
+
+const columnsPerLineThreshold = 6
+
+type whereParam struct {
+	Name string
+	Item config.WhereParamsItem
 }
 
 type processParams struct {

@@ -130,7 +130,10 @@ func (p *SqlcSQL) GetModelPath() string {
 	return filepath.Join(p.Gen.Go.Out, modelFileName)
 }
 
-func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string) ([]string, error) {
+// GetPathsByScheme filters paths from sqlc config by matching schema directory.
+// configDir is the directory containing sqlc.yaml — relative paths are resolved against it.
+// If configDir is empty, paths are resolved relative to the current working directory.
+func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string, configDir string) ([]string, error) {
 	availablePaths := []string{"models", "queries", "out", "schema"}
 	if !slices.Contains(availablePaths, pathType) {
 		return nil, fmt.Errorf("unavailable path type %s", pathType)
@@ -139,12 +142,12 @@ func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string)
 	// filter model paths for current schema
 	filteredModelPaths := []string{}
 	for index, item := range gpr.SchemaPaths {
-		absFirst, err := filepath.Abs(item)
+		absFirst, err := filepath.Abs(joinIfRelative(configDir, item))
 		if err != nil {
 			return nil, err
 		}
 
-		absSecond, err := filepath.Abs(inSchemaDir)
+		absSecond, err := filepath.Abs(joinIfRelative(configDir, inSchemaDir))
 		if err != nil {
 			return nil, err
 		}
@@ -164,8 +167,9 @@ func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string)
 				return nil, fmt.Errorf("unavailable path type %s", pathType)
 			}
 
-			if !slices.Contains(filteredModelPaths, modelPath) {
-				filteredModelPaths = append(filteredModelPaths, modelPath)
+			resolved := joinIfRelative(configDir, modelPath)
+			if !slices.Contains(filteredModelPaths, resolved) {
+				filteredModelPaths = append(filteredModelPaths, resolved)
 			}
 		}
 	}
@@ -173,15 +177,17 @@ func GetPathsByScheme(gpr GetPathsResponse, inSchemaDir string, pathType string)
 	return filteredModelPaths, nil
 }
 
-func GetEnginesByScheme(gpr GetPathsResponse, inSchemaDir string) ([]string, error) {
+// GetEnginesByScheme returns engine names for entries matching the given schema directory.
+// configDir is the directory containing sqlc.yaml — relative paths are resolved against it.
+func GetEnginesByScheme(gpr GetPathsResponse, inSchemaDir string, configDir string) ([]string, error) {
 	engines := []string{}
 	for index, item := range gpr.SchemaPaths {
-		absFirst, err := filepath.Abs(item)
+		absFirst, err := filepath.Abs(joinIfRelative(configDir, item))
 		if err != nil {
 			return nil, err
 		}
 
-		absSecond, err := filepath.Abs(inSchemaDir)
+		absSecond, err := filepath.Abs(joinIfRelative(configDir, inSchemaDir))
 		if err != nil {
 			return nil, err
 		}
@@ -192,4 +198,12 @@ func GetEnginesByScheme(gpr GetPathsResponse, inSchemaDir string) ([]string, err
 	}
 
 	return engines, nil
+}
+
+// joinIfRelative joins baseDir and p if p is not an absolute path.
+func joinIfRelative(baseDir, p string) string {
+	if baseDir == "" || filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(baseDir, p)
 }

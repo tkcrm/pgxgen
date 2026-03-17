@@ -1,16 +1,16 @@
 # pgxgen
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/tkcrm/pgxgen.svg)](https://pkg.go.dev/github.com/tkcrm/pgxgen)
-[![Go Version](https://img.shields.io/badge/go-1.25-blue)](https://go.dev/)
+[![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/tkcrm/pgxgen)](https://goreportcard.com/report/github.com/tkcrm/pgxgen)
 [![License](https://img.shields.io/github/license/tkcrm/pgxgen)](LICENSE)
 
-pgxgen use [`sqlc`](https://github.com/sqlc-dev/sqlc) tool with additional improvements.
+pgxgen uses [`sqlc`](https://github.com/sqlc-dev/sqlc) with additional improvements.
 
-- Generate CRUD for existing tables in postgresql database
+- Generate CRUD SQL for existing tables (PostgreSQL, MySQL, SQLite)
+- Generate Go models for all tables from SQL schema
 - Json tags: Omit empty and hide
-- Use Sqlc only for generating models
-- Update generated models with additinal parameters: add / update fields and tags
+- Update generated models with additional parameters: add / update fields and tags
 
 > You can use [this repository](https://github.com/sxwebdev/pgxgen-example) which explains how to use `pgxgen` tool in your project
 
@@ -45,12 +45,12 @@ go install github.com/tkcrm/pgxgen/cmd/pgxgen@latest
 
 ```text
 COMMANDS:
-   crud      Generate crud sql's
-   gomodels  Generate golang models based on existed structs
-   sqlc      Generate sqlc code
-   update    Update pgxgen to the latest version
-   version   Print the version
-   help, h   Shows a list of commands or help for one command
+   crud               Generate crud sql's
+   generate models    Generate Go models for all tables from SQL schema
+   sqlc               Generate sqlc code
+   update             Update pgxgen to the latest version
+   version            Print the version
+   help, h            Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
    --pgxgen-config value  Absolute or relative path to pgxgen.yaml file (default: "pgxgen.yaml")
@@ -155,86 +155,27 @@ sqlc:
           output_dir: internal/store/users/repo_users
           include_column_names: true
 
-# modification of existing models. not required
-gen_models:
-  - # path to a specific file
-    input_file_path: "internal/store/models.go"
-    # input dir. will process all files with extension `.go`
-    input_dir: "internal/store"
-    # delete specific file or all files in dir. default: false
-    delete_original_files: false
-    # output dir. required
-    output_dir: "internal/models"
-    # output file name. required
-    output_file_name: "models_gen.go"
-    # default: last item in output_dir
-    package_name: "model"
-    # additional imports
-    imports:
-      - "github.com/uptrace/bun"
-    # Use uint64 instead int64 for all fields ends with ID
-    use_uint_for_ids: true
-    use_uint_for_ids_exceptions:
-      - struct_name: "User"
-        field_names:
-          - OrganizationID
-          - UserID
-    # add new field to struct
-    add_fields:
-      - struct_name: "User"
-        # default: start
-        # available values: start, end, after FieldName
-        position: "start"
-        field_name: "bun.BaseModel"
-        type: ""
-        tags:
-          - name: "bun"
-            value: "table:users,alias:u"
-    # update fields for all structs
-    update_all_struct_fields:
-      # update by field name
-      by_field:
-        - field_name: "ID"
-          new_field_name: "bun.NullTime"
-          new_type: "int"
-          match_with_current_tags: true
-          tags:
-            - name: "json"
-              value: "-"
-      # update by field type
-      by_type:
-        - type: "*time.Time"
-          new_type: "bun.NullTime"
-          match_with_current_tags: true
-          tags:
-            - name: "json"
-              value: "-"
-    # update fields in specific struct
-    update_fields:
-      - struct_name: "users"
-        field_name: "Password"
-        new_parameters:
-          name: "Password"
-          type: "string"
-          # default: false
-          match_with_current_tags: true
-          tags:
-            - name: "json"
-              value: "-"
-    # delete specific field in struct
-    delete_fields:
-      - struct_name: "users"
-        field_names:
-          - CreatedAt
-          - UpdatedAt
-    rename:
-      oldName: newName
-    # exclude structs from result list
-    exclude_structs:
-      - struct_name: "User"
-    # only the listed structures will be used
-    include_structs:
-      - struct_name: "User"
+# generate Go models for all tables from SQL schema
+generate:
+  models:
+    - # directory with SQL schema/migration files. required
+      schema_dir: sql/migrations
+      # database engine: postgresql, mysql, sqlite. default: postgresql
+      engine: postgresql
+      # output directory for generated models. required
+      output_dir: internal/models
+      # output file name. default: models.go
+      output_file_name: models.go
+      # Go package name. required
+      package_name: models
+      # SQL driver package: pgx/v5, pgx/v4, database/sql. default: database/sql
+      sql_package: pgx/v5
+      # emit json struct tags
+      emit_json_tags: true
+      # emit db struct tags
+      emit_db_tags: true
+      # use pointers for nullable types instead of sql.Null*
+      emit_pointers_for_null: false
 ```
 
 ### Configure `sqlc`

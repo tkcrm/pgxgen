@@ -14,7 +14,8 @@ import (
 	"github.com/tkcrm/pgxgen/internal/generator"
 	"github.com/tkcrm/pgxgen/internal/goconstatnts"
 	"github.com/tkcrm/pgxgen/pkg/logger"
-	sqlcpkg "github.com/tkcrm/pgxgen/pkg/sqlc"
+
+	sqlcpkg "github.com/sqlc-dev/sqlc/pkg/cli"
 )
 
 type sqlc struct {
@@ -76,11 +77,14 @@ func (s *sqlc) process(args []string) error {
 	for _, cfg := range s.config.Pgxgen.Sqlc {
 		param := cfg.SqlcModels
 
+		sqlcConfigDir := filepath.Dir(s.config.ConfigPaths.SqlcConfigFilePath)
+
 		// get model paths for current schema
 		filteredModelPaths, err := config.GetPathsByScheme(
 			s.config.Sqlc.GetPaths(),
 			cfg.SchemaDir,
 			"models",
+			sqlcConfigDir,
 		)
 		if err != nil {
 			return fmt.Errorf("GetPathsByScheme error: %w", err)
@@ -93,15 +97,13 @@ func (s *sqlc) process(args []string) error {
 		s.logger.Infof("processing for sqlc models for schema: %s", cfg.SchemaDir)
 		timeStart = time.Now()
 
-		sqlcAbsFilePath, err := filepath.Abs(s.config.ConfigPaths.SqlcConfigFilePath)
-		if err != nil {
-			return fmt.Errorf("failed to get sqlc config abs file path: %w", err)
-		}
-
-		sqlcDir := filepath.Dir(sqlcAbsFilePath)
-
 		for _, modelPath := range filteredModelPaths {
-			modelFileDir := filepath.Join(sqlcDir, filepath.Dir(modelPath))
+			// modelPath is already resolved relative to CWD by GetPathsByScheme
+			absModelPath, err := filepath.Abs(modelPath)
+			if err != nil {
+				return fmt.Errorf("failed to get abs model path: %w", err)
+			}
+			modelFileDir := filepath.Dir(absModelPath)
 			modelFileName := filepath.Base(modelPath)
 
 			files, err := os.ReadDir(modelFileDir)

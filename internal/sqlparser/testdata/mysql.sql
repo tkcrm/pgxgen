@@ -1,0 +1,49 @@
+CREATE TABLE users (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    username VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    age INT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 0,
+    role TINYINT NOT NULL DEFAULT 0,
+    balance DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    bio TEXT NULL,
+    avatar BLOB NULL,
+    metadata JSON NULL,
+    score DOUBLE NOT NULL DEFAULT 0.0,
+    small_val SMALLINT UNSIGNED NOT NULL DEFAULT 0,
+    big_val BIGINT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NULL
+) COMMENT='Main users table';
+
+CREATE TABLE posts (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(500) NOT NULL,
+    body MEDIUMTEXT NOT NULL,
+    author_id BIGINT NOT NULL,
+    published_at DATETIME NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Table to be altered
+CREATE TABLE profiles (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL
+);
+
+ALTER TABLE profiles ADD COLUMN bio TEXT NULL;
+ALTER TABLE profiles ADD COLUMN website VARCHAR(255) NOT NULL DEFAULT '';
+ALTER TABLE profiles DROP COLUMN website;
+ALTER TABLE profiles MODIFY COLUMN bio MEDIUMTEXT NULL;
+
+-- Table to be dropped
+CREATE TABLE temp_data (
+    id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    data TEXT
+);
+DROP TABLE temp_data;
+
+-- IF NOT EXISTS
+CREATE TABLE IF NOT EXISTS users (
+    should_not_override TEXT
+);
