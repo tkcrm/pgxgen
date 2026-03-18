@@ -22,17 +22,17 @@ type ColumnData struct {
 
 // TemplateData holds all data needed to render a CRUD SQL template.
 type TemplateData struct {
-	MethodName      string
-	OperationType   string
-	TableName       string
-	PrimaryColumn   string
-	Columns         []ColumnData
-	Returning       string
-	WhereClause     string
-	SoftDeleteWhere bool
+	MethodName       string
+	OperationType    string
+	TableName        string
+	PrimaryColumn    string
+	Columns          []ColumnData
+	Returning        string
+	WhereClause      string
+	SoftDeleteWhere  bool
 	SoftDeleteColumn string
-	OrderClause     string
-	LimitClause     string
+	OrderClause      string
+	LimitClause      string
 }
 
 // Generator generates CRUD SQL files from config and catalog.
@@ -149,7 +149,7 @@ func (g *Generator) buildTemplateData(
 			}
 			where[tableConfig.PrimaryColumn] = config.WhereParamConfig{}
 		}
-		data.WhereClause = g.buildWhereClause(where, methodCfg.WhereAdditional, allColumns, &paramIndex)
+		data.WhereClause = g.buildWhereClause(where, methodCfg.WhereAdditional, &paramIndex)
 
 	case "delete":
 		if tableConfig.SoftDelete != nil {
@@ -164,7 +164,7 @@ func (g *Generator) buildTemplateData(
 			}
 			where[tableConfig.PrimaryColumn] = config.WhereParamConfig{}
 		}
-		data.WhereClause = g.buildWhereClause(where, methodCfg.WhereAdditional, allColumns, &paramIndex)
+		data.WhereClause = g.buildWhereClause(where, methodCfg.WhereAdditional, &paramIndex)
 
 	case "get":
 		templateFile = "get"
@@ -175,14 +175,14 @@ func (g *Generator) buildTemplateData(
 			}
 			where[tableConfig.PrimaryColumn] = config.WhereParamConfig{}
 		}
-		data.WhereClause = g.buildWhereClause(where, methodCfg.WhereAdditional, allColumns, &paramIndex)
+		data.WhereClause = g.buildWhereClause(where, methodCfg.WhereAdditional, &paramIndex)
 		if tableConfig.SoftDelete != nil {
 			data.SoftDeleteWhere = true
 		}
 
 	case "find":
 		templateFile = "find"
-		data.WhereClause = g.buildWhereClause(methodCfg.Where, methodCfg.WhereAdditional, allColumns, &paramIndex)
+		data.WhereClause = g.buildWhereClause(methodCfg.Where, methodCfg.WhereAdditional, &paramIndex)
 		if tableConfig.SoftDelete != nil {
 			data.SoftDeleteWhere = true
 		}
@@ -195,14 +195,14 @@ func (g *Generator) buildTemplateData(
 
 	case "total":
 		templateFile = "total"
-		data.WhereClause = g.buildWhereClause(methodCfg.Where, methodCfg.WhereAdditional, allColumns, &paramIndex)
+		data.WhereClause = g.buildWhereClause(methodCfg.Where, methodCfg.WhereAdditional, &paramIndex)
 		if tableConfig.SoftDelete != nil {
 			data.SoftDeleteWhere = true
 		}
 
 	case "exists":
 		templateFile = "exists"
-		data.WhereClause = g.buildWhereClause(methodCfg.Where, methodCfg.WhereAdditional, allColumns, &paramIndex)
+		data.WhereClause = g.buildWhereClause(methodCfg.Where, methodCfg.WhereAdditional, &paramIndex)
 		if tableConfig.SoftDelete != nil {
 			data.SoftDeleteWhere = true
 		}
@@ -258,9 +258,7 @@ func (g *Generator) defaultMethodName(method, tableName string, defaultCrud *con
 
 	// Singularize for non-collection methods
 	if !slices.Contains([]string{"find", "total"}, method) {
-		if strings.HasSuffix(methodName, "s") {
-			methodName = methodName[:len(methodName)-1]
-		}
+		methodName = strings.TrimSuffix(methodName, "s")
 	}
 
 	return methodName
@@ -288,7 +286,6 @@ func (g *Generator) buildSetColumns(columns []string, columnValues map[string]st
 func (g *Generator) buildWhereClause(
 	where map[string]config.WhereParamConfig,
 	whereAdditional []string,
-	allColumns []string,
 	paramIndex *int,
 ) string {
 	if len(where) == 0 && len(whereAdditional) == 0 {

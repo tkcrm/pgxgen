@@ -17,6 +17,16 @@ Code generation tool for PostgreSQL, MySQL, and SQLite. Generates CRUD SQL, Go m
 - **Per-table repos** or **single repo** layout
 - **Watch mode**, **dry-run**, **validation**, **interactive init**
 
+## AI Agent Skills
+
+This repository includes [AI agent skills](https://github.com/sxwebdev/skills) with documentation and usage examples for all packages. Install them with the [skills](https://github.com/sxwebdev/skills) CLI:
+
+```bash
+go install github.com/sxwebdev/skills/cmd/skills@latest
+skills init
+skills repo add tkcrm/pgxgen
+```
+
 ## Install
 
 ```bash
@@ -196,7 +206,7 @@ pgxgen generate
 
 ## JSON Schema
 
-IDE autocompletion is available via [schemas/pgxgen-schema-v2.json](schemas/pgxgen-schema.json):
+IDE autocompletion is available via [schemas/pgxgen-schema.json](schemas/pgxgen-schema.json):
 
 ```yaml
 # yaml-language-server: $schema=https://raw.githubusercontent.com/tkcrm/pgxgen/master/schemas/pgxgen-schema.json
