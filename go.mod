@@ -21,7 +21,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/go-playground/validator/v10 v10.30.1
 	github.com/pganalyze/pg_query_go/v6 v6.2.2
-	github.com/pingcap/tidb/pkg/parser v0.0.0-20260317145605-732eea56e30d
+	github.com/pingcap/tidb/pkg/parser v0.0.0-20260317213042-b1525070ca3e
 	github.com/sqlc-dev/sqlc v1.30.0
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.7.0
@@ -32,7 +32,7 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
+	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/google/cel-go v0.27.0 // indirect
@@ -73,6 +73,6 @@ require (
 	golang.org/x/mod v0.34.0
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0
-	google.golang.org/grpc v1.79.2 // indirect
+	google.golang.org/grpc v1.79.3 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
