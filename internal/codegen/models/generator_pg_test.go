@@ -133,7 +133,7 @@ func renderPg(t *testing.T, cfg *config.ModelsConfig, overrides *config.SqlcOver
 
 	mapOpts := typemap.Options{
 		SqlPackage:          sqlPkg,
-		EmitPointersForNull: cfg.EmitPointersForNull || cfg.ReplaceNullableTypes,
+		EmitPointersForNull: cfg.EmitPointersForNull,
 	}
 	code, err := renderModelsRaw(cfg, cat, mapper, mapOpts, overrides, defaults)
 	require.NoError(t, err)
@@ -253,28 +253,6 @@ func TestPg_SqlcColumnOverrideGoType(t *testing.T) {
 	assert.Contains(t, output, "\tBlockData OrganizationBlockData ")
 }
 
-// --- Nullable types with replace_nullable_types ---
-
-func TestPg_ReplaceNullableTypes(t *testing.T) {
-	output := renderPg(t,
-		&config.ModelsConfig{PackageName: "models", ReplaceNullableTypes: true},
-		newPgSqlcOverrides(), newPgSqlcDefaults(),
-	)
-
-	// Nullable varchar → *string
-	assert.Contains(t, output, "\tPhone *string ")
-	assert.Contains(t, output, "\tCurrency *string ")
-
-	// Nullable timestamp → *time.Time
-	assert.Contains(t, output, "\tCreatedAt *time.Time ")
-
-	// Nullable int2 → *int16
-	assert.Contains(t, output, "\tCountryID *int16 ")
-
-	// Should NOT have pgtype.Text for nullable
-	assert.NotContains(t, output, "pgtype.Text")
-}
-
 // --- Enum resolves from column type ---
 
 func TestPg_EnumColumnType(t *testing.T) {
@@ -298,7 +276,7 @@ func TestPg_SqlPackageFallback(t *testing.T) {
 	// pgx/v5 should use github.com/jackc/pgx/v5/pgtype, NOT github.com/jackc/pgtype
 	assert.NotContains(t, output, `"github.com/jackc/pgtype"`)
 
-	// For nullable fields without replace_nullable_types, pgx/v5 uses pgtype from v5
+	// For nullable fields, pgx/v5 uses pgtype from v5
 	// Currency is nullable varchar → pgtype.Text (from pgx/v5)
 	assert.Contains(t, output, "pgtype.Text")
 }

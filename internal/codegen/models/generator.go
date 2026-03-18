@@ -19,34 +19,34 @@ import (
 
 // Common Go acronyms that should be fully uppercased.
 var acronyms = map[string]string{
-	"id":    "ID",
-	"ids":   "IDs",
-	"url":   "URL",
-	"uri":   "URI",
-	"api":   "API",
-	"http":  "HTTP",
-	"https": "HTTPS",
-	"ip":    "IP",
-	"sql":   "SQL",
-	"ssh":   "SSH",
-	"tcp":   "TCP",
-	"udp":   "UDP",
-	"uid":   "UID",
-	"uuid":  "UUID",
-	"json":  "JSON",
-	"xml":   "XML",
-	"html":  "HTML",
-	"css":   "CSS",
-	"js":    "JS",
-	"cpu":   "CPU",
-	"gpu":   "GPU",
-	"os":    "OS",
-	"db":    "DB",
-	"io":    "IO",
-	"eof":   "EOF",
-	"tls":   "TLS",
-	"ttl":   "TTL",
-	"dns":   "DNS",
+	"id":  "ID",
+	"ids": "IDs",
+	// "url":   "URL",
+	// "uri":   "URI",
+	// "api":   "API",
+	// "http":  "HTTP",
+	// "https": "HTTPS",
+	// "ip":    "IP",
+	// "sql":   "SQL",
+	// "ssh":   "SSH",
+	// "tcp":   "TCP",
+	// "udp":   "UDP",
+	// "uid":   "UID",
+	// "uuid":  "UUID",
+	// "json":  "JSON",
+	// "xml":   "XML",
+	// "html":  "HTML",
+	// "css":   "CSS",
+	// "js":    "JS",
+	// "cpu":   "CPU",
+	// "gpu":   "GPU",
+	// "os":    "OS",
+	// "db":    "DB",
+	// "io":    "IO",
+	// "eof":   "EOF",
+	// "tls":   "TLS",
+	// "ttl":   "TTL",
+	// "dns":   "DNS",
 }
 
 // GenerateFromV2Config generates Go models from SQL schema using v2 config.
@@ -106,8 +106,7 @@ func GenerateFromV2Config(
 		sqlPackage = "pgx/v5"
 	}
 
-	// replace_nullable_types implies emit_pointers_for_null
-	emitPointers := modelsCfg.EmitPointersForNull || modelsCfg.ReplaceNullableTypes
+	emitPointers := modelsCfg.EmitPointersForNull
 
 	mapOpts := typemap.Options{
 		SqlPackage:          sqlPackage,
@@ -228,14 +227,14 @@ func renderModelsRaw(
 
 // knownTypeImports maps Go type prefixes/names to their import paths.
 var knownTypeImports = map[string]string{
-	"time.":       "time",
-	"sql.":        "database/sql",
-	"uuid.":       "github.com/google/uuid",
-	"pgtype.":     "github.com/jackc/pgx/v5/pgtype",
-	"netip.":      "net/netip",
-	"net.":        "net",
-	"json.":       "encoding/json",
-	"pqtype.":     "github.com/sqlc-dev/pqtype",
+	"time.":   "time",
+	"sql.":    "database/sql",
+	"uuid.":   "github.com/google/uuid",
+	"pgtype.": "github.com/jackc/pgx/v5/pgtype",
+	"netip.":  "net/netip",
+	"net.":    "net",
+	"json.":   "encoding/json",
+	"pqtype.": "github.com/sqlc-dev/pqtype",
 }
 
 // collectImports scans rendered Go code for type references and returns needed imports.
@@ -362,6 +361,8 @@ func resolveType(
 	mapOpts typemap.Options,
 	sqlcOverrides *config.SqlcOverridesConfig,
 ) string {
+	var goType string
+
 	// 1. Check sqlc column overrides (highest priority)
 	if sqlcOverrides != nil {
 		columnKey := tableName + "." + col.Name
@@ -373,60 +374,52 @@ func resolveType(
 		// Check sqlc type overrides
 		// Match nullable override for nullable columns, non-nullable for NOT NULL columns
 		isNullable := !col.NotNull
+		colType := normalizeDbType(col.Type)
 		for _, to := range sqlcOverrides.Types {
-			if strings.EqualFold(to.DbType, col.Type) && to.Nullable == isNullable {
-				return extractGoType(to.GoType)
+			if normalizeDbType(to.DbType) == colType && to.Nullable == isNullable {
+				goType = extractGoType(to.GoType)
+				break
 			}
 		}
 		// Fallback: if no exact nullable match, try non-nullable override for NOT NULL columns
-		if !isNullable {
+		if goType == "" && !isNullable {
 			for _, to := range sqlcOverrides.Types {
-				if strings.EqualFold(to.DbType, col.Type) && !to.Nullable {
-					return extractGoType(to.GoType)
+				if normalizeDbType(to.DbType) == colType && !to.Nullable {
+					goType = extractGoType(to.GoType)
+					break
 				}
 			}
 		}
 	}
 
 	// 2. Check models.type_overrides from config
-	for _, override := range cfg.TypeOverrides {
-		if strings.EqualFold(override.SqlType, col.Type) {
-			return override.GoType
+	if goType == "" {
+		for _, override := range cfg.TypeOverrides {
+			if normalizeDbType(override.SqlType) == normalizeDbType(col.Type) {
+				goType = override.GoType
+				break
+			}
 		}
 	}
 
 	// 3. Default typemap
-	goType := mapper.GoType(col, enums, mapOpts)
+	if goType == "" {
+		goType = mapper.GoType(col, enums, mapOpts)
+	}
 
-	// 4. When replace_nullable_types is set, convert pgtype.* to pointer types for nullable columns
-	if !col.NotNull && mapOpts.EmitPointersForNull {
-		goType = replaceNullablePgtype(goType)
+	// 4. Wrap in slice for array columns
+	if col.IsArray && !strings.HasPrefix(goType, "[]") {
+		goType = "[]" + goType
 	}
 
 	return goType
 }
 
-// pgtypeToPointer maps pgtype types to their pointer equivalents.
-var pgtypeToPointer = map[string]string{
-	"pgtype.Text":        "*string",
-	"pgtype.Int2":        "*int16",
-	"pgtype.Int4":        "*int32",
-	"pgtype.Int8":        "*int64",
-	"pgtype.Float4":      "*float32",
-	"pgtype.Float8":      "*float64",
-	"pgtype.Bool":        "*bool",
-	"pgtype.Timestamp":   "*time.Time",
-	"pgtype.Timestamptz": "*time.Time",
-	"pgtype.Date":        "*time.Time",
-	"pgtype.UUID":        "*uuid.UUID",
-	"pgtype.Numeric":     "*string",
-}
-
-func replaceNullablePgtype(goType string) string {
-	if replacement, ok := pgtypeToPointer[goType]; ok {
-		return replacement
-	}
-	return goType
+// normalizeDbType strips the pg_catalog. prefix and lowercases for consistent matching.
+func normalizeDbType(t string) string {
+	t = strings.ToLower(t)
+	t = strings.TrimPrefix(t, "pg_catalog.")
+	return t
 }
 
 // extractGoType converts sqlc go_type value (string or map) to a Go type string.

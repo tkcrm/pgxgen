@@ -251,7 +251,16 @@ func (p *postgresParser) handleAlterTable(cat *catalog.Catalog, n *pg.AlterTable
 			if def, ok := c.Def.Node.(*pg.Node_ColumnDef); ok {
 				col := p.convertColumnDef(def.ColumnDef)
 				if col != nil {
-					table.Columns = append(table.Columns, col)
+					exists := false
+					for _, existing := range table.Columns {
+						if existing.Name == col.Name {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						table.Columns = append(table.Columns, col)
+					}
 				}
 			}
 		case pg.AlterTableType_AT_DropColumn:

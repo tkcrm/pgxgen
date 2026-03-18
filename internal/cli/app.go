@@ -334,7 +334,6 @@ func newInitCmd(l logger.Logger) *cli.Command {
       output_dir: internal/models
       output_file_name: models_gen.go
       package_name: models
-      replace_nullable_types: true
       emit_json_tags: true
       emit_db_tags: true`
 			}
@@ -457,7 +456,6 @@ schemas:
       output_file_name: models_gen.go
       package_name: models
       package_path: github.com/your-org/your-project/internal/models
-      replace_nullable_types: true  # sql.NullString → *string
       emit_json_tags: true
       emit_db_tags: true
       # custom_types: [MyCustomType]  # types defined in models package

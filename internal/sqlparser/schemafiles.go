@@ -29,7 +29,11 @@ func ResolveSchemaFiles(schemaPath string) ([]string, error) {
 		if e.IsDir() {
 			continue
 		}
-		if strings.HasSuffix(strings.ToLower(e.Name()), ".sql") {
+		name := strings.ToLower(e.Name())
+		if strings.HasSuffix(name, ".down.sql") {
+			continue
+		}
+		if strings.HasSuffix(name, ".sql") {
 			files = append(files, filepath.Join(schemaPath, e.Name()))
 		}
 	}

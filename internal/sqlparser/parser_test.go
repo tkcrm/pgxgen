@@ -43,7 +43,7 @@ func TestResolveSchemaFiles_Directory(t *testing.T) {
 
 	// Create mixed files
 	for _, name := range []string{"002_second.sql", "001_first.sql", "readme.txt", "data.csv", "003_third.SQL"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("-- test"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("-- test"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -69,7 +69,7 @@ func TestResolveSchemaFiles_Directory(t *testing.T) {
 func TestResolveSchemaFiles_SingleFile(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "schema.sql")
-	if err := os.WriteFile(filePath, []byte("-- test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("-- test"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -87,6 +87,39 @@ func TestResolveSchemaFiles_NotExists(t *testing.T) {
 	_, err := ResolveSchemaFiles("/nonexistent/path")
 	if err == nil {
 		t.Error("expected error for non-existent path")
+	}
+}
+
+func TestResolveSchemaFiles_SkipsDownMigrations(t *testing.T) {
+	dir := t.TempDir()
+
+	files := []string{
+		"001_create_users.up.sql",
+		"001_create_users.down.sql",
+		"002_add_column.up.sql",
+		"002_add_column.down.sql",
+		"003_schema.sql",
+	}
+	for _, name := range files {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("-- test"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	result, err := ResolveSchemaFiles(dir)
+	if err != nil {
+		t.Fatalf("ResolveSchemaFiles error: %v", err)
+	}
+
+	if len(result) != 3 {
+		t.Fatalf("expected 3 files (no .down.sql), got %d: %v", len(result), result)
+	}
+
+	expected := []string{"001_create_users.up.sql", "002_add_column.up.sql", "003_schema.sql"}
+	for i, want := range expected {
+		if filepath.Base(result[i]) != want {
+			t.Errorf("file[%d]: expected %s, got %s", i, want, filepath.Base(result[i]))
+		}
 	}
 }
 

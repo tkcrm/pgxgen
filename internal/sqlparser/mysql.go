@@ -138,7 +138,16 @@ func (p *mysqlParser) handleAlterTable(cat *catalog.Catalog, n *pcast.AlterTable
 			for _, def := range spec.NewColumns {
 				col := p.convertColumnDef(def)
 				if col != nil {
-					table.Columns = append(table.Columns, col)
+					exists := false
+					for _, existing := range table.Columns {
+						if existing.Name == col.Name {
+							exists = true
+							break
+						}
+					}
+					if !exists {
+						table.Columns = append(table.Columns, col)
+					}
 				}
 			}
 		case pcast.AlterTableDropColumn:

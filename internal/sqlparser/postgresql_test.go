@@ -3,14 +3,17 @@ package sqlparser
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/tkcrm/pgxgen/internal/sqlparser/catalog"
 )
 
 func writeTemp(t *testing.T, sql string) string {
 	t.Helper()
 	dir := t.TempDir()
 	path := filepath.Join(dir, "schema.sql")
-	if err := os.WriteFile(path, []byte(sql), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(sql), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -281,7 +284,7 @@ func TestPostgresSchema(t *testing.T) {
 	}
 
 	// Find custom schema
-	var customSchema, publicSchema = (*struct{ tables int })(nil), (*struct{ tables int })(nil)
+	customSchema, publicSchema := (*struct{ tables int })(nil), (*struct{ tables int })(nil)
 	_ = customSchema
 	_ = publicSchema
 
@@ -370,6 +373,91 @@ func TestPostgresArrayColumns(t *testing.T) {
 	}
 }
 
+func TestPostgresFullMigrationDirectory(t *testing.T) {
+	migrationDir := filepath.Join("..", "..", "testdata", "sql", "migrations", "postgres")
+	if _, err := os.Stat(migrationDir); os.IsNotExist(err) {
+		t.Skip("migration directory not found, skipping")
+	}
+
+	files, err := ResolveSchemaFiles(migrationDir)
+	if err != nil {
+		t.Fatalf("ResolveSchemaFiles error: %v", err)
+	}
+
+	// Verify no .down.sql files are included
+	for _, f := range files {
+		if strings.HasSuffix(strings.ToLower(f), ".down.sql") {
+			t.Errorf("unexpected .down.sql file: %s", f)
+		}
+	}
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema(files)
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	schema := cat.Schemas[0]
+
+	// Verify key tables exist from the migration
+	requiredTables := []string{
+		"authors",
+		"books",
+	}
+
+	tableNames := make(map[string]bool)
+	for _, tbl := range schema.Tables {
+		tableNames[tbl.Name] = true
+	}
+
+	for _, name := range requiredTables {
+		if !tableNames[name] {
+			t.Errorf("table %q not found in parsed schema", name)
+		}
+	}
+
+	// Verify books table has expected columns
+	for _, tbl := range schema.Tables {
+		if tbl.Name == "books" {
+			colMap := make(map[string]*catalog.Column)
+			for _, c := range tbl.Columns {
+				colMap[c.Name] = c
+			}
+			// Check genre column exists with enum type
+			if c, ok := colMap["genre"]; !ok {
+				t.Error("books: missing column \"genre\"")
+			} else if !c.NotNull {
+				t.Error("books.genre: expected NotNull=true")
+			}
+			// Check author_id column exists
+			if _, ok := colMap["author_id"]; !ok {
+				t.Error("books: missing column \"author_id\"")
+			}
+			break
+		}
+	}
+
+	// Verify book_type enum was parsed
+	if len(schema.Enums) == 0 {
+		t.Error("expected at least one enum (book_type)")
+	} else {
+		found := false
+		for _, e := range schema.Enums {
+			if e.Name == "book_type" {
+				found = true
+				if len(e.Values) != 3 {
+					t.Errorf("book_type: expected 3 values, got %d", len(e.Values))
+				}
+			}
+		}
+		if !found {
+			t.Error("enum \"book_type\" not found in parsed schema")
+		}
+	}
+
+	t.Logf("parsed %d tables from %d migration files", len(schema.Tables), len(files))
+}
+
 func TestPostgresRealMigration(t *testing.T) {
 	// Use the existing testdata migration file
 	migrationPath := filepath.Join("..", "..", "testdata", "sql", "migrations", "postgres", "000001_init_ddl.up.sql")
@@ -391,7 +479,7 @@ func TestPostgresRealMigration(t *testing.T) {
 	}
 
 	// Check authors table
-	var authors, books = (*struct{})(nil), (*struct{})(nil)
+	authors, books := (*struct{})(nil), (*struct{})(nil)
 	_ = authors
 	_ = books
 
@@ -448,10 +536,10 @@ func TestPostgresMultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	file1 := filepath.Join(dir, "001.sql")
-	os.WriteFile(file1, []byte(`CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL);`), 0644)
+	os.WriteFile(file1, []byte(`CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL);`), 0o644)
 
 	file2 := filepath.Join(dir, "002.sql")
-	os.WriteFile(file2, []byte(`CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL);`), 0644)
+	os.WriteFile(file2, []byte(`CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL);`), 0o644)
 
 	p := newPostgresParser()
 	cat, err := p.ParseSchema([]string{file1, file2})

@@ -20,14 +20,14 @@ type v1Pgxgen struct {
 }
 
 type v1SqlcItem struct {
-	SchemaDir   string          `yaml:"schema_dir"`
-	SqlcModels  v1SqlcModels    `yaml:"models"`
-	CrudParams  v1CrudParams    `yaml:"crud"`
-	GoConstants v1GoConstants   `yaml:"constants"`
+	SchemaDir   string        `yaml:"schema_dir"`
+	SqlcModels  v1SqlcModels  `yaml:"models"`
+	CrudParams  v1CrudParams  `yaml:"crud"`
+	GoConstants v1GoConstants `yaml:"constants"`
 }
 
 type v1SqlcModels struct {
-	ReplaceSqlcNullableTypes bool           `yaml:"replace_sqlc_nullable_types"`
+	ReplaceSqlcNullableTypes bool             `yaml:"replace_sqlc_nullable_types"`
 	Move                     v1SqlcModelsMove `yaml:"move"`
 }
 
@@ -49,9 +49,9 @@ type v1SqlcModelsMoveImports struct {
 }
 
 type v1CrudParams struct {
-	AutoRemoveGeneratedFiles    bool              `yaml:"auto_remove_generated_files"`
-	ExcludeTableNameFromMethods bool              `yaml:"exclude_table_name_from_methods"`
-	Default                     v1DefaultParams   `yaml:"default"`
+	AutoRemoveGeneratedFiles    bool                     `yaml:"auto_remove_generated_files"`
+	ExcludeTableNameFromMethods bool                     `yaml:"exclude_table_name_from_methods"`
+	Default                     v1DefaultParams          `yaml:"default"`
 	Tables                      map[string]v1TableParams `yaml:"tables"`
 }
 
@@ -60,15 +60,15 @@ type v1DefaultParams struct {
 }
 
 type v1TableParams struct {
-	PrimaryColumn string                `yaml:"primary_column"`
-	OutputDir     string                `yaml:"output_dir"`
-	Methods       map[string]v1Method   `yaml:"methods"`
+	PrimaryColumn string              `yaml:"primary_column"`
+	OutputDir     string              `yaml:"output_dir"`
+	Methods       map[string]v1Method `yaml:"methods"`
 }
 
 type v1Method struct {
 	Name            string                       `yaml:"name"`
 	Returning       string                       `yaml:"returning"`
-	Where           map[string]v1WhereParamsItem  `yaml:"where"`
+	Where           map[string]v1WhereParamsItem `yaml:"where"`
 	WhereAdditional []string                     `yaml:"where_additional"`
 	SkipColumns     []string                     `yaml:"skip_columns"`
 	ColumnValues    map[string]string            `yaml:"column_values"`
@@ -214,12 +214,11 @@ func migrateSchemaFromV1(item v1SqlcItem, sqlcCfg *v1SqlcConfig) SchemaConfig {
 			}
 		}
 		schema.Models = &ModelsConfig{
-			OutputDir:            item.SqlcModels.Move.OutputDir,
-			OutputFileName:       item.SqlcModels.Move.OutputFileName,
-			PackageName:          item.SqlcModels.Move.PackageName,
-			PackagePath:          item.SqlcModels.Move.PackagePath,
-			ReplaceNullableTypes: item.SqlcModels.ReplaceSqlcNullableTypes,
-			CustomTypes:          customTypes,
+			OutputDir:      item.SqlcModels.Move.OutputDir,
+			OutputFileName: item.SqlcModels.Move.OutputFileName,
+			PackageName:    item.SqlcModels.Move.PackageName,
+			PackagePath:    item.SqlcModels.Move.PackagePath,
+			CustomTypes:    customTypes,
 		}
 		// Copy emit_json_tags/emit_db_tags from sqlc defaults to models
 		if sqlcCfg != nil && len(sqlcCfg.SQL) > 0 {

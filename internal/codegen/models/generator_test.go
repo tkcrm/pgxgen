@@ -72,7 +72,7 @@ func render(t *testing.T, cfg *config.ModelsConfig, cat *catalog.Catalog, sqlcOv
 	require.NoError(t, err)
 	mapOpts := typemap.Options{
 		SqlPackage:          "database/sql",
-		EmitPointersForNull: cfg.EmitPointersForNull || cfg.ReplaceNullableTypes,
+		EmitPointersForNull: cfg.EmitPointersForNull,
 	}
 	code, err := renderModelsRaw(cfg, cat, mapper, mapOpts, sqlcOverrides, sqlcDefaults)
 	require.NoError(t, err)
@@ -83,20 +83,20 @@ func render(t *testing.T, cfg *config.ModelsConfig, cat *catalog.Catalog, sqlcOv
 
 func TestToCamelCase(t *testing.T) {
 	tests := map[string]string{
-		"id":          "ID",
-		"user_id":     "UserID",
-		"note_id":     "NoteID",
-		"created_at":  "CreatedAt",
-		"full_name":   "FullName",
-		"website_url": "WebsiteURL",
-		"http_status": "HTTPStatus",
-		"is_active":   "IsActive",
-		"uuid":        "UUID",
-		"json_data":   "JSONData",
-		"html_body":   "HTMLBody",
-		"api_key":     "APIKey",
+		"id":           "ID",
+		"user_id":      "UserID",
+		"note_id":      "NoteID",
+		"created_at":   "CreatedAt",
+		"full_name":    "FullName",
+		"website_url":  "WebsiteUrl",
+		"http_status":  "HttpStatus",
+		"is_active":    "IsActive",
+		"uuid":         "Uuid",
+		"json_data":    "JsonData",
+		"html_body":    "HtmlBody",
+		"api_key":      "ApiKey",
 		"workspace_id": "WorkspaceID",
-		"todo_status": "TodoStatus",
+		"todo_status":  "TodoStatus",
 	}
 	for input, expected := range tests {
 		t.Run(input, func(t *testing.T) {
@@ -203,8 +203,7 @@ func TestIDFieldNaming(t *testing.T) {
 
 func TestURLFieldNaming(t *testing.T) {
 	output := render(t, &config.ModelsConfig{PackageName: "models"}, newTestCatalog(), nil, nil)
-	assert.Contains(t, output, "\tWebsiteURL ")
-	assert.NotContains(t, output, "WebsiteUrl")
+	assert.Contains(t, output, "\tWebsiteUrl ")
 }
 
 // --- Tags ---
@@ -340,18 +339,6 @@ func TestModelTypeOverrides(t *testing.T) {
 }
 
 // --- Nullable types ---
-
-func TestNullableTypesPointers(t *testing.T) {
-	output := render(t,
-		&config.ModelsConfig{PackageName: "models", ReplaceNullableTypes: true},
-		newTestCatalog(), nil, nil,
-	)
-
-	assert.Contains(t, output, "\tCompletedAt *time.Time\n")
-	assert.Contains(t, output, "\tWorkspaceID *string\n")
-	assert.NotContains(t, output, "sql.NullTime")
-	assert.NotContains(t, output, "sql.NullString")
-}
 
 func TestNullableTypesDefault(t *testing.T) {
 	output := render(t,

@@ -5,9 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
+	sqlcpkg "github.com/sqlc-dev/sqlc/pkg/cli"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/pkg/logger"
-	sqlcpkg "github.com/sqlc-dev/sqlc/pkg/cli"
 	"gopkg.in/yaml.v3"
 )
 
