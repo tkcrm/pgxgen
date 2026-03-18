@@ -399,16 +399,10 @@ func TestPostgresFullMigrationDirectory(t *testing.T) {
 
 	schema := cat.Schemas[0]
 
-	// Verify key tables exist (these are referenced in pgxgen-postgres.yaml)
+	// Verify key tables exist from the migration
 	requiredTables := []string{
-		"notification_send_history",
-		"notification_send_queue",
-		"notifications",
-		"users",
-		"stores",
-		"transactions",
-		"transfers",
-		"wallets",
+		"authors",
+		"books",
 	}
 
 	tableNames := make(map[string]bool)
@@ -422,34 +416,42 @@ func TestPostgresFullMigrationDirectory(t *testing.T) {
 		}
 	}
 
-	// Verify transfers table has array columns from ALTER TABLE migration
+	// Verify books table has expected columns
 	for _, tbl := range schema.Tables {
-		if tbl.Name == "transfers" {
+		if tbl.Name == "books" {
 			colMap := make(map[string]*catalog.Column)
 			for _, c := range tbl.Columns {
 				colMap[c.Name] = c
 			}
-			for _, arrCol := range []string{"from_addresses", "to_addresses"} {
-				c, ok := colMap[arrCol]
-				if !ok {
-					t.Errorf("transfers: missing column %q", arrCol)
-					continue
-				}
-				if !c.IsArray {
-					t.Errorf("transfers.%s: expected IsArray=true", arrCol)
-				}
-				if !c.NotNull {
-					t.Errorf("transfers.%s: expected NotNull=true", arrCol)
-				}
+			// Check genre column exists with enum type
+			if c, ok := colMap["genre"]; !ok {
+				t.Error("books: missing column \"genre\"")
+			} else if !c.NotNull {
+				t.Error("books.genre: expected NotNull=true")
 			}
-			// from_address and to_address should be dropped
-			if _, ok := colMap["from_address"]; ok {
-				t.Error("transfers: from_address should have been dropped")
-			}
-			if _, ok := colMap["to_address"]; ok {
-				t.Error("transfers: to_address should have been dropped")
+			// Check author_id column exists
+			if _, ok := colMap["author_id"]; !ok {
+				t.Error("books: missing column \"author_id\"")
 			}
 			break
+		}
+	}
+
+	// Verify book_type enum was parsed
+	if len(schema.Enums) == 0 {
+		t.Error("expected at least one enum (book_type)")
+	} else {
+		found := false
+		for _, e := range schema.Enums {
+			if e.Name == "book_type" {
+				found = true
+				if len(e.Values) != 3 {
+					t.Errorf("book_type: expected 3 values, got %d", len(e.Values))
+				}
+			}
+		}
+		if !found {
+			t.Error("enum \"book_type\" not found in parsed schema")
 		}
 	}
 
