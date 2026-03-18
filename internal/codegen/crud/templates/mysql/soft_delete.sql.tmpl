@@ -1,0 +1,5 @@
+-- name: {{ .MethodName }} :exec
+UPDATE {{ .TableName }}
+	SET {{ .SoftDeleteColumn }} = NOW()
+{{ .WhereClause }};
+

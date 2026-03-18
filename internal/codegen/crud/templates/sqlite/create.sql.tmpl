@@ -1,0 +1,7 @@
+-- name: {{ .MethodName }} :{{ .OperationType }}
+INSERT INTO {{ .TableName }} ({{ joinNames .Columns }})
+	VALUES ({{ joinPlaceholders .Columns }})
+{{- if .Returning }}
+	RETURNING {{ .Returning }}
+{{- end }};
+

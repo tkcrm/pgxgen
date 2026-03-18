@@ -1,0 +1,4 @@
+-- name: {{ .MethodName }} :one
+SELECT EXISTS (SELECT 1 FROM {{ .TableName }} {{ .WhereClause }}
+{{- if .SoftDeleteWhere }} AND {{ .SoftDeleteColumn }} IS NULL{{ end }} LIMIT 1);
+

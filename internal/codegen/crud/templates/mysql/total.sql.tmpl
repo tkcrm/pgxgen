@@ -1,0 +1,5 @@
+-- name: {{ .MethodName }} :one
+SELECT count(1) as total FROM {{ .TableName }}
+{{- if .WhereClause }} {{ .WhereClause }}{{ end }}
+{{- if .SoftDeleteWhere }}{{ if .WhereClause }} AND {{ else }} WHERE {{ end }}{{ .SoftDeleteColumn }} IS NULL{{ end }};
+

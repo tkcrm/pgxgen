@@ -1,0 +1,3 @@
+-- name: {{ .MethodName }} :one
+SELECT * FROM {{ .TableName }} {{ .WhereClause }} LIMIT 1;
+

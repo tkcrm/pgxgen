@@ -1,0 +1,8 @@
+-- name: {{ .MethodName }} :{{ .OperationType }}
+UPDATE {{ .TableName }}
+	SET {{ joinSetClauses .Columns }}
+{{ .WhereClause }}
+{{- if .Returning }}
+	RETURNING {{ .Returning }}
+{{- end }};
+
