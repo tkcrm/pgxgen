@@ -175,4 +175,3 @@ sqlc:
 - The `returning` option only works with PostgreSQL (other engines use `:exec` instead of `:one`)
 - `auto_clean: true` removes old generated SQL files before regenerating — safe for CI
 - When `exclude_table_name: true`, method names become `GetByID` instead of `GetUserByID`
-- `replace_nullable_types: true` converts `sql.NullString` to `*string` in models — simpler but loses the Valid/Set pattern

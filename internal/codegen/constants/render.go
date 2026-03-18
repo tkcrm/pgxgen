@@ -21,7 +21,7 @@ type ConstantsColumnNamesParamsItem struct {
 }
 
 type ConstantsParams struct {
-	Package string
+	Package     string
 	Tables      []ConstantsTableNamesParamsItem
 	ColumnNames []ConstantsColumnNamesParamsItem
 }

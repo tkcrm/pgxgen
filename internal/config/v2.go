@@ -21,18 +21,17 @@ type SchemaConfig struct {
 
 // ModelsConfig defines Go model generation settings.
 type ModelsConfig struct {
-	OutputDir            string              `yaml:"output_dir" validate:"required"`
-	OutputFileName       string              `yaml:"output_file_name,omitempty"`
-	PackageName          string              `yaml:"package_name" validate:"required"`
-	PackagePath          string              `yaml:"package_path,omitempty"`
-	ReplaceNullableTypes bool                `yaml:"replace_nullable_types,omitempty"`
-	CustomTypes          []string            `yaml:"custom_types,omitempty"`
-	EmitJsonTags         bool                `yaml:"emit_json_tags,omitempty"`
-	EmitDbTags           bool                `yaml:"emit_db_tags,omitempty"`
-	EmitPointersForNull  bool                `yaml:"emit_pointers_for_null,omitempty"`
-	SqlPackage           string              `yaml:"sql_package,omitempty" validate:"omitempty,oneof=pgx/v5 pgx/v4 database/sql"`
-	TypeOverrides        []TypeOverrideConfig `yaml:"type_overrides,omitempty"`
-	CustomTags           []CustomTagConfig    `yaml:"custom_tags,omitempty"`
+	OutputDir           string               `yaml:"output_dir" validate:"required"`
+	OutputFileName      string               `yaml:"output_file_name,omitempty"`
+	PackageName         string               `yaml:"package_name" validate:"required"`
+	PackagePath         string               `yaml:"package_path,omitempty"`
+	CustomTypes         []string             `yaml:"custom_types,omitempty"`
+	EmitJsonTags        bool                 `yaml:"emit_json_tags,omitempty"`
+	EmitDbTags          bool                 `yaml:"emit_db_tags,omitempty"`
+	EmitPointersForNull bool                 `yaml:"emit_pointers_for_null,omitempty"`
+	SqlPackage          string               `yaml:"sql_package,omitempty" validate:"omitempty,oneof=pgx/v5 pgx/v4 database/sql"`
+	TypeOverrides       []TypeOverrideConfig `yaml:"type_overrides,omitempty"`
+	CustomTags          []CustomTagConfig    `yaml:"custom_tags,omitempty"`
 }
 
 // TypeOverrideConfig overrides SQL type → Go type mapping.

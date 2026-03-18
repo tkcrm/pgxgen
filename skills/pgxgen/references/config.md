@@ -46,7 +46,6 @@ models:
   output_file_name: models_gen.go # Optional. Default: "models.go"
   package_name: models # Required. Go package name
   package_path: github.com/org/proj/internal/models # Optional. Full import path
-  replace_nullable_types: true # Optional. sql.NullString → *string
   emit_json_tags: true # Optional. Add json struct tags
   emit_db_tags: true # Optional. Add db struct tags
   emit_pointers_for_null: false # Optional. Use *type for nullable (pgx only)
@@ -226,7 +225,6 @@ schemas:
       output_file_name: models_gen.go
       package_name: models
       package_path: github.com/your-org/project/internal/models
-      replace_nullable_types: true
       emit_json_tags: true
       emit_db_tags: true
 

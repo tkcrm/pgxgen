@@ -10,7 +10,6 @@ When resolving a column's Go type, pgxgen checks in this order (highest priority
 2. **sqlc type overrides** — `db_type` → `go_type` in `sqlc.overrides.types`
 3. **models type_overrides** — `sql_type` → `go_type` in `models.type_overrides`
 4. **Default typemap** — engine-specific built-in mapping (tables below)
-5. **Pointer replacement** — if `replace_nullable_types: true`, converts `sql.NullString` → `*string`
 
 ## PostgreSQL Type Mapping
 
@@ -169,13 +168,3 @@ sqlc:
         go_type: "github.com/shopspring/decimal.Decimal"
 ```
 
-### replace_nullable_types
-
-When `models.replace_nullable_types: true`, all `sql.Null*` types become Go pointers:
-
-- `sql.NullString` → `*string`
-- `sql.NullInt32` → `*int32`
-- `sql.NullTime` → `*time.Time`
-- etc.
-
-This produces simpler structs but loses the `Valid`/`Set` pattern of `sql.Null*` types.

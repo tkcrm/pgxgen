@@ -86,7 +86,6 @@
           "type": "string",
           "description": "Full Go import path for the models package"
         },
-        "replace_nullable_types": { "type": "boolean", "default": false },
         "custom_types": {
           "type": "array",
           "items": { "type": "string" },
