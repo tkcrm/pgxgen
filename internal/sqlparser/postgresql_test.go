@@ -552,6 +552,101 @@ func TestPostgresMultipleFiles(t *testing.T) {
 	}
 }
 
+func TestPostgresDropNotNull(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE accounts (
+			id SERIAL PRIMARY KEY,
+			email TEXT NOT NULL,
+			phone TEXT NOT NULL
+		);
+		ALTER TABLE accounts ALTER COLUMN phone DROP NOT NULL;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	table := cat.Schemas[0].Tables[0]
+	for _, col := range table.Columns {
+		switch col.Name {
+		case "email":
+			if !col.NotNull {
+				t.Error("email should remain NOT NULL")
+			}
+		case "phone":
+			if col.NotNull {
+				t.Error("phone should be nullable after DROP NOT NULL")
+			}
+		}
+	}
+}
+
+func TestPostgresParseError(t *testing.T) {
+	path := writeTemp(t, `THIS IS NOT VALID SQL AT ALL ???`)
+
+	p := newPostgresParser()
+	_, err := p.ParseSchema([]string{path})
+	if err == nil {
+		t.Fatal("expected parse error for invalid SQL")
+	}
+}
+
+func TestPostgresEmptyFile(t *testing.T) {
+	path := writeTemp(t, ``)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas) != 1 {
+		t.Fatalf("expected 1 schema (public), got %d", len(cat.Schemas))
+	}
+	if len(cat.Schemas[0].Tables) != 0 {
+		t.Errorf("expected 0 tables, got %d", len(cat.Schemas[0].Tables))
+	}
+	if len(cat.Schemas[0].Enums) != 0 {
+		t.Errorf("expected 0 enums, got %d", len(cat.Schemas[0].Enums))
+	}
+}
+
+func TestPostgresMultiSchemaEnums(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE SCHEMA IF NOT EXISTS billing;
+		CREATE TYPE status AS ENUM ('active', 'inactive');
+		CREATE TYPE billing.payment_status AS ENUM ('pending', 'paid', 'refunded');
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas) != 2 {
+		t.Fatalf("expected 2 schemas, got %d", len(cat.Schemas))
+	}
+
+	for _, s := range cat.Schemas {
+		switch s.Name {
+		case "public":
+			if len(s.Enums) != 1 || s.Enums[0].Name != "status" {
+				t.Errorf("public: expected enum 'status', got %v", s.Enums)
+			}
+		case "billing":
+			if len(s.Enums) != 1 || s.Enums[0].Name != "payment_status" {
+				t.Errorf("billing: expected enum 'payment_status', got %v", s.Enums)
+			}
+			if len(s.Enums) == 1 && len(s.Enums[0].Values) != 3 {
+				t.Errorf("billing.payment_status: expected 3 values, got %d", len(s.Enums[0].Values))
+			}
+		}
+	}
+}
+
 func TestPostgresTestdataFile(t *testing.T) {
 	path := filepath.Join("testdata", "postgresql.sql")
 	if _, err := os.Stat(path); os.IsNotExist(err) {
