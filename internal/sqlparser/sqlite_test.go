@@ -302,7 +302,7 @@ func TestSqliteMultiFileMigrations(t *testing.T) {
 	dir := t.TempDir()
 
 	// Migration 1: create tables
-	os.WriteFile(filepath.Join(dir, "001.sql"), []byte(`
+	if err := os.WriteFile(filepath.Join(dir, "001.sql"), []byte(`
 		CREATE TABLE IF NOT EXISTS todos (
 			id TEXT PRIMARY KEY,
 			user_id BIGINT NOT NULL,
@@ -317,14 +317,18 @@ func TestSqliteMultiFileMigrations(t *testing.T) {
 			body TEXT NOT NULL DEFAULT '',
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 		);
-	`), 0o644)
+	`), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
 
 	// Migration 2: add columns via ALTER TABLE
-	os.WriteFile(filepath.Join(dir, "002.sql"), []byte(`
+	if err := os.WriteFile(filepath.Join(dir, "002.sql"), []byte(`
 		ALTER TABLE todos ADD COLUMN workspace_id TEXT;
 		ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT 'none';
 		ALTER TABLE notes ADD COLUMN workspace_id TEXT;
-	`), 0o644)
+	`), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
 
 	files, err := ResolveSchemaFiles(dir)
 	if err != nil {

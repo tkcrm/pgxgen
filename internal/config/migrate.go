@@ -343,7 +343,7 @@ func migrateMethodsMap(methods map[string]v1Method) map[string]*MethodConfig {
 		if len(method.Where) > 0 {
 			mc.Where = make(map[string]WhereParamConfig, len(method.Where))
 			for k, v := range method.Where {
-				mc.Where[k] = WhereParamConfig{Value: v.Value, Operator: v.Operator}
+				mc.Where[k] = WhereParamConfig(v)
 			}
 		}
 		result[methodType] = mc

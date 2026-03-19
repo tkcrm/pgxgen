@@ -1,21 +1,39 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  release:
+    types: [created]
 
 permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            goos: linux
+            goarch: amd64
+          - os: ubuntu-latest
+            goos: linux
+            goarch: arm64
+            cc: aarch64-linux-gnu-gcc
+          - os: macos-latest
+            goos: darwin
+            goarch: amd64
+          - os: macos-latest
+            goos: darwin
+            goarch: arm64
+          - os: windows-latest
+            goos: windows
+            goarch: amd64
+          - os: windows-latest
+            goos: windows
+            goarch: arm64
+    runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # Important for git history and changelog generation
+      - uses: actions/checkout@v6
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -23,21 +41,51 @@ jobs:
           go-version: "1.26.1"
           cache: true
 
-      - name: Install zig
-        uses: mlugg/setup-zig@v2.2.1
-        with:
-          version: 0.15.1
+      - name: Install cross-compiler (Linux ARM64)
+        if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Install gcx
-        run: |
-          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/sxwebdev/gcx/refs/heads/master/scripts/install.sh)"
-
-      - name: Build release binaries
-        run: gcx build --config gcx.yaml
-
-      - name: Create GitHub Release
-        run: |
-          changelog=$(gcx release changelog --stable)
-          gh release create ${{ github.ref_name }} ./dist/* --notes "$changelog" --title ${{ github.ref_name }}
+      - name: Build binary
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: "1"
+          CC: ${{ matrix.cc || '' }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          COMMIT="${GITHUB_SHA::8}"
+          DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          BINARY_NAME="pgxgen"
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            BINARY_NAME="pgxgen.exe"
+          fi
+          DIR_NAME="pgxgen_${TAG}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          mkdir -p "dist/${DIR_NAME}"
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${TAG} -X main.commit=${COMMIT} -X main.buildDate=${DATE}" \
+            -o "dist/${DIR_NAME}/${BINARY_NAME}" \
+            ./cmd/pgxgen
+          cd dist && tar -czf "${DIR_NAME}.tar.gz" "${DIR_NAME}"
+        shell: bash
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pgxgen_${{ github.event.release.tag_name }}_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: dist/*.tar.gz
+
+  upload:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Upload assets to release
+        run: gh release upload "${{ github.event.release.tag_name }}" ./dist/*.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}

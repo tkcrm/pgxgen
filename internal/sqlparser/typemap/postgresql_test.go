@@ -10,10 +10,6 @@ func col(typ string, notNull bool) *catalog.Column {
 	return &catalog.Column{Type: typ, NotNull: notNull}
 }
 
-func colArray(typ string) *catalog.Column {
-	return &catalog.Column{Type: typ, NotNull: false, IsArray: true, ArrayDims: 1}
-}
-
 var noEnums []*catalog.Enum
 
 func TestPostgresIntegerTypes(t *testing.T) {

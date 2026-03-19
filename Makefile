@@ -12,6 +12,3 @@ fmt:
 
 lint:
 	golangci-lint run
-
-%:
-	@:

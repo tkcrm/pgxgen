@@ -536,10 +536,14 @@ func TestPostgresMultipleFiles(t *testing.T) {
 	dir := t.TempDir()
 
 	file1 := filepath.Join(dir, "001.sql")
-	os.WriteFile(file1, []byte(`CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL);`), 0o644)
+	if err := os.WriteFile(file1, []byte(`CREATE TABLE users (id SERIAL PRIMARY KEY, name TEXT NOT NULL);`), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
 
 	file2 := filepath.Join(dir, "002.sql")
-	os.WriteFile(file2, []byte(`CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL);`), 0o644)
+	if err := os.WriteFile(file2, []byte(`CREATE TABLE posts (id SERIAL PRIMARY KEY, user_id INTEGER NOT NULL);`), 0o644); err != nil {
+		t.Fatalf("WriteFile error: %v", err)
+	}
 
 	p := newPostgresParser()
 	cat, err := p.ParseSchema([]string{file1, file2})

@@ -320,9 +320,7 @@ func (g *Generator) buildWhereClause(
 		}
 	}
 
-	for _, additional := range whereAdditional {
-		parts = append(parts, additional)
-	}
+	parts = append(parts, whereAdditional...)
 
 	if len(parts) == 0 {
 		return ""

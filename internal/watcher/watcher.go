@@ -20,7 +20,7 @@ func Watch(ctx context.Context, l logger.Logger, cfg *config.V2Config, configPat
 	if err != nil {
 		return err
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	configDir := filepath.Dir(configPath)
 

@@ -34,7 +34,7 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	if err != nil {
 		return nil, err
 	}
-	defer githubResp.Body.Close()
+	defer func() { _ = githubResp.Body.Close() }()
 
 	body, err := io.ReadAll(githubResp.Body)
 	if err != nil {
@@ -85,7 +85,7 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %w", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Determine platform and architecture
 	platform := runtime.GOOS
@@ -113,7 +113,7 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	if err != nil {
 		return nil, fmt.Errorf("failed to download new version: %w", err)
 	}
-	defer downloadResp.Body.Close()
+	defer func() { _ = downloadResp.Body.Close() }()
 
 	if downloadResp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to download: status code %d", downloadResp.StatusCode)
@@ -125,7 +125,7 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	if err != nil {
 		return nil, fmt.Errorf("failed to create archive file: %w", err)
 	}
-	defer archiveFile.Close()
+	defer func() { _ = archiveFile.Close() }()
 
 	if _, err := io.Copy(archiveFile, downloadResp.Body); err != nil {
 		return nil, fmt.Errorf("failed to save archive: %w", err)
@@ -142,7 +142,7 @@ func CheckAndUpdateVersion(ctx context.Context, currentVersion string) (*CheckLa
 	if platform == "windows" {
 		binaryName += ".exe"
 	}
-	newBinaryPath := filepath.Join(tempDir, dirName, "pgxgen")
+	newBinaryPath := filepath.Join(tempDir, dirName, binaryName)
 
 	// Check if file exists
 	if _, err := os.Stat(newBinaryPath); err != nil {
