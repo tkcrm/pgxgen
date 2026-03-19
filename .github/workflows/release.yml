@@ -28,9 +28,6 @@ jobs:
           - os: windows-latest
             goos: windows
             goarch: amd64
-          - os: windows-latest
-            goos: windows
-            goarch: arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
