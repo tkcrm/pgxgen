@@ -73,6 +73,7 @@ schemas:
       package_path: github.com/your-org/project/internal/models
       emit_json_tags: true
       emit_db_tags: true
+      # include_struct_comments: true  # Add // @name StructName for Swagger
 
     sqlc:
       defaults:

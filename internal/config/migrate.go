@@ -28,6 +28,7 @@ type v1SqlcItem struct {
 
 type v1SqlcModels struct {
 	ReplaceSqlcNullableTypes bool             `yaml:"replace_sqlc_nullable_types"`
+	IncludeStructComments    bool             `yaml:"include_struct_comments"`
 	Move                     v1SqlcModelsMove `yaml:"move"`
 }
 
@@ -214,11 +215,12 @@ func migrateSchemaFromV1(item v1SqlcItem, sqlcCfg *v1SqlcConfig) SchemaConfig {
 			}
 		}
 		schema.Models = &ModelsConfig{
-			OutputDir:      item.SqlcModels.Move.OutputDir,
-			OutputFileName: item.SqlcModels.Move.OutputFileName,
-			PackageName:    item.SqlcModels.Move.PackageName,
-			PackagePath:    item.SqlcModels.Move.PackagePath,
-			CustomTypes:    customTypes,
+			OutputDir:             item.SqlcModels.Move.OutputDir,
+			OutputFileName:        item.SqlcModels.Move.OutputFileName,
+			PackageName:           item.SqlcModels.Move.PackageName,
+			PackagePath:           item.SqlcModels.Move.PackagePath,
+			CustomTypes:           customTypes,
+			IncludeStructComments: item.SqlcModels.IncludeStructComments,
 		}
 		// Copy emit_json_tags/emit_db_tags from sqlc defaults to models
 		if sqlcCfg != nil && len(sqlcCfg.SQL) > 0 {

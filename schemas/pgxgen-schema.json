@@ -94,6 +94,7 @@
         "emit_json_tags": { "type": "boolean", "default": false },
         "emit_db_tags": { "type": "boolean", "default": false },
         "emit_pointers_for_null": { "type": "boolean", "default": false },
+        "include_struct_comments": { "type": "boolean", "default": false, "description": "Add // @name StructName comments to generated structs (useful for Swagger)" },
         "sql_package": {
           "type": "string",
           "enum": ["pgx/v5", "pgx/v4", "database/sql"]

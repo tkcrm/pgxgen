@@ -49,6 +49,7 @@ models:
   emit_json_tags: true # Optional. Add json struct tags
   emit_db_tags: true # Optional. Add db struct tags
   emit_pointers_for_null: false # Optional. Use *type for nullable (pgx only)
+  include_struct_comments: false # Optional. Add // @name comments for Swagger
   sql_package: pgx/v5 # Optional. pgx/v5 | pgx/v4 | database/sql
   custom_types: [MyType] # Optional. Types defined in models package
   type_overrides: # Optional. SQL → Go type overrides

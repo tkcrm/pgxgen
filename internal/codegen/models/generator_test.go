@@ -338,6 +338,25 @@ func TestModelTypeOverrides(t *testing.T) {
 	assert.Contains(t, output, "\tHappenedAt time.Time\n")
 }
 
+// --- Struct comments ---
+
+func TestIncludeStructComments(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName:           "models",
+		IncludeStructComments: true,
+	}, newTestCatalog(), nil, nil)
+
+	assert.Contains(t, output, "} // @name Author\n")
+	assert.Contains(t, output, "} // @name NoteTag\n")
+	assert.Contains(t, output, "} // @name Todo\n")
+	assert.Contains(t, output, "} // @name Workspace\n")
+}
+
+func TestNoStructCommentsWhenDisabled(t *testing.T) {
+	output := render(t, &config.ModelsConfig{PackageName: "models"}, newTestCatalog(), nil, nil)
+	assert.NotContains(t, output, "// @name")
+}
+
 // --- Nullable types ---
 
 func TestNullableTypesDefault(t *testing.T) {

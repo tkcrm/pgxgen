@@ -348,7 +348,11 @@ func renderStruct(
 		buf.WriteString(fmt.Sprintf("\t%s %s%s\n", fieldName, fieldType, tagStr))
 	}
 
-	buf.WriteString("}\n\n")
+	if cfg.IncludeStructComments {
+		fmt.Fprintf(buf, "} // @name %s\n\n", structName)
+	} else {
+		buf.WriteString("}\n\n")
+	}
 }
 
 // resolveType checks sqlc overrides → models type_overrides → default typemap.
