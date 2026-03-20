@@ -15,6 +15,7 @@ Code generation tool for PostgreSQL, MySQL, and SQLite. Generates CRUD SQL, Go m
 - **sqlc integration** — auto-generates `sqlc.yaml` and runs sqlc
 - **Multi-engine** — PostgreSQL + MySQL + SQLite in one project
 - **Per-table repos** or **single repo** layout
+- **Schema dump** — consolidated DDL output from migrations (no config needed)
 - **Watch mode**, **dry-run**, **validation**, **interactive init**
 
 ## AI Agent Skills
@@ -143,7 +144,7 @@ schemas:
 ```yaml
 defaults:
   queries_dir_prefix: sql/queries # → sql/queries/{table}
-  output_dir_prefix: internal/store/repos # → internal/store/repos/repo_{table}
+  output_dir_prefix: internal/store/repos # → internal/store/repos/{table}
 ```
 
 **Single repo** (all tables in one directory):
@@ -189,12 +190,25 @@ tables:
 | `pgxgen generate crud`      | Generate CRUD SQL only                                 |
 | `pgxgen generate models`    | Generate Go models only                                |
 | `pgxgen generate --dry-run` | Preview changes without writing                        |
+| `pgxgen schema -d DIR`      | Output consolidated DDL from migrations                |
 | `pgxgen validate`           | Validate config and schema (for CI)                    |
 | `pgxgen watch`              | Watch schema files, regenerate on changes              |
 | `pgxgen init`               | Create config interactively                            |
 | `pgxgen example`            | Print example config with all features                 |
 | `pgxgen migrate`            | Migrate v1 config to v2                                |
 | `pgxgen update`             | Self-update to latest version                          |
+
+## Schema dump
+
+Output the final consolidated DDL from all migration files — as if all migrations were applied and the schema was dumped. This command is standalone and does not require a `pgxgen.yaml` config.
+
+```bash
+pgxgen schema --dir sql/migrations/postgres                  # PostgreSQL (default)
+pgxgen schema -d sql/migrations/sqlite -e sqlite             # SQLite
+pgxgen schema -d sql/migrations/postgres > schema.sql        # Save to file
+```
+
+Captures tables, columns with defaults, PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK constraints, indexes (including partial), extensions, enums, and comments. Tables are ordered by foreign key dependencies.
 
 ## Migration from v1
 

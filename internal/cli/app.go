@@ -12,6 +12,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/tkcrm/pgxgen/internal/codegen"
 	"github.com/tkcrm/pgxgen/internal/config"
+	"github.com/tkcrm/pgxgen/internal/ddlgen"
 	"github.com/tkcrm/pgxgen/internal/sqlparser"
 	"github.com/tkcrm/pgxgen/internal/updater"
 	"github.com/tkcrm/pgxgen/internal/watcher"
@@ -36,6 +37,7 @@ func NewApp(version string) *cli.Command {
 		},
 		Commands: []*cli.Command{
 			newGenerateCmd(l),
+			newSchemaCmd(l),
 			newMigrateCmd(l),
 			newValidateCmd(l),
 			newInitCmd(l),
@@ -131,6 +133,59 @@ func newGenerateCmd(l logger.Logger) *cli.Command {
 		// Default action: generate all
 		Action: func(ctx context.Context, cmd *cli.Command) error {
 			return runGenerate(ctx, cmd, l, nil)
+		},
+	}
+}
+
+func newSchemaCmd(_ logger.Logger) *cli.Command {
+	return &cli.Command{
+		Name:  "schema",
+		Usage: "Output consolidated DDL from all migrations",
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:     "dir",
+				Aliases:  []string{"d"},
+				Usage:    "Path to migrations directory or SQL file",
+				Required: true,
+			},
+			&cli.StringFlag{
+				Name:    "engine",
+				Aliases: []string{"e"},
+				Usage:   "Database engine (postgresql, mysql, sqlite)",
+				Value:   "postgresql",
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			dir := cmd.String("dir")
+			engine := cmd.String("engine")
+
+			files, err := sqlparser.ResolveSchemaFiles(dir)
+			if err != nil {
+				return fmt.Errorf("resolve schema files: %w", err)
+			}
+
+			parser, err := sqlparser.NewParser(engine)
+			if err != nil {
+				return err
+			}
+
+			cat, err := parser.ParseSchema(files)
+			if err != nil {
+				return fmt.Errorf("parse schema: %w", err)
+			}
+
+			gen, err := ddlgen.New(engine)
+			if err != nil {
+				return err
+			}
+
+			ddl, err := gen.Generate(cat)
+			if err != nil {
+				return fmt.Errorf("generate DDL: %w", err)
+			}
+
+			fmt.Print(ddl)
+			return nil
 		},
 	}
 }

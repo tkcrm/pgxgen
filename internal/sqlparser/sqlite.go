@@ -45,6 +45,10 @@ func (p *sqliteParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 				p.handleAlterTable(cat, n)
 			case *sqliteDropTable:
 				p.handleDropTable(cat, n)
+			case *sqliteCreateIndex:
+				p.handleCreateIndex(cat, n)
+			case *sqliteDropIndex:
+				p.handleDropIndex(cat, n)
 			}
 		}
 	}
@@ -60,17 +64,33 @@ type sqliteCreateTable struct {
 	Name        string
 	IfNotExists bool
 	Columns     []*catalog.Column
+	PrimaryKey  *catalog.PrimaryKey
+	ForeignKeys []*catalog.ForeignKey
+	Uniques     []*catalog.UniqueConstraint
+	Checks      []*catalog.CheckConstraint
 }
 
 type sqliteAlterTable struct {
 	Schema      string
 	Table       string
 	AddColumn   *catalog.Column
+	AddColumnFK *catalog.ForeignKey // FK from ADD COLUMN's REFERENCES
 	DropColumn  string
 	RenameTable string
 }
 
 type sqliteDropTable struct {
+	Schema string
+	Name   string
+}
+
+type sqliteCreateIndex struct {
+	Schema    string
+	TableName string
+	Index     *catalog.Index
+}
+
+type sqliteDropIndex struct {
 	Schema string
 	Name   string
 }
@@ -108,30 +128,33 @@ func sqliteParse(sql string) ([]sqliteStmt, error) {
 			continue
 		}
 		for _, stmt := range list.AllSql_stmt() {
-			s := convertSqliteStmt(stmt)
-			if s != nil {
-				stmts = append(stmts, s)
-			}
+			converted := convertSqliteStmts(stmt)
+			stmts = append(stmts, converted...)
 		}
 	}
 
 	return stmts, nil
 }
 
-func convertSqliteStmt(stmt sqliteparser.ISql_stmtContext) sqliteStmt {
+func convertSqliteStmts(stmt sqliteparser.ISql_stmtContext) []sqliteStmt {
 	s, ok := stmt.(*sqliteparser.Sql_stmtContext)
 	if !ok {
 		return nil
 	}
 
 	if ct := s.Create_table_stmt(); ct != nil {
-		return convertSqliteCreateTable(ct)
+		return []sqliteStmt{convertSqliteCreateTable(ct)}
 	}
 	if at := s.Alter_table_stmt(); at != nil {
-		return convertSqliteAlterTable(at)
+		return []sqliteStmt{convertSqliteAlterTable(at)}
 	}
 	if dt := s.Drop_stmt(); dt != nil {
-		return convertSqliteDropStmt(dt)
+		if r := convertSqliteDropStmt(dt); r != nil {
+			return []sqliteStmt{r}
+		}
+	}
+	if ci := s.Create_index_stmt(); ci != nil {
+		return []sqliteStmt{convertSqliteCreateIndexStmt(ci)}
 	}
 
 	return nil
@@ -164,15 +187,289 @@ func convertSqliteCreateTable(ctx sqliteparser.ICreate_table_stmtContext) *sqlit
 		}
 
 		col := &catalog.Column{
-			Name:    sqliteIdentifier(def.Column_name().GetText()),
-			Type:    typeName,
-			NotNull: sqliteHasNotNullConstraint(def.AllColumn_constraint()),
+			Name:     sqliteIdentifier(def.Column_name().GetText()),
+			Type:     typeName,
+			FullType: typeName,
+		}
+
+		// Process column constraints
+		for _, ic := range def.AllColumn_constraint() {
+			constraint, ok := ic.(*sqliteparser.Column_constraintContext)
+			if !ok {
+				continue
+			}
+			sqliteProcessColumnConstraint(col, constraint, ct)
 		}
 
 		ct.Columns = append(ct.Columns, col)
 	}
 
+	// Process table constraints
+	for _, itc := range n.AllTable_constraint() {
+		tc, ok := itc.(*sqliteparser.Table_constraintContext)
+		if !ok {
+			continue
+		}
+		sqliteProcessTableConstraint(tc, ct)
+	}
+
+	// Build PrimaryKey from inline column-level PK if no table-level PK was set
+	if ct.PrimaryKey == nil {
+		var pkCols []string
+		for _, col := range ct.Columns {
+			if col.IsPrimary {
+				pkCols = append(pkCols, col.Name)
+			}
+		}
+		if len(pkCols) > 0 {
+			ct.PrimaryKey = &catalog.PrimaryKey{Columns: pkCols}
+		}
+	}
+
 	return ct
+}
+
+// sqliteProcessColumnConstraint extracts constraint info from a column-level constraint.
+func sqliteProcessColumnConstraint(col *catalog.Column, c *sqliteparser.Column_constraintContext, ct *sqliteCreateTable) {
+	if c.PRIMARY_() != nil && c.KEY_() != nil {
+		col.IsPrimary = true
+		col.NotNull = true
+		return
+	}
+	if c.NOT_() != nil && c.NULL_() != nil {
+		col.NotNull = true
+		return
+	}
+	if c.DEFAULT_() != nil {
+		if sn := c.Signed_number(); sn != nil {
+			col.Default = sn.GetText()
+		} else if lv := c.Literal_value(); lv != nil {
+			col.Default = lv.GetText()
+		} else if expr := c.Expr(); expr != nil {
+			col.Default = expr.GetText()
+		}
+		return
+	}
+	if c.UNIQUE_() != nil {
+		name := ""
+		if c.CONSTRAINT_() != nil && c.Name() != nil {
+			name = sqliteIdentifier(c.Name().GetText())
+		}
+		ct.Uniques = append(ct.Uniques, &catalog.UniqueConstraint{
+			Name:    name,
+			Columns: []string{col.Name},
+		})
+		return
+	}
+	if c.CHECK_() != nil {
+		if expr := c.Expr(); expr != nil {
+			name := ""
+			if c.CONSTRAINT_() != nil && c.Name() != nil {
+				name = sqliteIdentifier(c.Name().GetText())
+			}
+			ct.Checks = append(ct.Checks, &catalog.CheckConstraint{
+				Name:       name,
+				Expression: expr.GetText(),
+			})
+		}
+		return
+	}
+	if fkc := c.Foreign_key_clause(); fkc != nil {
+		fk := sqliteParseForeignKeyClause(fkc)
+		if fk != nil {
+			fk.Columns = []string{col.Name}
+			ct.ForeignKeys = append(ct.ForeignKeys, fk)
+		}
+	}
+}
+
+// sqliteProcessTableConstraint extracts constraint info from a table-level constraint.
+func sqliteProcessTableConstraint(tc *sqliteparser.Table_constraintContext, ct *sqliteCreateTable) {
+	constraintName := ""
+	if tc.CONSTRAINT_() != nil && tc.Name() != nil {
+		constraintName = sqliteIdentifier(tc.Name().GetText())
+	}
+
+	if tc.PRIMARY_() != nil && tc.KEY_() != nil {
+		pk := &catalog.PrimaryKey{Name: constraintName}
+		for _, ic := range tc.AllIndexed_column() {
+			if idx, ok := ic.(*sqliteparser.Indexed_columnContext); ok {
+				if cn := idx.Column_name(); cn != nil {
+					pk.Columns = append(pk.Columns, sqliteIdentifier(cn.GetText()))
+				} else if expr := idx.Expr(); expr != nil {
+					pk.Columns = append(pk.Columns, expr.GetText())
+				}
+			}
+		}
+		ct.PrimaryKey = pk
+		// Mark columns as NOT NULL and IsPrimary
+		for _, pkCol := range pk.Columns {
+			for _, col := range ct.Columns {
+				if col.Name == pkCol {
+					col.NotNull = true
+					col.IsPrimary = true
+				}
+			}
+		}
+		return
+	}
+
+	if tc.UNIQUE_() != nil {
+		uc := &catalog.UniqueConstraint{Name: constraintName}
+		for _, ic := range tc.AllIndexed_column() {
+			if idx, ok := ic.(*sqliteparser.Indexed_columnContext); ok {
+				if cn := idx.Column_name(); cn != nil {
+					uc.Columns = append(uc.Columns, sqliteIdentifier(cn.GetText()))
+				}
+			}
+		}
+		ct.Uniques = append(ct.Uniques, uc)
+		return
+	}
+
+	if tc.CHECK_() != nil {
+		if expr := tc.Expr(); expr != nil {
+			ct.Checks = append(ct.Checks, &catalog.CheckConstraint{
+				Name:       constraintName,
+				Expression: expr.GetText(),
+			})
+		}
+		return
+	}
+
+	if tc.FOREIGN_() != nil && tc.KEY_() != nil {
+		fk := sqliteParseForeignKeyClause(tc.Foreign_key_clause())
+		if fk != nil {
+			fk.Name = constraintName
+			for _, cn := range tc.AllColumn_name() {
+				fk.Columns = append(fk.Columns, sqliteIdentifier(cn.GetText()))
+			}
+			ct.ForeignKeys = append(ct.ForeignKeys, fk)
+		}
+	}
+}
+
+// sqliteParseForeignKeyClause extracts FK details from a foreign_key_clause ANTLR node.
+func sqliteParseForeignKeyClause(ctx sqliteparser.IForeign_key_clauseContext) *catalog.ForeignKey {
+	fkc, ok := ctx.(*sqliteparser.Foreign_key_clauseContext)
+	if !ok || fkc == nil {
+		return nil
+	}
+
+	fk := &catalog.ForeignKey{}
+	if ft := fkc.Foreign_table(); ft != nil {
+		fk.RefTable = sqliteIdentifier(ft.GetText())
+	}
+	for _, cn := range fkc.AllColumn_name() {
+		fk.RefColumns = append(fk.RefColumns, sqliteIdentifier(cn.GetText()))
+	}
+
+	// Parse ON DELETE / ON UPDATE actions by walking children
+	children := fkc.GetChildren()
+	for i := 0; i < len(children); i++ {
+		tn, ok := children[i].(antlr.TerminalNode)
+		if !ok {
+			continue
+		}
+		if tn.GetSymbol().GetTokenType() != sqliteparser.SQLiteParserON_ {
+			continue
+		}
+		// Next token should be DELETE_ or UPDATE_
+		if i+1 >= len(children) {
+			continue
+		}
+		nextTn, ok := children[i+1].(antlr.TerminalNode)
+		if !ok {
+			continue
+		}
+		isDelete := nextTn.GetSymbol().GetTokenType() == sqliteparser.SQLiteParserDELETE_
+		isUpdate := nextTn.GetSymbol().GetTokenType() == sqliteparser.SQLiteParserUPDATE_
+		if !isDelete && !isUpdate {
+			continue
+		}
+		// Next token(s) should be the action
+		action := sqliteParseAction(children, i+2)
+		if isDelete {
+			fk.OnDelete = action
+		} else {
+			fk.OnUpdate = action
+		}
+	}
+
+	return fk
+}
+
+// sqliteParseAction extracts the action keyword(s) starting from index i in children.
+func sqliteParseAction(children []antlr.Tree, i int) string {
+	if i >= len(children) {
+		return ""
+	}
+	tn, ok := children[i].(antlr.TerminalNode)
+	if !ok {
+		return ""
+	}
+	switch tn.GetSymbol().GetTokenType() {
+	case sqliteparser.SQLiteParserCASCADE_:
+		return "CASCADE"
+	case sqliteparser.SQLiteParserRESTRICT_:
+		return "RESTRICT"
+	case sqliteparser.SQLiteParserSET_:
+		if i+1 < len(children) {
+			if next, ok := children[i+1].(antlr.TerminalNode); ok {
+				switch next.GetSymbol().GetTokenType() {
+				case sqliteparser.SQLiteParserNULL_:
+					return "SET NULL"
+				case sqliteparser.SQLiteParserDEFAULT_:
+					return "SET DEFAULT"
+				}
+			}
+		}
+	case sqliteparser.SQLiteParserNO_:
+		if i+1 < len(children) {
+			if next, ok := children[i+1].(antlr.TerminalNode); ok {
+				if next.GetSymbol().GetTokenType() == sqliteparser.SQLiteParserACTION_ {
+					return "NO ACTION"
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func convertSqliteCreateIndexStmt(ctx sqliteparser.ICreate_index_stmtContext) *sqliteCreateIndex {
+	n, ok := ctx.(*sqliteparser.Create_index_stmtContext)
+	if !ok {
+		return nil
+	}
+
+	ci := &sqliteCreateIndex{}
+	if n.Schema_name() != nil {
+		ci.Schema = n.Schema_name().GetText()
+	}
+	ci.TableName = sqliteIdentifier(n.Table_name().GetText())
+
+	idx := &catalog.Index{
+		IsUnique:    n.UNIQUE_() != nil,
+		IfNotExists: n.EXISTS_() != nil,
+	}
+	if n.Index_name() != nil {
+		idx.Name = sqliteIdentifier(n.Index_name().GetText())
+	}
+	for _, ic := range n.AllIndexed_column() {
+		if idxCol, ok := ic.(*sqliteparser.Indexed_columnContext); ok {
+			if cn := idxCol.Column_name(); cn != nil {
+				idx.Columns = append(idx.Columns, sqliteIdentifier(cn.GetText()))
+			} else if expr := idxCol.Expr(); expr != nil {
+				idx.Columns = append(idx.Columns, expr.GetText())
+			}
+		}
+	}
+	if n.WHERE_() != nil && n.Expr() != nil {
+		idx.Where = n.Expr().GetText()
+	}
+
+	ci.Index = idx
+	return ci
 }
 
 func convertSqliteAlterTable(ctx sqliteparser.IAlter_table_stmtContext) *sqliteAlterTable {
@@ -197,10 +494,25 @@ func convertSqliteAlterTable(ctx sqliteparser.IAlter_table_stmtContext) *sqliteA
 			if def.Type_name() != nil {
 				typeName = def.Type_name().GetText()
 			}
-			at.AddColumn = &catalog.Column{
-				Name:    sqliteIdentifier(def.Column_name().GetText()),
-				Type:    typeName,
-				NotNull: sqliteHasNotNullConstraint(def.AllColumn_constraint()),
+			col := &catalog.Column{
+				Name:     sqliteIdentifier(def.Column_name().GetText()),
+				Type:     typeName,
+				FullType: typeName,
+			}
+
+			// Process column constraints (including DEFAULT, FK, etc.)
+			tempCT := &sqliteCreateTable{} // temporary holder for FK/unique/check
+			for _, ic := range def.AllColumn_constraint() {
+				constraint, ok := ic.(*sqliteparser.Column_constraintContext)
+				if !ok {
+					continue
+				}
+				sqliteProcessColumnConstraint(col, constraint, tempCT)
+			}
+			at.AddColumn = col
+			// If a FK was found in column constraints, pass it along
+			if len(tempCT.ForeignKeys) > 0 {
+				at.AddColumnFK = tempCT.ForeignKeys[0]
 			}
 		}
 	}
@@ -221,25 +533,37 @@ func convertSqliteAlterTable(ctx sqliteparser.IAlter_table_stmtContext) *sqliteA
 	return at
 }
 
-func convertSqliteDropStmt(ctx sqliteparser.IDrop_stmtContext) *sqliteDropTable {
+func convertSqliteDropStmt(ctx sqliteparser.IDrop_stmtContext) sqliteStmt {
 	n, ok := ctx.(*sqliteparser.Drop_stmtContext)
 	if !ok {
 		return nil
 	}
 
-	// Only handle DROP TABLE
-	if n.TABLE_() == nil {
-		return nil
+	// DROP TABLE
+	if n.TABLE_() != nil {
+		dt := &sqliteDropTable{}
+		if n.Schema_name() != nil {
+			dt.Schema = n.Schema_name().GetText()
+		}
+		if n.Any_name() != nil {
+			dt.Name = sqliteIdentifier(n.Any_name().GetText())
+		}
+		return dt
 	}
 
-	dt := &sqliteDropTable{}
-	if n.Schema_name() != nil {
-		dt.Schema = n.Schema_name().GetText()
+	// DROP INDEX
+	if n.INDEX_() != nil {
+		di := &sqliteDropIndex{}
+		if n.Schema_name() != nil {
+			di.Schema = n.Schema_name().GetText()
+		}
+		if n.Any_name() != nil {
+			di.Name = sqliteIdentifier(n.Any_name().GetText())
+		}
+		return di
 	}
-	if n.Any_name() != nil {
-		dt.Name = sqliteIdentifier(n.Any_name().GetText())
-	}
-	return dt
+
+	return nil
 }
 
 func (p *sqliteParser) handleCreateTable(cat *catalog.Catalog, ct *sqliteCreateTable) {
@@ -259,9 +583,13 @@ func (p *sqliteParser) handleCreateTable(cat *catalog.Catalog, ct *sqliteCreateT
 	}
 
 	table := &catalog.Table{
-		Name:    ct.Name,
-		Schema:  schemaName,
-		Columns: ct.Columns,
+		Name:        ct.Name,
+		Schema:      schemaName,
+		Columns:     ct.Columns,
+		PrimaryKey:  ct.PrimaryKey,
+		ForeignKeys: ct.ForeignKeys,
+		Uniques:     ct.Uniques,
+		Checks:      ct.Checks,
 	}
 
 	schema.Tables = append(schema.Tables, table)
@@ -280,6 +608,9 @@ func (p *sqliteParser) handleAlterTable(cat *catalog.Catalog, at *sqliteAlterTab
 
 	if at.AddColumn != nil {
 		table.Columns = append(table.Columns, at.AddColumn)
+		if at.AddColumnFK != nil {
+			table.ForeignKeys = append(table.ForeignKeys, at.AddColumnFK)
+		}
 	}
 
 	if at.DropColumn != "" {
@@ -293,6 +624,40 @@ func (p *sqliteParser) handleAlterTable(cat *catalog.Catalog, at *sqliteAlterTab
 
 	if at.RenameTable != "" {
 		table.Name = at.RenameTable
+	}
+}
+
+func (p *sqliteParser) handleCreateIndex(cat *catalog.Catalog, ci *sqliteCreateIndex) {
+	schemaName := ci.Schema
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+
+	table := p.findTable(cat, schemaName, ci.TableName)
+	if table == nil {
+		return
+	}
+
+	table.Indexes = append(table.Indexes, ci.Index)
+}
+
+func (p *sqliteParser) handleDropIndex(cat *catalog.Catalog, di *sqliteDropIndex) {
+	schemaName := di.Schema
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+
+	for _, s := range cat.Schemas {
+		if s.Name == schemaName {
+			for _, t := range s.Tables {
+				for i, idx := range t.Indexes {
+					if strings.EqualFold(idx.Name, di.Name) {
+						t.Indexes = append(t.Indexes[:i], t.Indexes[i+1:]...)
+						return
+					}
+				}
+			}
+		}
 	}
 }
 
@@ -344,20 +709,4 @@ func sqliteIdentifier(id string) string {
 		return unquoted
 	}
 	return strings.ToLower(id)
-}
-
-func sqliteHasNotNullConstraint(checks []sqliteparser.IColumn_constraintContext) bool {
-	for _, c := range checks {
-		constraint, ok := c.(*sqliteparser.Column_constraintContext)
-		if !ok {
-			continue
-		}
-		if constraint.PRIMARY_() != nil && constraint.KEY_() != nil {
-			return true
-		}
-		if constraint.NOT_() != nil && constraint.NULL_() != nil {
-			return true
-		}
-	}
-	return false
 }

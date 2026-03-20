@@ -6,7 +6,7 @@ description: >
   generating Go models from SQL schema, sqlc integration and auto-generated sqlc.yaml,
   database code generation, Go struct generation from tables, type mapping (SQL to Go),
   soft delete configuration, batch inserts, table constants generation, or any mention
-  of pgxgen CLI commands (generate, validate, watch, init, migrate, example).
+  of pgxgen CLI commands (generate, validate, watch, init, migrate, example, schema).
   Also triggers for: configuring per-table repos vs single repo layout, custom CRUD
   templates, nullable type handling (pgtype, sql.Null*), enum generation, and
   struct tag customization (json, db, validate tags).
@@ -63,6 +63,7 @@ pgxgen generates CRUD SQL, Go models, and sqlc query code from a single `pgxgen.
 1. Read `references/cli.md` for all commands, flags, and usage
 2. Default command is `pgxgen generate` (runs all generators)
 3. `--dry-run` previews without writing, `--debug` shows timing
+4. `pgxgen schema` outputs consolidated DDL from migrations (standalone, no config needed)
 
 ### When the user needs to write or modify pgxgen.yaml
 
@@ -82,7 +83,7 @@ Two layout patterns exist:
 ```yaml
 defaults:
   queries_dir_prefix: sql/queries # → sql/queries/{table}/
-  output_dir_prefix: internal/store/repos # → internal/store/repos/repo_{table}/
+  output_dir_prefix: internal/store/repos # → internal/store/repos/{table}/
 ```
 
 **Single repo** (simpler projects):

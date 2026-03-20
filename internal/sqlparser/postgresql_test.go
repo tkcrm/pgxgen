@@ -587,6 +587,373 @@ func TestPostgresDropNotNull(t *testing.T) {
 	}
 }
 
+func TestPostgresColumnDefaults(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id UUID NOT NULL PRIMARY KEY DEFAULT uuid_generate_v4(),
+			is_active BOOLEAN NOT NULL DEFAULT FALSE,
+			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			status TEXT NOT NULL DEFAULT 'pending'
+		);
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	table := cat.Schemas[0].Tables[0]
+	defaults := map[string]string{
+		"id":         "uuid_generate_v4()",
+		"is_active":  "false",
+		"created_at": "current_timestamp",
+		"status":     "'pending'",
+	}
+	for _, col := range table.Columns {
+		if expected, ok := defaults[col.Name]; ok {
+			if !strings.EqualFold(col.Default, expected) {
+				t.Errorf("column %q: expected default %q, got %q", col.Name, expected, col.Default)
+			}
+		}
+	}
+}
+
+func TestPostgresPrimaryKey(t *testing.T) {
+	t.Run("inline", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TABLE users (
+				id SERIAL PRIMARY KEY,
+				name TEXT NOT NULL
+			);
+		`)
+		p := newPostgresParser()
+		cat, err := p.ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		table := cat.Schemas[0].Tables[0]
+		if table.PrimaryKey == nil {
+			t.Fatal("expected PrimaryKey to be set")
+		}
+		if len(table.PrimaryKey.Columns) != 1 || table.PrimaryKey.Columns[0] != "id" {
+			t.Errorf("expected PK columns [id], got %v", table.PrimaryKey.Columns)
+		}
+		if !table.Columns[0].IsPrimary {
+			t.Error("id column should have IsPrimary=true")
+		}
+	})
+
+	t.Run("composite", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TABLE order_items (
+				order_id INTEGER NOT NULL,
+				product_id INTEGER NOT NULL,
+				quantity INTEGER NOT NULL,
+				PRIMARY KEY (order_id, product_id)
+			);
+		`)
+		p := newPostgresParser()
+		cat, err := p.ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		table := cat.Schemas[0].Tables[0]
+		if table.PrimaryKey == nil {
+			t.Fatal("expected PrimaryKey to be set")
+		}
+		if len(table.PrimaryKey.Columns) != 2 {
+			t.Fatalf("expected 2 PK columns, got %d", len(table.PrimaryKey.Columns))
+		}
+		if table.PrimaryKey.Columns[0] != "order_id" || table.PrimaryKey.Columns[1] != "product_id" {
+			t.Errorf("expected PK [order_id, product_id], got %v", table.PrimaryKey.Columns)
+		}
+	})
+}
+
+func TestPostgresForeignKey(t *testing.T) {
+	t.Run("inline_references", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TABLE authors (id UUID PRIMARY KEY);
+			CREATE TABLE books (
+				id UUID PRIMARY KEY,
+				author_id UUID NOT NULL REFERENCES authors (id)
+			);
+		`)
+		p := newPostgresParser()
+		cat, err := p.ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		books := cat.Schemas[0].Tables[1]
+		if len(books.ForeignKeys) != 1 {
+			t.Fatalf("expected 1 FK, got %d", len(books.ForeignKeys))
+		}
+		fk := books.ForeignKeys[0]
+		if fk.RefTable != "authors" {
+			t.Errorf("expected ref table 'authors', got %q", fk.RefTable)
+		}
+		if len(fk.Columns) != 1 || fk.Columns[0] != "author_id" {
+			t.Errorf("expected FK columns [author_id], got %v", fk.Columns)
+		}
+		if len(fk.RefColumns) != 1 || fk.RefColumns[0] != "id" {
+			t.Errorf("expected ref columns [id], got %v", fk.RefColumns)
+		}
+	})
+
+	t.Run("table_level", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TABLE parents (id UUID PRIMARY KEY);
+			CREATE TABLE children (
+				id UUID PRIMARY KEY,
+				parent_id UUID NOT NULL,
+				CONSTRAINT fk_parent FOREIGN KEY (parent_id) REFERENCES parents (id) ON DELETE CASCADE
+			);
+		`)
+		p := newPostgresParser()
+		cat, err := p.ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		children := cat.Schemas[0].Tables[1]
+		if len(children.ForeignKeys) != 1 {
+			t.Fatalf("expected 1 FK, got %d", len(children.ForeignKeys))
+		}
+		fk := children.ForeignKeys[0]
+		if fk.Name != "fk_parent" {
+			t.Errorf("expected FK name 'fk_parent', got %q", fk.Name)
+		}
+		if fk.OnDelete != "CASCADE" {
+			t.Errorf("expected ON DELETE CASCADE, got %q", fk.OnDelete)
+		}
+	})
+}
+
+func TestPostgresUniqueConstraint(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id SERIAL PRIMARY KEY,
+			email TEXT NOT NULL,
+			username TEXT NOT NULL,
+			UNIQUE (email),
+			CONSTRAINT uq_username UNIQUE (username)
+		);
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	if len(table.Uniques) != 2 {
+		t.Fatalf("expected 2 unique constraints, got %d", len(table.Uniques))
+	}
+	if table.Uniques[1].Name != "uq_username" {
+		t.Errorf("expected constraint name 'uq_username', got %q", table.Uniques[1].Name)
+	}
+}
+
+func TestPostgresCheckConstraint(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE products (
+			id SERIAL PRIMARY KEY,
+			price NUMERIC NOT NULL,
+			CONSTRAINT positive_price CHECK (price > 0)
+		);
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	if len(table.Checks) != 1 {
+		t.Fatalf("expected 1 check constraint, got %d", len(table.Checks))
+	}
+	if table.Checks[0].Name != "positive_price" {
+		t.Errorf("expected name 'positive_price', got %q", table.Checks[0].Name)
+	}
+	if table.Checks[0].Expression == "" {
+		t.Error("expected check expression to be set")
+	}
+}
+
+func TestPostgresCreateIndex(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id SERIAL PRIMARY KEY,
+			email TEXT NOT NULL,
+			created_at TIMESTAMP NOT NULL
+		);
+		CREATE UNIQUE INDEX IF NOT EXISTS idx_email ON users (email) WHERE email != '';
+		CREATE INDEX idx_created ON users (created_at);
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	if len(table.Indexes) != 2 {
+		t.Fatalf("expected 2 indexes, got %d", len(table.Indexes))
+	}
+
+	idx0 := table.Indexes[0]
+	if idx0.Name != "idx_email" {
+		t.Errorf("expected name 'idx_email', got %q", idx0.Name)
+	}
+	if !idx0.IsUnique {
+		t.Error("idx_email should be unique")
+	}
+	if !idx0.IfNotExists {
+		t.Error("idx_email should have IfNotExists")
+	}
+	if idx0.Where == "" {
+		t.Error("idx_email should have WHERE clause")
+	}
+
+	idx1 := table.Indexes[1]
+	if idx1.Name != "idx_created" {
+		t.Errorf("expected name 'idx_created', got %q", idx1.Name)
+	}
+	if idx1.IsUnique {
+		t.Error("idx_created should not be unique")
+	}
+}
+
+func TestPostgresCreateExtension(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+		CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	exts := cat.Schemas[0].Extensions
+	if len(exts) != 2 {
+		t.Fatalf("expected 2 extensions, got %d", len(exts))
+	}
+	if exts[0] != "uuid-ossp" || exts[1] != "pgcrypto" {
+		t.Errorf("expected [uuid-ossp, pgcrypto], got %v", exts)
+	}
+}
+
+func TestPostgresDropIndex(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (id SERIAL PRIMARY KEY, email TEXT NOT NULL);
+		CREATE INDEX idx_email ON users (email);
+		CREATE INDEX idx_keep ON users (id);
+		DROP INDEX idx_email;
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	if len(table.Indexes) != 1 {
+		t.Fatalf("expected 1 index after drop, got %d", len(table.Indexes))
+	}
+	if table.Indexes[0].Name != "idx_keep" {
+		t.Errorf("expected 'idx_keep', got %q", table.Indexes[0].Name)
+	}
+}
+
+func TestPostgresAlterTableSetDefault(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id SERIAL PRIMARY KEY,
+			status TEXT NOT NULL
+		);
+		ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active';
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	for _, col := range table.Columns {
+		if col.Name == "status" {
+			if col.Default != "'active'" {
+				t.Errorf("expected default 'active', got %q", col.Default)
+			}
+			return
+		}
+	}
+	t.Error("status column not found")
+}
+
+func TestPostgresAlterTableAddConstraint(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE orders (id SERIAL PRIMARY KEY, total NUMERIC NOT NULL);
+		ALTER TABLE orders ADD CONSTRAINT positive_total CHECK (total >= 0);
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	if len(table.Checks) != 1 {
+		t.Fatalf("expected 1 check constraint, got %d", len(table.Checks))
+	}
+	if table.Checks[0].Name != "positive_total" {
+		t.Errorf("expected 'positive_total', got %q", table.Checks[0].Name)
+	}
+}
+
+func TestPostgresAlterTableDropConstraint(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE orders (
+			id SERIAL PRIMARY KEY,
+			total NUMERIC NOT NULL,
+			CONSTRAINT positive_total CHECK (total >= 0)
+		);
+		ALTER TABLE orders DROP CONSTRAINT positive_total;
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	if len(table.Checks) != 0 {
+		t.Errorf("expected 0 check constraints after drop, got %d", len(table.Checks))
+	}
+}
+
+func TestPostgresFullType(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE data (
+			id UUID PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			balance NUMERIC(10,2) NOT NULL,
+			data TEXT NOT NULL
+		);
+	`)
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+	table := cat.Schemas[0].Tables[0]
+	for _, col := range table.Columns {
+		switch col.Name {
+		case "name":
+			if !strings.Contains(col.FullType, "255") {
+				t.Errorf("name FullType should contain '255', got %q", col.FullType)
+			}
+		case "balance":
+			if !strings.Contains(col.FullType, "10") {
+				t.Errorf("balance FullType should contain '10', got %q", col.FullType)
+			}
+		}
+	}
+}
+
 func TestPostgresParseError(t *testing.T) {
 	path := writeTemp(t, `THIS IS NOT VALID SQL AT ALL ???`)
 
