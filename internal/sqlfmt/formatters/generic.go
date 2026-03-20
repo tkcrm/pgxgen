@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"strings"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
 // Generic group formatter
@@ -17,9 +18,8 @@ type Generic struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Generic) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var WHITESPACE = formatter.Whitespace
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -77,22 +77,21 @@ func (formatter *Generic) AddIndent(lev int) {
 }
 
 func (formatter *Generic) write(buf *bytes.Buffer, token, previousToken Token, indent, position int, parentIdx int) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Write element
-	switch {
-	case position == 0:
+	switch position {
+	case 0:
 		// Add newline before the first keyword if this formatter follows another
 		// segment (e.g., a standalone comment). Other formatters like Select/From
 		// handle this via ContinueNewline(), but Generic does not.
 		if parentIdx > 0 {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 		} else {
-			buf.WriteString(fmt.Sprintf("%s", token.Value))
+			buf.WriteString(token.Value)
 		}
 
 	// Write common token values
@@ -100,10 +99,10 @@ func (formatter *Generic) write(buf *bytes.Buffer, token, previousToken Token, i
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

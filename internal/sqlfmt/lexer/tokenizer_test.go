@@ -3,13 +3,14 @@ package lexer
 import (
 	"bufio"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTokenize(t *testing.T) {
-	var testingSQLStatement = strings.Trim(`select name, age, sum, sum(case xxx) from users where name xxx and age = 'xxx' limit 100 except 100`, "`")
+	testingSQLStatement := strings.Trim(`select name, age, sum, sum(case xxx) from users where name xxx and age = 'xxx' limit 100 except 100`, "`")
 	want := []Token{
 		{Type: SELECT, Value: "SELECT"},
 		{Type: IDENT, Value: "name"},
@@ -118,7 +119,6 @@ func TestTokenizeFunctionKeywordsDialect(t *testing.T) {
 }
 
 func Test_peekComparator(t *testing.T) {
-
 	tests := []struct {
 		testSequence   string
 		wantComperator string
@@ -212,7 +212,6 @@ func Test_peekComparator(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testSequence, func(t *testing.T) {
-
 			// Fill test reader with input sequence
 			r := bufio.NewReader(strings.NewReader(tt.testSequence))
 

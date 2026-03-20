@@ -1,9 +1,10 @@
 package parser
 
 import (
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/formatters"
 	"reflect"
 	"testing"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/formatters"
 
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
@@ -394,7 +395,6 @@ func Test_parseSegment(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			// Prepare parser with test data
 			r := &Parser{tokens: tt.source, endTypes: tt.endTokenTypes}
 

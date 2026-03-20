@@ -686,7 +686,6 @@ func newFmtCmd(l logger.Logger) *cli.Command {
 			type fileResult struct {
 				path      string
 				formatted []byte
-				err       error
 			}
 
 			var toFormat []fileResult

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/formatters"
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
@@ -11,7 +12,6 @@ const joinStartRange = 3
 // Parse parses a sequence of tokens returning a logically grouped slice of Formatters.
 // Each Formatter is a logical segment of an SQL query. It may also be a group of such.
 func Parse(tokens []lexer.Token, options *formatters.Options) ([]formatters.Formatter, error) {
-
 	// Prepare parser for segment
 	parser, errParser := NewParser(tokens, options)
 	if errParser != nil {
@@ -41,7 +41,6 @@ type Parser struct {
 
 // NewParser initializes a Parser with a sequence of lexer tokens representing an SQL query.
 func NewParser(tokens []lexer.Token, options *formatters.Options) (*Parser, error) {
-
 	// Use default options if none are passed
 	if options == nil {
 		options = formatters.DefaultOptions()
@@ -127,7 +126,6 @@ func NewParser(tokens []lexer.Token, options *formatters.Options) (*Parser, erro
 // comprised out of multiple segments (SELECT, FROM, WHERE,...). Parse() loops until EOF to make sure all
 // segments are processed.
 func (r *Parser) Parse() ([]formatters.Formatter, error) {
-
 	// Prepare process variable
 	var offset int
 
@@ -138,12 +136,7 @@ func (r *Parser) Parse() ([]formatters.Formatter, error) {
 
 	// Iterate and process segments until EOF is reached. Sequential segments are processed by this loop.
 	// Nested segments are recursively processed by parseSegment().
-	for {
-
-		// Stop processing at EOF
-		if r.tokens[offset].Type == lexer.EOF {
-			break
-		}
+	for r.tokens[offset].Type != lexer.EOF {
 
 		// Prepare parser for segment
 		segmentParser, errSegmentParser := NewParser(r.tokens[offset:], r.options)
@@ -183,7 +176,6 @@ func (r *Parser) Parse() ([]formatters.Formatter, error) {
 // can be nested arbitrarily, Parsers will be nested equally. A Parser may fork a Parser for a
 // subsequence, and so on. The nested Parser results are aggregated by their parent Parser as they are yielded.
 func (r *Parser) parseSegment() (int, error) {
-
 	// Prepare process variables
 	var (
 		idx          int
@@ -268,7 +260,6 @@ func (r *Parser) parseSegment() (int, error) {
 
 // hasEndType determines if the Parser's token sequence includes a suitable and expected end token type
 func (r *Parser) hasEndType() bool {
-
 	// Return true if there are no end types defined, meaning that anything is an end type
 	if len(r.endTypes) == 0 {
 		return true
@@ -289,7 +280,6 @@ func (r *Parser) hasEndType() bool {
 
 // isEndToken determines if the token at index idx is an end token
 func (r *Parser) isEndToken(idx int) bool {
-
 	// Return true if there are no end types defined, meaning that anything is an end type
 	if len(r.endTypes) == 0 {
 		return true
@@ -317,7 +307,6 @@ func (r *Parser) isEndToken(idx int) bool {
 
 // isNewSegment checks whether the token at index idx indicates a new subsegment that needs to be handled
 func (r *Parser) isNewSegment(idx int) bool {
-
 	// Get tokens to work with
 	tokenFirst := r.tokens[0]
 	tokenCurrent := r.tokens[idx]
@@ -364,7 +353,6 @@ func (r *Parser) isNewSegment(idx int) bool {
 	// Check if token is of any type commonly indicating subsegment
 	for _, v := range lexer.TokenTypesOfGroupMaker {
 		if tokenCurrent.Type == v {
-
 			// lexer.GROUP is only a group marker, if it is followed by lexer.BY
 			if v == lexer.GROUP && tokenNext.Type != lexer.BY {
 				return false
@@ -381,7 +369,6 @@ func (r *Parser) isNewSegment(idx int) bool {
 // buildFormatter creates a Formatter for the intermediate Parser subsegment, representing a
 // segment of the SQL query, which can then be appended to the result sequence
 func (r *Parser) buildFormatter() formatters.Formatter {
-
 	// Get variables to work with
 	elements := r.result
 	firstElement, _ := elements[0].(formatters.Token)
@@ -390,10 +377,11 @@ func (r *Parser) buildFormatter() formatters.Formatter {
 	switch firstElement.Type {
 	case lexer.COMMENT: // Just in case first element of SQL string is query.
 		// Otherwise, comment is just a normal token within a series of elements of another formatter
-		return &formatters.Token{Options: r.options, Token: lexer.Token{
-			Type:  firstElement.Type,
-			Value: firstElement.Value,
-		},
+		return &formatters.Token{
+			Options: r.options, Token: lexer.Token{
+				Type:  firstElement.Type,
+				Value: firstElement.Value,
+			},
 		}
 	case lexer.SELECT:
 		return &formatters.Select{Options: r.options, Elements: elements}

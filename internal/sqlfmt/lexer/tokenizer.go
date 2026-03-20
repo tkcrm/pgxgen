@@ -159,9 +159,6 @@ func (t *tokenizer) scan() (Token, error) {
 			return Token{Type: COMMENT, Value: comment}, nil
 		}
 
-		// Continue after select with reading other tokens otherwise
-		break
-
 	case isSingleQuote(ch):
 
 		// Read subsequent characters until closing single quote
@@ -226,7 +223,6 @@ func (t *tokenizer) scan() (Token, error) {
 			return Token{Type: STRING, Value: buf.String()}, nil
 		}
 		// Single $ sign, fall through to regular token reading
-		break
 	}
 
 	// Read subsequent characters until value is complete
@@ -427,7 +423,10 @@ func (t *tokenizer) readDollarTag(buf *bytes.Buffer) (string, error) {
 	for {
 		ch, _, err := t.r.ReadRune()
 		if err != nil {
-			// EOF after $: unread is not possible, just treat $ as regular token
+			// EOF after $: write any consumed tag chars to buf so they aren't lost
+			for _, r := range consumed {
+				buf.WriteRune(r)
+			}
 			return "", fmt.Errorf("unexpected EOF in dollar tag")
 		}
 		consumed = append(consumed, ch)

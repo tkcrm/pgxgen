@@ -17,9 +17,8 @@ type Select struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Select) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var WHITESPACE = formatter.Whitespace
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -83,39 +82,38 @@ func (formatter *Select) AddIndent(lev int) {
 }
 
 func (formatter *Select) writeSelect(buf *bytes.Buffer, token, previousToken Token, indent int, position int, hasMany bool) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Write element
 	switch {
 
 	case token.Type == lexer.SELECT || token.Type == lexer.INTO:
-		buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+		fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 	case token.Type == lexer.AS || token.Type == lexer.DISTINCT || token.Type == lexer.DISTINCTROW || token.Type == lexer.EXISTS || token.Type == lexer.WITHIN || token.Type == lexer.GROUP || token.Type == lexer.ON:
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	case position == 1 && hasMany && token.Type != lexer.COMMENT:
-		buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+		fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 
 	// Write comma token values or subsequent one
 	case token.Type == lexer.COMMA: // Write comma token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	case previousToken.Type == lexer.COMMA && hasMany && token.Type != lexer.COMMENT:
-		buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+		fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 
 	// Write common token values
 	case strings.HasPrefix(token.Value, "::"):
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT {
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

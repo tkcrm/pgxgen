@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"strings"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
 // And formatter
@@ -17,11 +18,10 @@ type And struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *And) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -30,7 +30,7 @@ func (formatter *And) Format(buf *bytes.Buffer, parent []Formatter, parentIdx in
 	}
 
 	// Check if parent's first token is indicating Join
-	var isPartOfJoin = false
+	isPartOfJoin := false
 	if parent != nil {
 		if t, ok := parent[0].(Token); ok {
 			if t.IsJoinStart() {
@@ -47,7 +47,6 @@ func (formatter *And) Format(buf *bytes.Buffer, parent []Formatter, parentIdx in
 		if token, ok := el.(Token); ok {
 			writeAnd(buf, INDENT, NEWLINE, WHITESPACE, token, previousToken, formatter.IndentLevel, formatter.SameLine, isPartOfJoin)
 		} else {
-
 			// Recursively format nested elements
 			_ = el.Format(buf, elements, i)
 		}
@@ -91,25 +90,24 @@ func writeAnd(
 	sameLine bool,
 	isPartOfJoin bool,
 ) {
-
 	// Print to same line with WHITESPACE
 	switch {
 	case strings.HasPrefix(token.Value, "::"): // Write cast token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	case sameLine || isPartOfJoin:
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	case token.Type == lexer.AND || token.Type == lexer.OR: // Start of where clause
-		buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+		fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 
 	// Write common token values
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

@@ -1,9 +1,13 @@
 package sqlfmt
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/formatters"
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/parser"
 )
 
 func TestFormatSingleStatementWithDashComment(t *testing.T) {
@@ -121,6 +125,46 @@ func TestFormatFileNoTrailingNewline(t *testing.T) {
 	if result[len(result)-1] != '\n' {
 		t.Error("expected trailing newline in output")
 	}
+}
+
+func TestFormatSqlcAnnotatedQuery(t *testing.T) {
+	sql := "-- name: SetStatus :exec\nupdate transfers set updated_at = now(), status = $2 where id = $1"
+	opts := formatters.DefaultOptions()
+
+	before := removeSymbols(removeComments(sql))
+	t.Logf("Original cleaned: %q", before)
+
+	// Try to format
+	result, err := Format(sql, opts)
+	if err != nil {
+		t.Logf("Format error: %v", err)
+
+		// Manually format to see output
+		tokens, terr := lexer.Tokenize(sql, lexer.DialectPostgreSQL)
+		if terr != nil {
+			t.Fatalf("Tokenize error: %v", terr)
+		}
+		for i, tok := range tokens {
+			t.Logf("  token[%d]: type=%d value=%q", i, tok.Type, tok.Value)
+		}
+
+		parsed, perr := parser.Parse(tokens, opts)
+		if perr != nil {
+			t.Fatalf("Parse error: %v", perr)
+		}
+
+		var buf bytes.Buffer
+		for i, p := range parsed {
+			_ = p.Format(&buf, parsed, i)
+		}
+		formatted := strings.Trim(buf.String(), "\n")
+		t.Logf("Formatted: %q", formatted)
+
+		after := removeSymbols(removeComments(formatted))
+		t.Logf("Formatted cleaned: %q", after)
+		return
+	}
+	t.Logf("Result: %s", result)
 }
 
 func TestIsCommentOnly(t *testing.T) {

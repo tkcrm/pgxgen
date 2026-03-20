@@ -13,11 +13,10 @@ type Having struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Having) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -41,7 +40,6 @@ func (formatter *Having) Format(buf *bytes.Buffer, parent []Formatter, parentIdx
 		if token, ok := el.(Token); ok {
 			write(buf, INDENT, NEWLINE, WHITESPACE, token, previousToken, previousParentToken, formatter.IndentLevel, false)
 		} else {
-
 			// Recursively format nested elements
 			_ = el.Format(buf, elements, i)
 		}

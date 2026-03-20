@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"strings"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
 // Values group formatter
@@ -16,9 +17,8 @@ type Values struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Values) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var WHITESPACE = formatter.Whitespace
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -28,7 +28,6 @@ func (formatter *Values) Format(buf *bytes.Buffer, parent []Formatter, parentIdx
 
 	// Iterate and write elements to the buffer. Recursively step into nested elements.
 	for i, el := range elements {
-
 		// Write element or recursively call its Format function
 		if token, ok := el.(Token); ok {
 			formatter.WriteValues(buf, token, formatter.IndentLevel)
@@ -66,20 +65,19 @@ func (formatter *Values) AddIndent(lev int) {
 }
 
 func (formatter *Values) WriteValues(buf *bytes.Buffer, token Token, indent int) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	switch {
 	case token.ContinueNewline():
-		buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+		fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 
 	// Write value
 	case token.Type == lexer.COMMA: // Write comma token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

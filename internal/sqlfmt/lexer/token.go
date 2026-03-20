@@ -307,7 +307,6 @@ var keywordMap = map[string]TokenType{
 }
 
 var functionMap = map[string]TokenType{
-
 	/*
 	 * PostgreSQL functions
 	 */
@@ -856,7 +855,6 @@ var comparatorMap = map[string]TokenType{
 // peekComparator peeks into the subsequent characters trying to identify valid comparator substrings, but
 // tries not to match on broken substrings that are not really valid comparators.
 func peekComparator(r *bufio.Reader) (string, error) {
-
 	// Peek step by step into subsequent characters to search for a valid comparator
 	steps := 1
 	sequence := ""

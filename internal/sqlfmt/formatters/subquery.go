@@ -2,6 +2,7 @@ package formatters
 
 import (
 	"bytes"
+
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
@@ -15,11 +16,10 @@ type Subquery struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Subquery) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -48,7 +48,7 @@ func (formatter *Subquery) Format(buf *bytes.Buffer, parent []Formatter, parentI
 	}
 
 	// Check if parenthesis group has nested element
-	var endSameLine = true
+	endSameLine := true
 	for _, el := range elements {
 		switch el.(type) {
 		case Token:

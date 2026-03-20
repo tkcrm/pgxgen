@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"strings"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
 // Type group formatter
@@ -16,9 +17,8 @@ type Type struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Type) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var WHITESPACE = formatter.Whitespace
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -62,32 +62,31 @@ func (formatter *Type) AddIndent(lev int) {
 }
 
 func (formatter *Type) writeType(buf *bytes.Buffer, token, previousToken Token, indent int) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Write element
 	switch {
 	case token.Type == lexer.TYPE:
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 
 	// Write comma token values or subsequent one
 	case token.Type == lexer.COMMA: // Write comma token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 
 	// Write common token values
 	case strings.HasPrefix(token.Value, "::"):
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	}
 }

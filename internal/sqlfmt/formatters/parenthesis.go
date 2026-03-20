@@ -19,11 +19,10 @@ type Parenthesis struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Parenthesis) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -52,7 +51,7 @@ func (formatter *Parenthesis) Format(buf *bytes.Buffer, parent []Formatter, pare
 	}
 
 	// Check if parenthesis group has nested element
-	var endSameLine = true
+	endSameLine := true
 	for _, el := range elements {
 		switch el.(type) {
 		case Token:
@@ -63,7 +62,7 @@ func (formatter *Parenthesis) Format(buf *bytes.Buffer, parent []Formatter, pare
 
 	// Check if there are type definitions in the list of values
 	// This is a special format case for CREATE TABLE queries
-	var hasTypeDefinitions = false
+	hasTypeDefinitions := false
 	for _, el := range elements {
 		switch t := el.(type) {
 		case Token:
@@ -130,54 +129,53 @@ func writeParenthesis(
 	endSameLine bool,
 	containsTypeDefinitions bool,
 ) {
-
 	// Write element
 	if startSameLine && endSameLine { // Parenthesis starts and ends in the same line - one-liner case
 		switch {
 		case token.Type == lexer.STARTPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+			fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 			return
 		case position == 1 && !containsTypeDefinitions:
-			buf.WriteString(fmt.Sprintf("%s", token.Value))
+			buf.WriteString(token.Value)
 			return
 		case token.Type == lexer.ENDPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s", token.Value))
+			buf.WriteString(token.Value)
 			return
 		}
 	} else if startSameLine && !endSameLine { // Parenthesis starts in the same line but ends in new line
 		switch {
 		case token.Type == lexer.STARTPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+			fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 			return
 		case position == 1 && token.Type != lexer.COMMENT:
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 		case token.Type == lexer.ENDPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 	} else if !startSameLine && !endSameLine { // Parenthesis starts and ends in new lines
 		switch {
 		case token.Type == lexer.STARTPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		case position == 1 && token.Type != lexer.COMMENT:
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 		case token.Type == lexer.ENDPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 	} else { // `if !startSameLine && endSameLine`
 		switch {
 		case token.Type == lexer.STARTPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 		case position == 1 && !containsTypeDefinitions:
-			buf.WriteString(fmt.Sprintf("%s", token.Value))
+			buf.WriteString(token.Value)
 			return
 		case token.Type == lexer.ENDPARENTHESIS:
-			buf.WriteString(fmt.Sprintf("%s", token.Value))
+			buf.WriteString(token.Value)
 			return
 		}
 	}
@@ -187,21 +185,21 @@ func writeParenthesis(
 
 	// Write comma token values or subsequent one
 	case token.Type == lexer.COMMA: // Write comma token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	case previousToken.Type == lexer.COMMA && containsTypeDefinitions:
-		buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+		fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 
 	// Write common token values
 	case strings.HasPrefix(token.Value, "::"):
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

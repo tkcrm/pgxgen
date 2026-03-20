@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"testing"
+
+	"github.com/davecgh/go-spew/spew"
 
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
@@ -41,9 +42,8 @@ func TestFormatFunction(t *testing.T) {
 			if tt.want != got {
 				t.Errorf("\n=======================\n=== WANT =============>\n%s\n=======================\n=== GOT ==============>\n%s\n=======================", tt.want, got)
 			} else {
-				fmt.Println(fmt.Sprintf("%s\n%s", got, "========================================================================"))
+				fmt.Printf("%s\n%s\n", got, "========================================================================")
 			}
-
 		})
 	}
 }

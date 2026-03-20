@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"strings"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
 // Lock group formatter
@@ -16,7 +17,6 @@ type Lock struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Lock) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Iterate and write elements to the buffer. Recursively step into nested elements.
 	var previousToken Token
 	for i, el := range formatter.Elements {
@@ -55,28 +55,27 @@ func (formatter *Lock) AddIndent(lev int) {
 }
 
 func (formatter *Lock) writeLock(buf *bytes.Buffer, token, previousToken Token, indent int) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Write element
 	switch token.Type {
 	case lexer.LOCK:
-		buf.WriteString(fmt.Sprintf("%s%s", NEWLINE, token.Value))
+		fmt.Fprintf(buf, "%s%s", NEWLINE, token.Value)
 	case lexer.IN:
-		buf.WriteString(fmt.Sprintf("%s%s", NEWLINE, token.Value))
+		fmt.Fprintf(buf, "%s%s", NEWLINE, token.Value)
 
 	// Write common token values
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

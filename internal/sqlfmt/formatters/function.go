@@ -18,9 +18,8 @@ type Function struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Function) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var WHITESPACE = formatter.Whitespace
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -36,7 +35,6 @@ func (formatter *Function) Format(buf *bytes.Buffer, parent []Formatter, parentI
 		if token, ok := el.(Token); ok {
 			formatter.writeFunction(buf, token, previousToken, formatter.IndentLevel, formatter.IsColumnArea)
 		} else {
-
 			// Recursively format nested elements
 			_ = el.Format(buf, elements, i)
 		}
@@ -70,34 +68,33 @@ func (formatter *Function) AddIndent(lev int) {
 }
 
 func (formatter *Function) writeFunction(buf *bytes.Buffer, token, previousToken Token, indent int, isColumnArea bool) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Write element
 	switch {
 	case token.Type == lexer.FUNCTION && isColumnArea: // Write function name token to new line in SELECT clause
-		buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+		fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 	case token.Type == lexer.STARTPARENTHESIS || token.Type == lexer.ENDPARENTHESIS: // Write function's parentheses without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	case previousToken.Type == lexer.STARTPARENTHESIS: // Write first function value token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 
 	// Write common token values
 	case token.Type == lexer.COMMA: // Write comma token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	case strings.HasPrefix(token.Value, "::"): // Write cast token without whitespace
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

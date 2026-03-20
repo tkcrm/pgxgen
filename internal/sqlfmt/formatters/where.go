@@ -3,8 +3,9 @@ package formatters
 import (
 	"bytes"
 	"fmt"
-	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"strings"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
 const maxWhereClausesPerLine = 2
@@ -18,11 +19,10 @@ type Where struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Where) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -31,7 +31,7 @@ func (formatter *Where) Format(buf *bytes.Buffer, parent []Formatter, parentIdx 
 	}
 
 	// Check how many clauses there are. Linebreak if too many
-	var clauses = 1 // Segment clause starts with first clause
+	clauses := 1 // Segment clause starts with first clause
 	for _, el := range elements {
 		switch t := el.(type) {
 		case Token:
@@ -48,7 +48,7 @@ func (formatter *Where) Format(buf *bytes.Buffer, parent []Formatter, parentIdx 
 	}
 
 	// Iterate and write elements to the buffer. Recursively step into nested elements.
-	var hasMany = clauses > maxWhereClausesPerLine
+	hasMany := clauses > maxWhereClausesPerLine
 	var previousToken Token
 	for i, el := range elements {
 
@@ -117,7 +117,7 @@ func writeWhere(
 ) {
 	// Print WHERE token into new line
 	if token.ContinueNewline() {
-		buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+		fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 		return
 	}
 
@@ -125,11 +125,11 @@ func writeWhere(
 	if hasMany {
 		switch {
 		case position == 1 && token.Type != lexer.COMMENT: // First element of first clause
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 
 		case token.Type == lexer.AND || token.Type == lexer.OR: // Any additional where clause introduced by AND / OR
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 	}
@@ -139,16 +139,16 @@ func writeWhere(
 
 	// Write common token values
 	case strings.HasPrefix(token.Value, "::"):
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value))
+			fmt.Fprintf(buf, "%s%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), INDENT, token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 		return
 	}
 }

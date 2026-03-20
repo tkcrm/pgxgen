@@ -17,9 +17,8 @@ type Join struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *Join) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var WHITESPACE = formatter.Whitespace
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -35,7 +34,6 @@ func (formatter *Join) Format(buf *bytes.Buffer, parent []Formatter, parentIdx i
 		if token, ok := el.(Token); ok {
 			formatter.writeJoin(buf, token, previousToken, formatter.IndentLevel, i)
 		} else {
-
 			// Recursively format nested elements
 			_ = el.Format(buf, elements, i)
 		}
@@ -69,30 +67,29 @@ func (formatter *Join) AddIndent(lev int) {
 }
 
 func (formatter *Join) writeJoin(buf *bytes.Buffer, token, previousToken Token, indent int, position int) {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Write element
 	switch {
 	case position == 0 && token.IsJoinStart():
-		buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+		fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 	case token.Type == lexer.ON || token.Type == lexer.USING:
-		buf.WriteString(fmt.Sprintf(" %s", token.Value))
+		fmt.Fprintf(buf, " %s", token.Value)
 
 	// Write common token values
 	case strings.HasPrefix(token.Value, "::"):
-		buf.WriteString(fmt.Sprintf("%s", token.Value))
+		buf.WriteString(token.Value)
 	default:
 
 		// Move token to new line, because it cannot follow after single line comment
 		if previousToken.Type == lexer.COMMENT && !strings.HasPrefix(previousToken.Value, "/*") {
-			buf.WriteString(fmt.Sprintf("%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value))
+			fmt.Fprintf(buf, "%s%s%s", NEWLINE, strings.Repeat(INDENT, indent), token.Value)
 			return
 		}
 
-		buf.WriteString(fmt.Sprintf("%s%s", WHITESPACE, token.Value))
+		fmt.Fprintf(buf, "%s%s", WHITESPACE, token.Value)
 	}
 }

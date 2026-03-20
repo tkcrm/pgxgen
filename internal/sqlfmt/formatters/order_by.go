@@ -2,6 +2,7 @@ package formatters
 
 import (
 	"bytes"
+
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 )
 
@@ -16,11 +17,10 @@ type OrderBy struct {
 
 // Format component accordingly with necessary indents, newlines,...
 func (formatter *OrderBy) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
-
 	// Prepare short variables for better visibility
-	var INDENT = formatter.Indent
-	var NEWLINE = formatter.Newline
-	var WHITESPACE = formatter.Whitespace
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
 
 	// Preprocess punctuation and enrich with surrounding information
 	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
@@ -29,20 +29,21 @@ func (formatter *OrderBy) Format(buf *bytes.Buffer, parent []Formatter, parentId
 	}
 
 	// Check how many clauses there are. Linebreak if too many
-	var clauses = 0
+	clauses := 0
 	for _, el := range elements {
 		switch t := el.(type) {
 		case Token:
-			if t.Type == lexer.IDENT {
+			switch t.Type {
+			case lexer.IDENT:
 				clauses++
-			} else if t.Type == lexer.COMMENT {
+			case lexer.COMMENT:
 				clauses = 999 // Format like if there were many clauses to make space for comments
 			}
 		}
 	}
 
 	// Iterate and write elements to the buffer. Recursively step into nested elements.
-	var hasMany = clauses > maxOrderClausesPerLine
+	hasMany := clauses > maxOrderClausesPerLine
 	var previousToken Token
 	for i, el := range elements {
 

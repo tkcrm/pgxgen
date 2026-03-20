@@ -83,7 +83,10 @@ func FormatFile(src []byte, options *formatters.Options) ([]byte, error) {
 
 		formatted, err := Format(trimmed, options)
 		if err != nil {
-			return nil, fmt.Errorf("format statement error: %w\nstatement: %s", err, trimmed)
+			// Statement can't be formatted (e.g. PL/pgSQL DO blocks, unsupported syntax).
+			// Keep original unchanged.
+			results = append(results, trimmed)
+			continue
 		}
 		results = append(results, formatted)
 	}
@@ -224,7 +227,7 @@ func readDollarTagFromRunes(runes []rune, i int) string {
 		if ch == '$' {
 			return string(runes[i : j+1])
 		}
-		if !((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_') {
+		if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') && ch != '_' {
 			return ""
 		}
 		j++
