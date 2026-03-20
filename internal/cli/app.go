@@ -13,6 +13,9 @@ import (
 	"github.com/tkcrm/pgxgen/internal/codegen"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/ddlgen"
+	"github.com/tkcrm/pgxgen/internal/sqlfmt"
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/formatters"
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
 	"github.com/tkcrm/pgxgen/internal/sqlparser"
 	"github.com/tkcrm/pgxgen/internal/updater"
 	"github.com/tkcrm/pgxgen/internal/watcher"
@@ -43,6 +46,7 @@ func NewApp(version string) *cli.Command {
 			newInitCmd(l),
 			newWatchCmd(l),
 			newExampleCmd(l),
+			newFmtCmd(l),
 			newVersionCmd(version),
 			newUpdateCmd(l, version),
 		},
@@ -139,15 +143,10 @@ func newGenerateCmd(l logger.Logger) *cli.Command {
 
 func newSchemaCmd(_ logger.Logger) *cli.Command {
 	return &cli.Command{
-		Name:  "schema",
-		Usage: "Output consolidated DDL from all migrations",
+		Name:      "schema",
+		Usage:     "Output consolidated DDL from all migrations",
+		ArgsUsage: "<path>",
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:     "dir",
-				Aliases:  []string{"d"},
-				Usage:    "Path to migrations directory or SQL file",
-				Required: true,
-			},
 			&cli.StringFlag{
 				Name:    "engine",
 				Aliases: []string{"e"},
@@ -156,7 +155,10 @@ func newSchemaCmd(_ logger.Logger) *cli.Command {
 			},
 		},
 		Action: func(ctx context.Context, cmd *cli.Command) error {
-			dir := cmd.String("dir")
+			if cmd.NArg() < 1 {
+				return fmt.Errorf("path argument is required\nusage: pgxgen schema <path> [--engine <engine>]")
+			}
+			dir := cmd.Args().First()
 			engine := cmd.String("engine")
 
 			files, err := sqlparser.ResolveSchemaFiles(dir)
@@ -619,4 +621,193 @@ func newUpdateCmd(l logger.Logger, version string) *cli.Command {
 			return updater.CheckAndUpdate(ctx, l, version)
 		},
 	}
+}
+
+func newFmtCmd(l logger.Logger) *cli.Command {
+	return &cli.Command{
+		Name:      "fmt",
+		Usage:     "Format SQL files",
+		ArgsUsage: "<path>",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:    "check",
+				Aliases: []string{"c"},
+				Usage:   "Check formatting without modifying files (exit 1 if unformatted)",
+			},
+			&cli.BoolFlag{
+				Name:    "yes",
+				Aliases: []string{"y"},
+				Usage:   "Skip confirmation prompt",
+			},
+			&cli.BoolFlag{
+				Name:  "dry-run",
+				Usage: "Process files without saving (test formatting)",
+			},
+			&cli.StringFlag{
+				Name:    "engine",
+				Aliases: []string{"e"},
+				Usage:   "SQL dialect (postgresql, mysql, sqlite)",
+				Value:   "postgresql",
+			},
+		},
+		Action: func(ctx context.Context, cmd *cli.Command) error {
+			if cmd.NArg() < 1 {
+				return fmt.Errorf("path argument is required\nusage: pgxgen fmt <path> [--check] [--yes] [--engine <engine>]")
+			}
+			target := cmd.Args().First()
+			check := cmd.Bool("check")
+			yes := cmd.Bool("yes")
+			dryRun := cmd.Bool("dry-run")
+			engine := cmd.String("engine")
+
+			// Validate engine
+			dialect := lexer.Dialect(engine)
+			switch dialect {
+			case lexer.DialectPostgreSQL, lexer.DialectMySQL, lexer.DialectSQLite:
+			default:
+				return fmt.Errorf("unsupported engine: %s (supported: postgresql, mysql, sqlite)", engine)
+			}
+
+			options := formatters.DefaultOptions()
+			options.Dialect = dialect
+
+			// Resolve target: file or directory (recursive)
+			sqlFiles, err := resolveSQLFiles(target)
+			if err != nil {
+				return err
+			}
+
+			if len(sqlFiles) == 0 {
+				l.Info("no .sql files found in", target)
+				return nil
+			}
+
+			// Analyze which files need formatting
+			type fileResult struct {
+				path      string
+				formatted []byte
+			}
+
+			var toFormat []fileResult
+			var errCount int
+
+			for _, file := range sqlFiles {
+				src, err := os.ReadFile(file)
+				if err != nil {
+					l.Infof("error reading %s: %v", file, err)
+					errCount++
+					continue
+				}
+
+				formatted, err := sqlfmt.FormatFile(src, options)
+				if err != nil {
+					l.Infof("error formatting %s: %v", file, err)
+					errCount++
+					continue
+				}
+
+				if string(src) != string(formatted) {
+					toFormat = append(toFormat, fileResult{path: file, formatted: formatted})
+				}
+			}
+
+			// Dry-run mode: just process and report
+			if dryRun {
+				l.Infof("processed %d file(s), %d need formatting, %d error(s)", len(sqlFiles), len(toFormat), errCount)
+				for _, f := range toFormat {
+					l.Infof("  would format %s", f.path)
+				}
+				if errCount > 0 {
+					return fmt.Errorf("%d file(s) had errors", errCount)
+				}
+				return nil
+			}
+
+			// Check mode: just report and exit
+			if check {
+				if len(toFormat) > 0 {
+					l.Info("unformatted files:")
+					for _, f := range toFormat {
+						l.Infof("  %s", f.path)
+					}
+					return fmt.Errorf("%d file(s) not formatted", len(toFormat))
+				}
+				l.Info("all files are formatted")
+				return nil
+			}
+
+			if len(toFormat) == 0 {
+				l.Infof("all %d file(s) are already formatted", len(sqlFiles))
+				return nil
+			}
+
+			// Show files to format
+			l.Infof("files to format (%d):", len(toFormat))
+			for _, f := range toFormat {
+				l.Infof("  %s", f.path)
+			}
+
+			// Ask for confirmation unless --yes
+			if !yes {
+				fmt.Print("\nproceed? [y/N] ")
+				scanner := bufio.NewScanner(os.Stdin)
+				scanner.Scan()
+				answer := strings.TrimSpace(strings.ToLower(scanner.Text()))
+				if answer != "y" && answer != "yes" {
+					l.Info("aborted")
+					return nil
+				}
+			}
+
+			// Write formatted files
+			for _, f := range toFormat {
+				if err := os.WriteFile(f.path, f.formatted, 0o644); err != nil {
+					l.Infof("error writing %s: %v", f.path, err)
+					errCount++
+					continue
+				}
+				l.Infof("formatted %s", f.path)
+			}
+
+			if errCount > 0 {
+				return fmt.Errorf("%d file(s) had errors", errCount)
+			}
+
+			return nil
+		},
+	}
+}
+
+// resolveSQLFiles resolves a path (file or directory) into a list of .sql files.
+// For directories, it searches recursively.
+func resolveSQLFiles(target string) ([]string, error) {
+	info, err := os.Stat(target)
+	if err != nil {
+		return nil, fmt.Errorf("path %s: %w", target, err)
+	}
+
+	// Single file
+	if !info.IsDir() {
+		if strings.HasSuffix(strings.ToLower(info.Name()), ".sql") {
+			return []string{target}, nil
+		}
+		return nil, fmt.Errorf("%s is not a .sql file", target)
+	}
+
+	// Directory: walk recursively
+	var files []string
+	err = filepath.WalkDir(target, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && strings.HasSuffix(strings.ToLower(d.Name()), ".sql") {
+			files = append(files, path)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("walk directory %s: %w", target, err)
+	}
+
+	return files, nil
 }

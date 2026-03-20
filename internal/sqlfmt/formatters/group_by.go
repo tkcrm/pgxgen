@@ -1,0 +1,90 @@
+package formatters
+
+import (
+	"bytes"
+
+	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
+)
+
+const maxGroupClausesPerLine = 2
+
+// GroupBy group formatter
+type GroupBy struct {
+	Elements    []Formatter
+	IndentLevel int
+	*Options    // Options used later to format element
+}
+
+// Format component accordingly with necessary indents, newlines,...
+func (formatter *GroupBy) Format(buf *bytes.Buffer, parent []Formatter, parentIdx int) error {
+	// Prepare short variables for better visibility
+	INDENT := formatter.Indent
+	NEWLINE := formatter.Newline
+	WHITESPACE := formatter.Whitespace
+
+	// Preprocess punctuation and enrich with surrounding information
+	elements, err := processPunctuation(formatter.Elements, WHITESPACE)
+	if err != nil {
+		return err
+	}
+
+	// Check how many clauses there are. Linebreak if too many
+	clauses := 0
+	for _, el := range elements {
+		switch t := el.(type) {
+		case Token:
+			switch t.Type {
+			case lexer.IDENT:
+				clauses++
+			case lexer.COMMENT:
+				clauses = 999 // Format like if there were many clauses to make space for comments
+			}
+		}
+	}
+
+	// Iterate and write elements to the buffer. Recursively step into nested elements.
+	hasMany := clauses > maxGroupClausesPerLine
+	var previousToken Token
+	for i, el := range elements {
+
+		// Write element or recursively call its Format function
+		if token, ok := el.(Token); ok {
+			writeWithComma(buf, INDENT, NEWLINE, WHITESPACE, token, previousToken, formatter.IndentLevel, i-1, hasMany) // -1 because ORDER is always followed by 'BY'
+		} else {
+
+			// Increment indent, if GROUP clauses should be written into new lines
+			if hasMany {
+				el.AddIndent(1)
+			}
+
+			// Recursively format nested elements
+			_ = el.Format(buf, elements, i)
+		}
+
+		// Remember last Token element
+		if token, ok := el.(Token); ok {
+			previousToken = token
+		} else {
+			previousToken = Token{}
+		}
+	}
+
+	// Return nil and continue with parent Formatter
+	return nil
+}
+
+// AddIndent increments indentation level by the given amount
+func (formatter *GroupBy) AddIndent(lev int) {
+	formatter.IndentLevel += lev
+
+	// Preprocess punctuation and enrich with surrounding information
+	elements, err := processPunctuation(formatter.Elements, formatter.Whitespace)
+	if err != nil {
+		elements = formatter.Elements
+	}
+
+	// Iterate and increase indent of child elements too
+	for _, el := range elements {
+		el.AddIndent(lev)
+	}
+}
