@@ -145,6 +145,18 @@ func (t *tokenizer) scan() (Token, error) {
 			}
 		}
 		if isDash(ch) && !t.peekSubsequent(isDash) {
+			// Check for PostgreSQL JSON operators -> and ->>
+			if t.peekSubsequent(isGreaterThan) {
+				// Read the '>'
+				gt, _, _ := t.r.ReadRune()
+				buf.WriteRune(gt)
+				// Check for ->> (double arrow)
+				if t.peekSubsequent(isGreaterThan) {
+					gt2, _, _ := t.r.ReadRune()
+					buf.WriteRune(gt2)
+				}
+				return Token{Type: COMPARATOR, Value: buf.String()}, nil
+			}
 			break
 		}
 
@@ -253,6 +265,12 @@ func (t *tokenizer) scan() (Token, error) {
 
 		// Stop if next character doesn't belong to the value anymore. Unread last unnecessary character.
 		if isPunctuation(chNext) || isSingleQuote(chNext) || isWhitespace(chNext) || isNewline(chNext) || isTab(chNext) {
+			_ = t.r.UnreadRune()
+			break
+		}
+
+		// Stop before dash that starts a JSON operator (-> or ->>) or comment (--)
+		if isDash(chNext) {
 			_ = t.r.UnreadRune()
 			break
 		}
@@ -405,6 +423,10 @@ func isDash(ch rune) bool {
 
 func isAsterisk(ch rune) bool {
 	return ch == '*'
+}
+
+func isGreaterThan(ch rune) bool {
+	return ch == '>'
 }
 
 func isBacktick(ch rune) bool {

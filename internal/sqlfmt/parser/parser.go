@@ -337,6 +337,11 @@ func (r *Parser) isNewSegment(idx int) bool {
 		return false
 	}
 
+	// Not a new segment if WITH follows a TYPE token (e.g., TIMESTAMP WITH TIME ZONE)
+	if tokenCurrent.Type == lexer.WITH && tokenPrevious.Type == lexer.TYPE {
+		return false
+	}
+
 	//
 	// Positive indicators:
 	//

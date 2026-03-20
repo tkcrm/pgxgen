@@ -36,18 +36,18 @@ FROM (
     col4
   FROM contents
   WHERE
-    active = true
-    AND attr2 = true
-    AND attr3 = true
-    AND attr4 = true
-    AND attr5 = true
+    active = TRUE
+    AND attr2 = TRUE
+    AND attr3 = TRUE
+    AND attr4 = TRUE
+    AND attr5 = TRUE
     AND attr6 IN (
       SELECT
         *
       FROM attributes
     )
-    AND attr6 = true
-    AND attr7 = true
+    AND attr6 = TRUE
+    AND attr7 = TRUE
 ) AS tble1
 WHERE col3 ILIKE '%substr%' AND col4 > (
   SELECT
@@ -77,7 +77,7 @@ LIMIT 1`,
 			name: "Nested functions",
 			sql:  `select true from m where t < date_trunc('DAY', to_timestamp('2022-01-01'))`,
 			want: `SELECT
-  true
+  TRUE
 FROM m
 WHERE t < DATE_TRUNC('DAY', TO_TIMESTAMP('2022-01-01'))`,
 		},
@@ -522,8 +522,8 @@ WHERE 'value' = ANY (
 			want: `SELECT
   roles.rolsuper AS is_superuser,
   CASE
-    WHEN roles.rolsuper THEN true
-    WHEN roles.roladmin THEN true
+    WHEN roles.rolsuper THEN TRUE
+    WHEN roles.roladmin THEN TRUE
     ELSE roles.rolcreaterole
   END AS can_create_role,
   CASE
@@ -547,8 +547,8 @@ WHERE 'value' = ANY (
           rolname
         FROM cte
       )
-    ) THEN true
-    ELSE false
+    ) THEN TRUE
+    ELSE FALSE
   END AS can_signal_backend
 FROM pg_catalog.pg_roles AS roles
 WHERE rolname = CURRENT_USER`,
@@ -559,7 +559,7 @@ WHERE rolname = CURRENT_USER`,
 			want: `SELECT
   CASE
     WHEN usesuper AND pg_catalog.PG_IS_IN_RECOVERY() OR pg_catalog.PG_IS_IN_RECOVERY() THEN pg_is_wal_replay_paused ()
-    ELSE false
+    ELSE FALSE
   END AS isreplaypaused
 FROM pg_catalog.pg_user
 WHERE usename = CURRENT_USER`,
@@ -796,9 +796,9 @@ SET
   country = 'germany'
 WHERE
   customer_id = 1
-  AND active = true
-  AND display = true
-  AND accepted = true`,
+  AND active = TRUE
+  AND display = TRUE
+  AND accepted = TRUE`,
 		},
 		{
 			name: "UPDATE complex",
@@ -876,7 +876,7 @@ SELECT
   customer_name,
   contact_name
 FROM customers
-WHERE active = true`,
+WHERE active = TRUE`,
 		},
 		{
 			name: "ALTER TABLE ADD",
