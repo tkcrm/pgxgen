@@ -222,7 +222,7 @@ func (s *SchemaConfig) ResolveQueriesDir(tableName string) string {
 func (s *SchemaConfig) ResolveOutputDir(tableName string) string {
 	if s.Defaults != nil {
 		if s.Defaults.OutputDirPrefix != "" {
-			return s.Defaults.OutputDirPrefix + "/repo_" + tableName
+			return s.Defaults.OutputDirPrefix + "/" + tableName
 		}
 		if s.Defaults.OutputDir != "" {
 			return s.Defaults.OutputDir

@@ -171,7 +171,7 @@
         },
         "output_dir_prefix": {
           "type": "string",
-          "description": "Per-table repos: output_dir = {prefix}/repo_{table_name}"
+          "description": "Per-table repos: output_dir = {prefix}/{table_name}"
         },
         "queries_dir": {
           "type": "string",

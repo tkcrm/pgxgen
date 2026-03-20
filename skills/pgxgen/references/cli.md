@@ -106,6 +106,35 @@ pgxgen migrate --in-place --sqlc-config sqlc.yaml  # Import sqlc.yaml settings
 | `--in-place`    | `false`     | Overwrite pgxgen.yaml (creates .v1.bak backup)       |
 | `--sqlc-config` | `sqlc.yaml` | Path to sqlc.yaml for extracting engine and settings |
 
+### schema
+
+Output consolidated DDL from all migration files. Reads all `.up.sql` files, replays CREATE/ALTER/DROP statements, and outputs the final schema state as a single DDL script. This command is standalone — it does not require a `pgxgen.yaml` config.
+
+```bash
+pgxgen schema --dir sql/migrations/postgres                    # PostgreSQL (default engine)
+pgxgen schema -d sql/migrations/sqlite -e sqlite               # SQLite
+pgxgen schema -d sql/migrations/postgres > consolidated.sql    # Redirect to file
+```
+
+**Flags:**
+
+| Flag                          | Default        | Description                          |
+| ----------------------------- | -------------- | ------------------------------------ |
+| `--dir`, `-d`                 | (required)     | Path to migrations directory or file |
+| `--engine`, `-e`              | `postgresql`   | Database engine (postgresql, sqlite) |
+
+**What is captured:**
+
+- Tables with all columns (types, NOT NULL, defaults)
+- PRIMARY KEY (inline and composite)
+- FOREIGN KEY (inline REFERENCES and table-level) with ON DELETE/UPDATE actions
+- UNIQUE and CHECK constraints
+- CREATE INDEX (regular, unique, partial with WHERE, IF NOT EXISTS)
+- CREATE EXTENSION (PostgreSQL)
+- CREATE TYPE / ENUM (PostgreSQL)
+- COMMENT ON TABLE/COLUMN (PostgreSQL)
+- Tables are topologically sorted by FK dependencies
+
 ### update
 
 Self-update pgxgen to the latest version.

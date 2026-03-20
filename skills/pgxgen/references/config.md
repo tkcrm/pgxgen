@@ -105,7 +105,7 @@ sqlc:
 defaults:
   # Pattern A: per-table repos (each table gets its own directory)
   queries_dir_prefix: sql/queries # → sql/queries/{table}/
-  output_dir_prefix: internal/store/repos # → internal/store/repos/repo_{table}/
+  output_dir_prefix: internal/store/repos # → internal/store/repos/{table}/
 
   # Pattern B: single repo (all tables in one directory)
   # queries_dir: sql/queries
@@ -190,7 +190,7 @@ custom_queries:
   - name: GetActiveUsers
     type: many # one | many | exec | copyfrom
     table: users # Optional. Associated table
-    output_dir: internal/store/repos/repo_users # Optional. Override output
+    output_dir: internal/store/repos/users # Optional. Override output
     sql: |
       SELECT * FROM users
       WHERE is_active = true

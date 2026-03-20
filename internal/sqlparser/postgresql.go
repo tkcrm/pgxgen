@@ -51,6 +51,10 @@ func (p *postgresParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 				p.handleAlterTable(cat, n.AlterTableStmt)
 			case *pg.Node_DropStmt:
 				p.handleDropStmt(cat, n.DropStmt)
+			case *pg.Node_IndexStmt:
+				p.handleCreateIndex(cat, n.IndexStmt)
+			case *pg.Node_CreateExtensionStmt:
+				p.handleCreateExtension(cat, n.CreateExtensionStmt)
 			}
 		}
 	}
@@ -96,6 +100,14 @@ func (p *postgresParser) handleCreateTable(cat *catalog.Catalog, n *pg.CreateStm
 		Schema: schemaName,
 	}
 
+	// Collect inline foreign keys from column REFERENCES constraints.
+	// We need to process these after all columns are added.
+	type inlineFK struct {
+		colName    string
+		constraint *pg.Constraint
+	}
+	var inlineFKs []inlineFK
+
 	for _, elt := range n.TableElts {
 		switch item := elt.Node.(type) {
 		case *pg.Node_ColumnDef:
@@ -103,10 +115,90 @@ func (p *postgresParser) handleCreateTable(cat *catalog.Catalog, n *pg.CreateStm
 			if col != nil {
 				table.Columns = append(table.Columns, col)
 			}
+			// Check for inline REFERENCES constraint
+			for _, c := range item.ColumnDef.Constraints {
+				if constraint, ok := c.Node.(*pg.Node_Constraint); ok {
+					if constraint.Constraint.Contype == pg.ConstrType_CONSTR_FOREIGN {
+						inlineFKs = append(inlineFKs, inlineFK{
+							colName:    item.ColumnDef.Colname,
+							constraint: constraint.Constraint,
+						})
+					}
+				}
+			}
+		case *pg.Node_Constraint:
+			p.handleTableConstraint(table, item.Constraint)
+		}
+	}
+
+	// Process inline foreign keys
+	for _, ifk := range inlineFKs {
+		fk := p.convertForeignKey(ifk.constraint)
+		if fk != nil {
+			fk.Columns = []string{ifk.colName}
+			table.ForeignKeys = append(table.ForeignKeys, fk)
+		}
+	}
+
+	// Build PrimaryKey from inline column-level PRIMARY KEY if no table-level PK was set
+	if table.PrimaryKey == nil {
+		var pkCols []string
+		for _, col := range table.Columns {
+			if col.IsPrimary {
+				pkCols = append(pkCols, col.Name)
+			}
+		}
+		if len(pkCols) > 0 {
+			table.PrimaryKey = &catalog.PrimaryKey{Columns: pkCols}
 		}
 	}
 
 	schema.Tables = append(schema.Tables, table)
+}
+
+// handleTableConstraint processes a table-level constraint node.
+func (p *postgresParser) handleTableConstraint(table *catalog.Table, n *pg.Constraint) {
+	if n == nil {
+		return
+	}
+	switch n.Contype {
+	case pg.ConstrType_CONSTR_PRIMARY:
+		pk := &catalog.PrimaryKey{Name: n.Conname}
+		for _, key := range n.Keys {
+			pk.Columns = append(pk.Columns, pgStringVal(key))
+		}
+		table.PrimaryKey = pk
+		// Mark columns as NOT NULL
+		for _, pkCol := range pk.Columns {
+			for _, col := range table.Columns {
+				if col.Name == pkCol {
+					col.NotNull = true
+					col.IsPrimary = true
+				}
+			}
+		}
+	case pg.ConstrType_CONSTR_UNIQUE:
+		uc := &catalog.UniqueConstraint{Name: n.Conname}
+		for _, key := range n.Keys {
+			uc.Columns = append(uc.Columns, pgStringVal(key))
+		}
+		table.Uniques = append(table.Uniques, uc)
+	case pg.ConstrType_CONSTR_FOREIGN:
+		fk := p.convertForeignKey(n)
+		if fk != nil {
+			// Table-level FK: columns from FkAttrs
+			for _, attr := range n.FkAttrs {
+				fk.Columns = append(fk.Columns, pgStringVal(attr))
+			}
+			table.ForeignKeys = append(table.ForeignKeys, fk)
+		}
+	case pg.ConstrType_CONSTR_CHECK:
+		cc := &catalog.CheckConstraint{Name: n.Conname}
+		if n.RawExpr != nil {
+			cc.Expression = deparseExpr(n.RawExpr)
+		}
+		table.Checks = append(table.Checks, cc)
+	}
 }
 
 func (p *postgresParser) convertColumnDef(n *pg.ColumnDef) *catalog.Column {
@@ -121,11 +213,12 @@ func (p *postgresParser) convertColumnDef(n *pg.ColumnDef) *catalog.Column {
 
 	if n.TypeName != nil {
 		col.Type = pgTypeName(n.TypeName)
+		col.FullType = deparseTypeName(n.TypeName)
 		col.IsArray = len(n.TypeName.ArrayBounds) > 0
 		col.ArrayDims = len(n.TypeName.ArrayBounds)
 	}
 
-	// Check constraints for NOT NULL / PRIMARY KEY
+	// Check constraints for NOT NULL / PRIMARY KEY / DEFAULT
 	for _, c := range n.Constraints {
 		if constraint, ok := c.Node.(*pg.Node_Constraint); ok {
 			switch constraint.Constraint.Contype {
@@ -133,11 +226,36 @@ func (p *postgresParser) convertColumnDef(n *pg.ColumnDef) *catalog.Column {
 				col.NotNull = true
 			case pg.ConstrType_CONSTR_PRIMARY:
 				col.NotNull = true
+				col.IsPrimary = true
+			case pg.ConstrType_CONSTR_DEFAULT:
+				if constraint.Constraint.RawExpr != nil {
+					col.Default = deparseExpr(constraint.Constraint.RawExpr)
+				}
 			}
 		}
 	}
 
 	return col
+}
+
+// convertForeignKey extracts FK details from a Constraint node.
+func (p *postgresParser) convertForeignKey(n *pg.Constraint) *catalog.ForeignKey {
+	if n == nil || n.Pktable == nil {
+		return nil
+	}
+	fk := &catalog.ForeignKey{
+		Name:     n.Conname,
+		RefTable: n.Pktable.Relname,
+	}
+	if n.Pktable.Schemaname != "" {
+		fk.RefSchema = n.Pktable.Schemaname
+	}
+	for _, attr := range n.PkAttrs {
+		fk.RefColumns = append(fk.RefColumns, pgStringVal(attr))
+	}
+	fk.OnDelete = pgFKAction(n.FkDelAction)
+	fk.OnUpdate = pgFKAction(n.FkUpdAction)
+	return fk
 }
 
 func (p *postgresParser) handleCreateEnum(cat *catalog.Catalog, n *pg.CreateEnumStmt) {
@@ -291,6 +409,7 @@ func (p *postgresParser) handleAlterTable(cat *catalog.Catalog, n *pg.AlterTable
 					if col.Name == def.ColumnDef.Colname {
 						if def.ColumnDef.TypeName != nil {
 							col.Type = pgTypeName(def.ColumnDef.TypeName)
+							col.FullType = deparseTypeName(def.ColumnDef.TypeName)
 							col.IsArray = len(def.ColumnDef.TypeName.ArrayBounds) > 0
 							col.ArrayDims = len(def.ColumnDef.TypeName.ArrayBounds)
 						}
@@ -298,8 +417,82 @@ func (p *postgresParser) handleAlterTable(cat *catalog.Catalog, n *pg.AlterTable
 					}
 				}
 			}
+		case pg.AlterTableType_AT_ColumnDefault:
+			for _, col := range table.Columns {
+				if col.Name == c.Name {
+					if c.Def != nil {
+						col.Default = deparseExpr(c.Def)
+					} else {
+						col.Default = ""
+					}
+					break
+				}
+			}
+		case pg.AlterTableType_AT_AddConstraint:
+			if constraint, ok := c.Def.Node.(*pg.Node_Constraint); ok {
+				p.handleTableConstraint(table, constraint.Constraint)
+			}
+		case pg.AlterTableType_AT_DropConstraint:
+			p.dropConstraint(table, c.Name)
 		}
 	}
+}
+
+func (p *postgresParser) handleCreateIndex(cat *catalog.Catalog, n *pg.IndexStmt) {
+	if n == nil || n.Relation == nil {
+		return
+	}
+
+	schemaName := n.Relation.Schemaname
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+
+	table := p.findTable(cat, schemaName, n.Relation.Relname)
+	if table == nil {
+		return
+	}
+
+	idx := &catalog.Index{
+		Name:        n.Idxname,
+		IsUnique:    n.Unique,
+		IfNotExists: n.IfNotExists,
+	}
+
+	// Extract column names from index params
+	for _, param := range n.IndexParams {
+		if elem, ok := param.Node.(*pg.Node_IndexElem); ok {
+			if elem.IndexElem.Name != "" {
+				idx.Columns = append(idx.Columns, elem.IndexElem.Name)
+			} else if elem.IndexElem.Expr != nil {
+				// Expression index — deparse the expression
+				idx.Columns = append(idx.Columns, deparseExpr(elem.IndexElem.Expr))
+			}
+		}
+	}
+
+	// Partial index WHERE clause
+	if n.WhereClause != nil {
+		idx.Where = deparseExpr(n.WhereClause)
+	}
+
+	table.Indexes = append(table.Indexes, idx)
+}
+
+func (p *postgresParser) handleCreateExtension(cat *catalog.Catalog, n *pg.CreateExtensionStmt) {
+	if n == nil {
+		return
+	}
+
+	schema := p.getOrCreateSchema(cat, cat.DefaultSchema)
+
+	// Avoid duplicates
+	for _, ext := range schema.Extensions {
+		if ext == n.Extname {
+			return
+		}
+	}
+	schema.Extensions = append(schema.Extensions, n.Extname)
 }
 
 func (p *postgresParser) handleDropStmt(cat *catalog.Catalog, n *pg.DropStmt) {
@@ -346,6 +539,52 @@ func (p *postgresParser) handleDropStmt(cat *catalog.Catalog, n *pg.DropStmt) {
 				}
 			}
 		}
+	case pg.ObjectType_OBJECT_INDEX:
+		for _, obj := range n.Objects {
+			if list, ok := obj.Node.(*pg.Node_List); ok {
+				_, idxName := pgParseQualifiedName(list.List)
+				// Search all tables for this index
+				for _, s := range cat.Schemas {
+					for _, t := range s.Tables {
+						for i, idx := range t.Indexes {
+							if idx.Name == idxName {
+								t.Indexes = append(t.Indexes[:i], t.Indexes[i+1:]...)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// dropConstraint removes a constraint by name from a table.
+func (p *postgresParser) dropConstraint(table *catalog.Table, name string) {
+	if name == "" {
+		return
+	}
+	if table.PrimaryKey != nil && table.PrimaryKey.Name == name {
+		table.PrimaryKey = nil
+		return
+	}
+	for i, u := range table.Uniques {
+		if u.Name == name {
+			table.Uniques = append(table.Uniques[:i], table.Uniques[i+1:]...)
+			return
+		}
+	}
+	for i, fk := range table.ForeignKeys {
+		if fk.Name == name {
+			table.ForeignKeys = append(table.ForeignKeys[:i], table.ForeignKeys[i+1:]...)
+			return
+		}
+	}
+	for i, c := range table.Checks {
+		if c.Name == name {
+			table.Checks = append(table.Checks[:i], table.Checks[i+1:]...)
+			return
+		}
 	}
 }
 
@@ -371,6 +610,67 @@ func (p *postgresParser) findTable(cat *catalog.Catalog, schemaName, tableName s
 		}
 	}
 	return nil
+}
+
+// deparseTypeName converts a pg_query TypeName node to its full SQL representation
+// including modifiers like length, e.g. "character varying(255)".
+func deparseTypeName(tn *pg.TypeName) string {
+	if tn == nil {
+		return ""
+	}
+	// Build a synthetic "SELECT NULL::<type>" and deparse, then extract the type part.
+	colDef := &pg.ColumnDef{
+		Colname:  "_",
+		TypeName: tn,
+	}
+	createStmt := &pg.CreateStmt{
+		Relation: &pg.RangeVar{Relname: "_"},
+		TableElts: []*pg.Node{
+			{Node: &pg.Node_ColumnDef{ColumnDef: colDef}},
+		},
+	}
+	tree := &pg.ParseResult{
+		Stmts: []*pg.RawStmt{
+			{Stmt: &pg.Node{Node: &pg.Node_CreateStmt{CreateStmt: createStmt}}},
+		},
+	}
+	output, err := pg.Deparse(tree)
+	if err != nil {
+		return pgTypeName(tn)
+	}
+	// output: CREATE TABLE _ (_ <type>)
+	// Extract the type between "(_ " and ")"
+	start := strings.Index(output, "(_ ")
+	end := strings.LastIndex(output, ")")
+	if start >= 0 && end > start+3 {
+		return strings.TrimSpace(output[start+3 : end])
+	}
+	return pgTypeName(tn)
+}
+
+// deparseExpr converts a pg_query AST node back to SQL text.
+// It wraps the expression in a synthetic SELECT statement, deparses it,
+// then strips the "SELECT " prefix.
+func deparseExpr(node *pg.Node) string {
+	if node == nil {
+		return ""
+	}
+	selectStmt := &pg.SelectStmt{
+		TargetList: []*pg.Node{
+			{Node: &pg.Node_ResTarget{ResTarget: &pg.ResTarget{Val: node}}},
+		},
+	}
+	tree := &pg.ParseResult{
+		Stmts: []*pg.RawStmt{
+			{Stmt: &pg.Node{Node: &pg.Node_SelectStmt{SelectStmt: selectStmt}}},
+		},
+	}
+	output, err := pg.Deparse(tree)
+	if err != nil {
+		return ""
+	}
+	// Strip "SELECT " prefix
+	return strings.TrimPrefix(output, "SELECT ")
 }
 
 // pgTypeName extracts the type name string from a pg_query TypeName node.
@@ -435,4 +735,22 @@ func pgStringVal(n *pg.Node) string {
 		return s.String_.Sval
 	}
 	return ""
+}
+
+// pgFKAction converts a pg_query FK action character to a human-readable string.
+func pgFKAction(action string) string {
+	switch action {
+	case "a":
+		return "NO ACTION"
+	case "r":
+		return "RESTRICT"
+	case "c":
+		return "CASCADE"
+	case "n":
+		return "SET NULL"
+	case "d":
+		return "SET DEFAULT"
+	default:
+		return ""
+	}
 }
