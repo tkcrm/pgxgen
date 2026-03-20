@@ -118,6 +118,182 @@ func TestTokenizeFunctionKeywordsDialect(t *testing.T) {
 	assert.Equal(t, IDENT, sqliteTokens[1].Type)
 }
 
+func TestTokenizeJsonOperators(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want []Token
+	}{
+		{
+			name: "arrow operator ->",
+			sql:  "SELECT data->'key'",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: IDENT, Value: "data"},
+				{Type: COMPARATOR, Value: "->"},
+				{Type: STRING, Value: "'key'"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+		{
+			name: "double arrow operator ->>",
+			sql:  "SELECT data->>'key'",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: IDENT, Value: "data"},
+				{Type: COMPARATOR, Value: "->>"},
+				{Type: STRING, Value: "'key'"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+		{
+			name: "chained JSON operators",
+			sql:  "SELECT data->'a'->>'b'",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: IDENT, Value: "data"},
+				{Type: COMPARATOR, Value: "->"},
+				{Type: STRING, Value: "'a'"},
+				{Type: COMPARATOR, Value: "->>"},
+				{Type: STRING, Value: "'b'"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+		{
+			name: "arrow with space (- >) is still recognized",
+			sql:  "SELECT data - > 'key'",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: IDENT, Value: "data"},
+				{Type: COMPARATOR, Value: "->"},
+				{Type: STRING, Value: "'key'"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+		{
+			name: "double arrow with space (- >>)",
+			sql:  "SELECT data - >> 'key'",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: IDENT, Value: "data"},
+				{Type: COMPARATOR, Value: "->>"},
+				{Type: STRING, Value: "'key'"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+		{
+			name: "minus is not arrow when followed by non-gt",
+			sql:  "SELECT 1 - 2",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: IDENT, Value: "1"},
+				{Type: IDENT, Value: "-"},
+				{Type: IDENT, Value: "2"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+		{
+			name: "minus INTERVAL preserved",
+			sql:  "SELECT NOW() - INTERVAL '1 day'",
+			want: []Token{
+				{Type: SELECT, Value: "SELECT"},
+				{Type: FUNCTION, Value: "NOW"},
+				{Type: STARTPARENTHESIS, Value: "("},
+				{Type: ENDPARENTHESIS, Value: ")"},
+				{Type: IDENT, Value: "-"},
+				{Type: TYPE, Value: "INTERVAL"},
+				{Type: STRING, Value: "'1 day'"},
+				{Type: EOF, Value: "EOF"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Tokenize(tt.sql, DialectPostgreSQL)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestTokenizeDollarParamsAtEOF(t *testing.T) {
+	// $1 at end of string should not lose the "1" due to dollar-quoting EOF handling
+	sql := "SELECT * FROM t WHERE id = $1"
+	tokens, err := Tokenize(sql, DialectPostgreSQL)
+	assert.Nil(t, err)
+
+	// Find the $1 token
+	var found bool
+	for _, tok := range tokens {
+		if tok.Value == "$1" {
+			found = true
+			assert.Equal(t, IDENT, tok.Type)
+		}
+	}
+	assert.True(t, found, "expected to find $1 token")
+}
+
+func TestTokenizeDollarParamsMidQuery(t *testing.T) {
+	// $1 and $2 in the middle of a query
+	sql := "UPDATE t SET a = $1 WHERE b = $2"
+	tokens, err := Tokenize(sql, DialectPostgreSQL)
+	assert.Nil(t, err)
+
+	values := make(map[string]bool)
+	for _, tok := range tokens {
+		values[tok.Value] = true
+	}
+	assert.True(t, values["$1"], "expected $1 token")
+	assert.True(t, values["$2"], "expected $2 token")
+}
+
+func TestTokenizeSQLKeywordsUppercased(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+		tokType  TokenType
+	}{
+		{"default", "DEFAULT", SQLKEYWORD},
+		{"check", "CHECK", SQLKEYWORD},
+		{"constraint", "CONSTRAINT", SQLKEYWORD},
+		{"references", "REFERENCES", SQLKEYWORD},
+		{"unique", "UNIQUE", SQLKEYWORD},
+		{"index", "INDEX", SQLKEYWORD},
+		{"view", "VIEW", SQLKEYWORD},
+		{"cascade", "CASCADE", SQLKEYWORD},
+		{"foreign", "FOREIGN", SQLKEYWORD},
+		{"true", "TRUE", SQLKEYWORD},
+		{"false", "FALSE", SQLKEYWORD},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			tokens, err := Tokenize("SELECT "+tt.input, DialectPostgreSQL)
+			assert.Nil(t, err)
+			assert.Equal(t, tt.expected, tokens[1].Value)
+			assert.Equal(t, tt.tokType, tokens[1].Type)
+		})
+	}
+}
+
+func TestTokenizeSQLTypesUppercased(t *testing.T) {
+	tests := []string{
+		"uuid", "jsonb", "json", "bool", "bigint", "smallint",
+		"serial", "bytea", "inet", "real",
+	}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			// Types without parenthesis after them are NOT treated as TYPE segment starters
+			tokens, err := Tokenize("SELECT "+input, DialectPostgreSQL)
+			assert.Nil(t, err)
+			assert.Equal(t, strings.ToUpper(input), tokens[1].Value)
+			assert.Equal(t, TYPE, tokens[1].Type)
+		})
+	}
+}
+
 func Test_peekComparator(t *testing.T) {
 	tests := []struct {
 		testSequence   string

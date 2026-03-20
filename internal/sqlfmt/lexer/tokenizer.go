@@ -146,15 +146,8 @@ func (t *tokenizer) scan() (Token, error) {
 		}
 		if isDash(ch) && !t.peekSubsequent(isDash) {
 			// Check for PostgreSQL JSON operators -> and ->>
-			if t.peekSubsequent(isGreaterThan) {
-				// Read the '>'
-				gt, _, _ := t.r.ReadRune()
-				buf.WriteRune(gt)
-				// Check for ->> (double arrow)
-				if t.peekSubsequent(isGreaterThan) {
-					gt2, _, _ := t.r.ReadRune()
-					buf.WriteRune(gt2)
-				}
+			// Also handles already-formatted `- >` / `- >>` with whitespace
+			if t.peekJsonArrow(&buf) {
 				return Token{Type: COMPARATOR, Value: buf.String()}, nil
 			}
 			break
@@ -427,6 +420,41 @@ func isAsterisk(ch rune) bool {
 
 func isGreaterThan(ch rune) bool {
 	return ch == '>'
+}
+
+// peekJsonArrow checks if the upcoming characters form a JSON arrow operator (-> or ->>),
+// optionally skipping whitespace between `-` and `>`. If found, writes the arrow chars
+// to buf (which must already contain `-`) and returns true.
+// Uses Peek to avoid consuming characters on failure.
+func (t *tokenizer) peekJsonArrow(buf *bytes.Buffer) bool {
+	// Peek ahead to find '>' past optional whitespace
+	peekLen := 1
+	for {
+		b, err := t.r.Peek(peekLen)
+		if err != nil {
+			return false
+		}
+		ch := rune(b[peekLen-1])
+		if isWhitespace(ch) || isTab(ch) {
+			peekLen++
+			continue
+		}
+		if ch == '>' {
+			// Found '->' pattern. Consume all peeked bytes.
+			for i := 0; i < peekLen; i++ {
+				_, _, _ = t.r.ReadRune()
+			}
+			buf.WriteRune('>')
+			// Check for ->> (double arrow)
+			if t.peekSubsequent(isGreaterThan) {
+				gt2, _, _ := t.r.ReadRune()
+				buf.WriteRune(gt2)
+			}
+			return true
+		}
+		// Not '>' — don't consume anything
+		return false
+	}
 }
 
 func isBacktick(ch rune) bool {
