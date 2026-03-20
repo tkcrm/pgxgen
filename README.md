@@ -16,6 +16,7 @@ Code generation tool for PostgreSQL, MySQL, and SQLite. Generates CRUD SQL, Go m
 - **Multi-engine** — PostgreSQL + MySQL + SQLite in one project
 - **Per-table repos** or **single repo** layout
 - **Schema dump** — consolidated DDL output from migrations (no config needed)
+- **SQL formatting** — format SQL files with dialect support (PostgreSQL, MySQL, SQLite)
 - **Watch mode**, **dry-run**, **validation**, **interactive init**
 
 ## AI Agent Skills
@@ -190,7 +191,9 @@ tables:
 | `pgxgen generate crud`      | Generate CRUD SQL only                                 |
 | `pgxgen generate models`    | Generate Go models only                                |
 | `pgxgen generate --dry-run` | Preview changes without writing                        |
-| `pgxgen schema -d DIR`      | Output consolidated DDL from migrations                |
+| `pgxgen schema <path>`      | Output consolidated DDL from migrations                |
+| `pgxgen fmt <path>`         | Format SQL files (with confirmation)                   |
+| `pgxgen fmt <path> --check` | Check SQL formatting (for CI, exit 1 if unformatted)   |
 | `pgxgen validate`           | Validate config and schema (for CI)                    |
 | `pgxgen watch`              | Watch schema files, regenerate on changes              |
 | `pgxgen init`               | Create config interactively                            |
@@ -203,12 +206,29 @@ tables:
 Output the final consolidated DDL from all migration files — as if all migrations were applied and the schema was dumped. This command is standalone and does not require a `pgxgen.yaml` config.
 
 ```bash
-pgxgen schema --dir sql/migrations/postgres                  # PostgreSQL (default)
-pgxgen schema -d sql/migrations/sqlite -e sqlite             # SQLite
-pgxgen schema -d sql/migrations/postgres > schema.sql        # Save to file
+pgxgen schema sql/migrations/postgres                  # PostgreSQL (default)
+pgxgen schema sql/migrations/sqlite -e sqlite          # SQLite
+pgxgen schema sql/migrations/postgres > schema.sql     # Save to file
+pgxgen schema sql/migrations/001_init.up.sql           # Single file
 ```
 
 Captures tables, columns with defaults, PRIMARY KEY, FOREIGN KEY, UNIQUE, CHECK constraints, indexes (including partial), extensions, enums, and comments. Tables are ordered by foreign key dependencies.
+
+## SQL formatting
+
+Format SQL files with dialect-aware formatting. Shows files to format and asks for confirmation before writing. This command is standalone and does not require a `pgxgen.yaml` config.
+
+```bash
+pgxgen fmt .                                    # Format all .sql files recursively
+pgxgen fmt sql/migrations                       # Format directory
+pgxgen fmt sql/migrations/001_init.up.sql       # Format single file
+pgxgen fmt . --check                            # Check only (for CI)
+pgxgen fmt . --dry-run                          # Process without saving (test)
+pgxgen fmt . --yes                              # Skip confirmation
+pgxgen fmt . -e mysql                           # MySQL dialect
+```
+
+Supports PostgreSQL (default), MySQL, and SQLite dialects. Preserves comments, handles dollar-quoting (PostgreSQL), backtick identifiers (MySQL).
 
 ## Migration from v1
 

@@ -111,17 +111,60 @@ pgxgen migrate --in-place --sqlc-config sqlc.yaml  # Import sqlc.yaml settings
 Output consolidated DDL from all migration files. Reads all `.up.sql` files, replays CREATE/ALTER/DROP statements, and outputs the final schema state as a single DDL script. This command is standalone — it does not require a `pgxgen.yaml` config.
 
 ```bash
-pgxgen schema --dir sql/migrations/postgres                    # PostgreSQL (default engine)
-pgxgen schema -d sql/migrations/sqlite -e sqlite               # SQLite
-pgxgen schema -d sql/migrations/postgres > consolidated.sql    # Redirect to file
+pgxgen schema sql/migrations/postgres                    # PostgreSQL (default engine)
+pgxgen schema sql/migrations/sqlite -e sqlite            # SQLite
+pgxgen schema sql/migrations/postgres > consolidated.sql # Redirect to file
+pgxgen schema sql/migrations/001_init.up.sql             # Single file
 ```
+
+**Arguments:**
+
+| Argument | Description                          |
+| -------- | ------------------------------------ |
+| `<path>` | Path to migrations directory or file |
 
 **Flags:**
 
-| Flag                          | Default        | Description                          |
-| ----------------------------- | -------------- | ------------------------------------ |
-| `--dir`, `-d`                 | (required)     | Path to migrations directory or file |
-| `--engine`, `-e`              | `postgresql`   | Database engine (postgresql, sqlite) |
+| Flag             | Default      | Description                          |
+| ---------------- | ------------ | ------------------------------------ |
+| `--engine`, `-e` | `postgresql` | Database engine (postgresql, sqlite) |
+
+### fmt
+
+Format SQL files. Analyzes files, shows which need formatting, and asks for confirmation before writing. This command is standalone — it does not require a `pgxgen.yaml` config.
+
+```bash
+pgxgen fmt .                                        # Format all .sql files recursively
+pgxgen fmt sql/migrations                           # Format directory recursively
+pgxgen fmt sql/migrations/001_init.up.sql           # Format single file
+pgxgen fmt . --check                                # Check only (exit 1 if unformatted, for CI)
+pgxgen fmt . --dry-run                              # Process without saving (test formatting)
+pgxgen fmt . --yes                                  # Skip confirmation prompt
+pgxgen fmt . -e mysql                               # Use MySQL dialect
+```
+
+**Arguments:**
+
+| Argument | Description                               |
+| -------- | ----------------------------------------- |
+| `<path>` | Path to SQL file or directory (recursive) |
+
+**Flags:**
+
+| Flag             | Default      | Description                                                      |
+| ---------------- | ------------ | ---------------------------------------------------------------- |
+| `--check`, `-c`  | `false`      | Check formatting without modifying files (exit 1 if unformatted) |
+| `--dry-run`      | `false`      | Process files without saving (test formatting)                   |
+| `--yes`, `-y`    | `false`      | Skip confirmation prompt                                         |
+| `--engine`, `-e` | `postgresql` | SQL dialect (postgresql, mysql, sqlite)                          |
+
+**Behavior:**
+
+1. Finds all `.sql` files in `<path>` (recursively for directories)
+2. Analyzes which files need formatting
+3. Shows the list of files to format
+4. Asks for confirmation (`y/N`) — skipped with `--yes` or `--check`
+5. Writes formatted files
 
 **What is captured:**
 

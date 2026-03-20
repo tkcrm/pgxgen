@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/cubicdaiya/gonp v1.0.4 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/davecgh/go-spew v1.1.1
 	github.com/go-sql-driver/mysql v1.9.3 // indirect
 	github.com/gobeam/stringy v0.0.7
 	github.com/jinzhu/inflection v1.0.0

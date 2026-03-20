@@ -208,9 +208,15 @@ func (g *Generator) buildTemplateData(
 		}
 
 	case "batch_create":
+		if g.eng.Name() == "sqlite" {
+			return nil, "", fmt.Errorf("batch_create is not supported for SQLite (sqlc :copyfrom requires pgx or go-sql-driver/mysql)")
+		}
 		templateFile = "batch_create"
 		filtered := filterColumns(allColumns, methodCfg.SkipColumns)
-		data.Columns = g.buildColumns(filtered, methodCfg.ColumnValues, &paramIndex)
+		// For copyfrom, columns with column_values (SQL expressions) cannot be used
+		// since CopyFrom doesn't execute SQL. Exclude them — DB defaults will apply.
+		filtered = filterColumns(filtered, columnValueKeys(methodCfg.ColumnValues))
+		data.Columns = g.buildColumns(filtered, nil, &paramIndex)
 
 	default:
 		return nil, "", fmt.Errorf("unknown method: %s", methodName)
@@ -366,6 +372,14 @@ func filterColumns(columns, skip []string) []string {
 		}
 	}
 	return result
+}
+
+func columnValueKeys(cv map[string]string) []string {
+	keys := make([]string, 0, len(cv))
+	for k := range cv {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func cloneWhere(w map[string]config.WhereParamConfig) map[string]config.WhereParamConfig {
