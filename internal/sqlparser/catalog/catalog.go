@@ -6,10 +6,11 @@ type Catalog struct {
 	Schemas       []*Schema
 }
 
-// Schema represents a database schema containing tables and types.
+// Schema represents a database schema containing tables, views, and types.
 type Schema struct {
 	Name       string
 	Tables     []*Table
+	Views      []*View
 	Enums      []*Enum
 	Extensions []string
 }
@@ -25,6 +26,15 @@ type Table struct {
 	ForeignKeys []*ForeignKey
 	Uniques     []*UniqueConstraint
 	Checks      []*CheckConstraint
+}
+
+// View represents a database view.
+type View struct {
+	Name    string
+	Schema  string
+	Columns []*Column
+	Comment string
+	Query   string // the SELECT statement defining the view
 }
 
 // Column represents a column in a database table.

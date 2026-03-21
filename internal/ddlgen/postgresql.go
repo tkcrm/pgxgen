@@ -24,6 +24,10 @@ func (g *postgresGenerator) Generate(cat *catalog.Catalog) (string, error) {
 			g.writeIndexes(&buf, table)
 			g.writeComments(&buf, table)
 		}
+
+		for _, view := range schema.Views {
+			g.writeView(&buf, view)
+		}
 	}
 
 	return strings.TrimRight(buf.String(), "\n") + "\n", nil
@@ -212,6 +216,14 @@ func (g *postgresGenerator) writeComments(buf *strings.Builder, table *catalog.T
 	}
 	if hasComments {
 		buf.WriteString("\n")
+	}
+}
+
+func (g *postgresGenerator) writeView(buf *strings.Builder, view *catalog.View) {
+	fmt.Fprintf(buf, "CREATE VIEW %s AS\n%s;\n\n", pgQuoteIdent(view.Name), view.Query)
+	if view.Comment != "" {
+		fmt.Fprintf(buf, "COMMENT ON VIEW %s IS '%s';\n\n",
+			pgQuoteIdent(view.Name), strings.ReplaceAll(view.Comment, "'", "''"))
 	}
 }
 

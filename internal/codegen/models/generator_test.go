@@ -61,6 +61,19 @@ func newTestCatalog() *catalog.Catalog {
 						},
 					},
 				},
+				Views: []*catalog.View{
+					{
+						Name:   "active_todos",
+						Schema: "main",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "TEXT", NotNull: true},
+							{Name: "title", Type: "TEXT", NotNull: true},
+							{Name: "user_id", Type: "INTEGER", NotNull: true},
+						},
+						Comment: "view of non-completed todos",
+						Query:   "SELECT id, title, user_id FROM todos WHERE status != 'completed'",
+					},
+				},
 			},
 		},
 	}
@@ -367,4 +380,40 @@ func TestNullableTypesDefault(t *testing.T) {
 
 	assert.Contains(t, output, "\tCompletedAt sql.NullTime\n")
 	assert.Contains(t, output, "\tWorkspaceID sql.NullString\n")
+}
+
+// --- View model generation ---
+
+func TestViewStructGenerated(t *testing.T) {
+	output := render(t, &config.ModelsConfig{PackageName: "models"}, newTestCatalog(), nil, nil)
+
+	assert.Contains(t, output, "type ActiveTodo struct {")
+	assert.Contains(t, output, "\tID string")
+	assert.Contains(t, output, "\tTitle string")
+	assert.Contains(t, output, "\tUserID int64")
+}
+
+func TestViewComment(t *testing.T) {
+	output := render(t, &config.ModelsConfig{PackageName: "models"}, newTestCatalog(), nil, nil)
+	assert.Contains(t, output, "// ActiveTodo view of non-completed todos\ntype ActiveTodo struct {")
+}
+
+func TestViewWithTags(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName:  "models",
+		EmitJsonTags: true,
+		EmitDbTags:   true,
+	}, newTestCatalog(), nil, nil)
+
+	assert.Contains(t, output, "\tID string `db:\"id\" json:\"id\"`")
+	assert.Contains(t, output, "\tTitle string `db:\"title\" json:\"title\"`")
+}
+
+func TestViewStructComments(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName:           "models",
+		IncludeStructComments: true,
+	}, newTestCatalog(), nil, nil)
+
+	assert.Contains(t, output, "} // @name ActiveTodo\n")
 }

@@ -18,9 +18,17 @@ func (g *sqliteGenerator) Generate(cat *catalog.Catalog) (string, error) {
 			g.writeTable(&buf, table)
 			g.writeIndexes(&buf, table)
 		}
+
+		for _, view := range schema.Views {
+			g.writeView(&buf, view)
+		}
 	}
 
 	return strings.TrimRight(buf.String(), "\n") + "\n", nil
+}
+
+func (g *sqliteGenerator) writeView(buf *strings.Builder, view *catalog.View) {
+	fmt.Fprintf(buf, "CREATE VIEW %s AS\n%s;\n\n", pgQuoteIdent(view.Name), view.Query)
 }
 
 func (g *sqliteGenerator) writeTable(buf *strings.Builder, table *catalog.Table) {

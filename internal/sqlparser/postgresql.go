@@ -55,6 +55,8 @@ func (p *postgresParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 				p.handleCreateIndex(cat, n.IndexStmt)
 			case *pg.Node_CreateExtensionStmt:
 				p.handleCreateExtension(cat, n.CreateExtensionStmt)
+			case *pg.Node_ViewStmt:
+				p.handleCreateView(cat, n.ViewStmt)
 			}
 		}
 	}
@@ -309,6 +311,24 @@ func (p *postgresParser) handleComment(cat *catalog.Catalog, n *pg.CommentStmt) 
 			}
 		}
 
+	case pg.ObjectType_OBJECT_VIEW:
+		if list, ok := n.Object.Node.(*pg.Node_List); ok {
+			schemaName, viewName := pgParseQualifiedName(list.List)
+			if schemaName == "" {
+				schemaName = cat.DefaultSchema
+			}
+			for _, s := range cat.Schemas {
+				if s.Name == schemaName {
+					for _, v := range s.Views {
+						if v.Name == viewName {
+							v.Comment = comment
+							return
+						}
+					}
+				}
+			}
+		}
+
 	case pg.ObjectType_OBJECT_COLUMN:
 		// Object is a list of names [schema, table, column]
 		if list, ok := n.Object.Node.(*pg.Node_List); ok {
@@ -539,6 +559,25 @@ func (p *postgresParser) handleDropStmt(cat *catalog.Catalog, n *pg.DropStmt) {
 				}
 			}
 		}
+	case pg.ObjectType_OBJECT_VIEW:
+		for _, obj := range n.Objects {
+			if list, ok := obj.Node.(*pg.Node_List); ok {
+				schemaName, viewName := pgParseQualifiedName(list.List)
+				if schemaName == "" {
+					schemaName = cat.DefaultSchema
+				}
+				for _, s := range cat.Schemas {
+					if s.Name == schemaName {
+						for i, v := range s.Views {
+							if v.Name == viewName {
+								s.Views = append(s.Views[:i], s.Views[i+1:]...)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
 	case pg.ObjectType_OBJECT_INDEX:
 		for _, obj := range n.Objects {
 			if list, ok := obj.Node.(*pg.Node_List); ok {
@@ -610,6 +649,304 @@ func (p *postgresParser) findTable(cat *catalog.Catalog, schemaName, tableName s
 		}
 	}
 	return nil
+}
+
+func (p *postgresParser) handleCreateView(cat *catalog.Catalog, n *pg.ViewStmt) {
+	if n == nil || n.View == nil {
+		return
+	}
+
+	schemaName := n.View.Schemaname
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+	viewName := n.View.Relname
+
+	schema := p.getOrCreateSchema(cat, schemaName)
+
+	// Skip if view already exists (unless CREATE OR REPLACE)
+	for i, v := range schema.Views {
+		if v.Name == viewName {
+			if n.Replace {
+				schema.Views = append(schema.Views[:i], schema.Views[i+1:]...)
+				break
+			}
+			return
+		}
+	}
+
+	// Deparse the query to get raw SQL
+	query := deparseViewQuery(n.Query)
+
+	// Resolve columns from the SELECT statement
+	columns := p.resolveViewColumns(cat, n)
+
+	schema.Views = append(schema.Views, &catalog.View{
+		Name:    viewName,
+		Schema:  schemaName,
+		Columns: columns,
+		Query:   query,
+	})
+}
+
+// resolveViewColumns extracts column names and types from a CREATE VIEW statement.
+func (p *postgresParser) resolveViewColumns(cat *catalog.Catalog, n *pg.ViewStmt) []*catalog.Column {
+	if n.Query == nil {
+		return nil
+	}
+
+	sel, ok := n.Query.Node.(*pg.Node_SelectStmt)
+	if !ok {
+		return nil
+	}
+
+	// Collect FROM tables for column type resolution
+	fromTables := p.extractFromTables(sel.SelectStmt)
+
+	var columns []*catalog.Column
+	for i, target := range sel.SelectStmt.TargetList {
+		rt, ok := target.Node.(*pg.Node_ResTarget)
+		if !ok {
+			continue
+		}
+
+		// Handle SELECT * — expand all columns from referenced tables
+		if rt.ResTarget.Val != nil {
+			if colRef, ok := rt.ResTarget.Val.Node.(*pg.Node_ColumnRef); ok {
+				if p.isStarRef(colRef.ColumnRef) {
+					expanded := p.expandStar(cat, colRef.ColumnRef, fromTables)
+					columns = append(columns, expanded...)
+					continue
+				}
+			}
+		}
+
+		colName := rt.ResTarget.Name // AS alias
+		colType := "any"
+
+		// Use explicit alias name if provided
+		if i < len(n.Aliases) {
+			colName = pgStringVal(n.Aliases[i])
+		}
+
+		// Try to resolve type from ColumnRef
+		if rt.ResTarget.Val != nil {
+			if colRef, ok := rt.ResTarget.Val.Node.(*pg.Node_ColumnRef); ok {
+				refTable, refCol := p.extractColumnRef(colRef.ColumnRef)
+				if colName == "" {
+					colName = refCol
+				}
+				if resolved := p.findColumnType(cat, refTable, refCol, fromTables); resolved != "" {
+					colType = resolved
+				}
+			} else if colName == "" {
+				// Expression without alias — use deparsed expression as name
+				colName = deparseExpr(rt.ResTarget.Val)
+			}
+		}
+
+		if colName == "" {
+			colName = fmt.Sprintf("column%d", i+1)
+		}
+
+		columns = append(columns, &catalog.Column{
+			Name: colName,
+			Type: colType,
+		})
+	}
+
+	return columns
+}
+
+// extractFromTables extracts table names and aliases from a SELECT's FROM clause.
+// Recursively walks JoinExpr nodes to handle JOINs.
+func (p *postgresParser) extractFromTables(sel *pg.SelectStmt) map[string]string {
+	tables := make(map[string]string)
+	for _, from := range sel.FromClause {
+		p.collectRangeVars(from, tables)
+	}
+	return tables
+}
+
+// collectRangeVars recursively walks AST nodes to find all RangeVar references,
+// including those inside JoinExpr (JOIN ... ON ...).
+func (p *postgresParser) collectRangeVars(node *pg.Node, tables map[string]string) {
+	if node == nil {
+		return
+	}
+	switch n := node.Node.(type) {
+	case *pg.Node_RangeVar:
+		name := n.RangeVar.Relname
+		alias := name
+		if n.RangeVar.Alias != nil && n.RangeVar.Alias.Aliasname != "" {
+			alias = n.RangeVar.Alias.Aliasname
+		}
+		tables[alias] = name
+	case *pg.Node_JoinExpr:
+		p.collectRangeVars(n.JoinExpr.Larg, tables)
+		p.collectRangeVars(n.JoinExpr.Rarg, tables)
+	}
+}
+
+// isStarRef checks if a ColumnRef is a star reference (SELECT * or SELECT t.*).
+func (p *postgresParser) isStarRef(ref *pg.ColumnRef) bool {
+	if ref == nil || len(ref.Fields) == 0 {
+		return false
+	}
+	last := ref.Fields[len(ref.Fields)-1]
+	_, ok := last.Node.(*pg.Node_AStar)
+	return ok
+}
+
+// expandStar expands SELECT * or SELECT t.* into individual columns.
+func (p *postgresParser) expandStar(cat *catalog.Catalog, ref *pg.ColumnRef, fromTables map[string]string) []*catalog.Column {
+	var columns []*catalog.Column
+
+	// If t.* — only expand from that specific table
+	if len(ref.Fields) == 2 {
+		tableAlias := pgStringVal(ref.Fields[0])
+		realName, ok := fromTables[tableAlias]
+		if !ok {
+			realName = tableAlias
+		}
+		if table := p.findTableOrView(cat, "", realName); table != nil {
+			for _, col := range table {
+				columns = append(columns, &catalog.Column{
+					Name:     col.Name,
+					Type:     col.Type,
+					FullType: col.FullType,
+					NotNull:  col.NotNull,
+					IsArray:  col.IsArray,
+				})
+			}
+		}
+		return columns
+	}
+
+	// SELECT * — expand from all FROM tables
+	for _, realName := range fromTables {
+		if cols := p.findTableOrView(cat, "", realName); cols != nil {
+			for _, col := range cols {
+				columns = append(columns, &catalog.Column{
+					Name:     col.Name,
+					Type:     col.Type,
+					FullType: col.FullType,
+					NotNull:  col.NotNull,
+					IsArray:  col.IsArray,
+				})
+			}
+		}
+	}
+	return columns
+}
+
+// findTableOrView returns columns for a table or view by name.
+func (p *postgresParser) findTableOrView(cat *catalog.Catalog, schemaName, name string) []*catalog.Column {
+	for _, s := range cat.Schemas {
+		if schemaName != "" && s.Name != schemaName {
+			continue
+		}
+		for _, t := range s.Tables {
+			if t.Name == name {
+				return t.Columns
+			}
+		}
+		for _, v := range s.Views {
+			if v.Name == name {
+				return v.Columns
+			}
+		}
+	}
+	return nil
+}
+
+// extractColumnRef extracts table name and column name from a ColumnRef.
+func (p *postgresParser) extractColumnRef(ref *pg.ColumnRef) (tableName, colName string) {
+	if ref == nil {
+		return
+	}
+	switch len(ref.Fields) {
+	case 1:
+		colName = pgStringVal(ref.Fields[0])
+	case 2:
+		tableName = pgStringVal(ref.Fields[0])
+		colName = pgStringVal(ref.Fields[1])
+	case 3:
+		// schema.table.column
+		tableName = pgStringVal(ref.Fields[1])
+		colName = pgStringVal(ref.Fields[2])
+	}
+	return
+}
+
+// findColumnType looks up the type of a column in the catalog's tables and views.
+func (p *postgresParser) findColumnType(cat *catalog.Catalog, tableName, colName string, fromTables map[string]string) string {
+	if colName == "" {
+		return ""
+	}
+
+	// Resolve alias to real table name
+	if tableName != "" {
+		if real, ok := fromTables[tableName]; ok {
+			tableName = real
+		}
+	}
+
+	for _, s := range cat.Schemas {
+		// Search tables
+		for _, t := range s.Tables {
+			if tableName != "" && t.Name != tableName {
+				continue
+			}
+			for _, c := range t.Columns {
+				if c.Name == colName {
+					return c.Type
+				}
+			}
+		}
+		// Search views
+		for _, v := range s.Views {
+			if tableName != "" && v.Name != tableName {
+				continue
+			}
+			for _, c := range v.Columns {
+				if c.Name == colName {
+					return c.Type
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func (p *postgresParser) findView(cat *catalog.Catalog, schemaName, viewName string) *catalog.View {
+	for _, s := range cat.Schemas {
+		if s.Name == schemaName {
+			for _, v := range s.Views {
+				if v.Name == viewName {
+					return v
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// deparseViewQuery converts a view's query AST node back to SQL text.
+func deparseViewQuery(node *pg.Node) string {
+	if node == nil {
+		return ""
+	}
+	tree := &pg.ParseResult{
+		Stmts: []*pg.RawStmt{
+			{Stmt: node},
+		},
+	}
+	output, err := pg.Deparse(tree)
+	if err != nil {
+		return ""
+	}
+	return output
 }
 
 // deparseTypeName converts a pg_query TypeName node to its full SQL representation

@@ -260,3 +260,52 @@ func TestPostgresGenerateCompositePK(t *testing.T) {
 		t.Errorf("missing composite PK, got:\n%s", ddl)
 	}
 }
+
+func TestPostgresGenerateWithView(t *testing.T) {
+	cat := &catalog.Catalog{
+		DefaultSchema: "public",
+		Schemas: []*catalog.Schema{
+			{
+				Name: "public",
+				Tables: []*catalog.Table{
+					{
+						Name:   "users",
+						Schema: "public",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "serial", FullType: "serial", NotNull: true, IsPrimary: true},
+							{Name: "name", Type: "text", FullType: "text", NotNull: true},
+						},
+					},
+				},
+				Views: []*catalog.View{
+					{
+						Name:    "active_users",
+						Schema:  "public",
+						Comment: "Only active users",
+						Query:   "SELECT id, name FROM users WHERE active = true",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "serial", NotNull: true},
+							{Name: "name", Type: "text", NotNull: true},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	gen := &postgresGenerator{}
+	ddl, err := gen.Generate(cat)
+	if err != nil {
+		t.Fatalf("Generate error: %v", err)
+	}
+
+	if !strings.Contains(ddl, `CREATE VIEW "active_users" AS`) {
+		t.Errorf("missing CREATE VIEW, got:\n%s", ddl)
+	}
+	if !strings.Contains(ddl, "SELECT id, name FROM users WHERE active = true") {
+		t.Error("missing view query")
+	}
+	if !strings.Contains(ddl, `COMMENT ON VIEW "active_users" IS 'Only active users'`) {
+		t.Error("missing view comment")
+	}
+}
