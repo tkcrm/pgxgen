@@ -1056,3 +1056,272 @@ func TestPostgresTestdataFile(t *testing.T) {
 		}
 	}
 }
+
+// --- View tests ---
+
+func TestPostgresCreateView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id UUID NOT NULL PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			email TEXT,
+			created_at TIMESTAMP NOT NULL
+		);
+
+		CREATE VIEW active_users AS
+			SELECT id, name, email FROM users;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	schema := cat.Schemas[0]
+	if len(schema.Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(schema.Views))
+	}
+
+	view := schema.Views[0]
+	if view.Name != "active_users" {
+		t.Errorf("expected view name 'active_users', got %q", view.Name)
+	}
+	if view.Schema != "public" {
+		t.Errorf("expected schema 'public', got %q", view.Schema)
+	}
+
+	if len(view.Columns) != 3 {
+		t.Fatalf("expected 3 columns, got %d", len(view.Columns))
+	}
+
+	// Verify column names and types resolved from base table
+	expectedCols := []struct {
+		name string
+		typ  string
+	}{
+		{"id", "uuid"},
+		{"name", "varchar"},
+		{"email", "text"},
+	}
+	for i, ec := range expectedCols {
+		if view.Columns[i].Name != ec.name {
+			t.Errorf("column %d: expected name %q, got %q", i, ec.name, view.Columns[i].Name)
+		}
+		if !strings.EqualFold(view.Columns[i].Type, ec.typ) {
+			t.Errorf("column %d (%s): expected type %q, got %q", i, ec.name, ec.typ, view.Columns[i].Type)
+		}
+	}
+
+	if view.Query == "" {
+		t.Error("expected non-empty query")
+	}
+}
+
+func TestPostgresCreateViewWithAliases(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE products (
+			id SERIAL NOT NULL,
+			title TEXT NOT NULL,
+			price NUMERIC(10,2) NOT NULL
+		);
+
+		CREATE VIEW product_summary (product_id, product_title) AS
+			SELECT id, title FROM products;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	schema := cat.Schemas[0]
+	if len(schema.Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(schema.Views))
+	}
+
+	view := schema.Views[0]
+	if len(view.Columns) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(view.Columns))
+	}
+
+	// Explicit aliases should override column names
+	if view.Columns[0].Name != "product_id" {
+		t.Errorf("expected column name 'product_id', got %q", view.Columns[0].Name)
+	}
+	if view.Columns[1].Name != "product_title" {
+		t.Errorf("expected column name 'product_title', got %q", view.Columns[1].Name)
+	}
+}
+
+func TestPostgresCreateViewStar(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE orders (
+			id UUID NOT NULL,
+			amount NUMERIC(10,2) NOT NULL,
+			status TEXT NOT NULL
+		);
+
+		CREATE VIEW all_orders AS SELECT * FROM orders;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	schema := cat.Schemas[0]
+	if len(schema.Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(schema.Views))
+	}
+
+	view := schema.Views[0]
+	if len(view.Columns) != 3 {
+		t.Fatalf("expected 3 columns from SELECT *, got %d", len(view.Columns))
+	}
+
+	if view.Columns[0].Name != "id" {
+		t.Errorf("expected first column 'id', got %q", view.Columns[0].Name)
+	}
+}
+
+func TestPostgresDropView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE t1 (id INT NOT NULL);
+		CREATE VIEW v1 AS SELECT id FROM t1;
+		DROP VIEW v1;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas[0].Views) != 0 {
+		t.Errorf("expected 0 views after DROP, got %d", len(cat.Schemas[0].Views))
+	}
+}
+
+func TestPostgresCommentOnView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE t1 (id INT NOT NULL);
+		CREATE VIEW v1 AS SELECT id FROM t1;
+		COMMENT ON VIEW v1 IS 'my view comment';
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas[0].Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(cat.Schemas[0].Views))
+	}
+	if cat.Schemas[0].Views[0].Comment != "my view comment" {
+		t.Errorf("expected comment 'my view comment', got %q", cat.Schemas[0].Views[0].Comment)
+	}
+}
+
+func TestPostgresCreateOrReplaceView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE t1 (id INT NOT NULL, name TEXT NOT NULL);
+		CREATE VIEW v1 AS SELECT id FROM t1;
+		CREATE OR REPLACE VIEW v1 AS SELECT id, name FROM t1;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas[0].Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(cat.Schemas[0].Views))
+	}
+	if len(cat.Schemas[0].Views[0].Columns) != 2 {
+		t.Errorf("expected 2 columns after replace, got %d", len(cat.Schemas[0].Views[0].Columns))
+	}
+}
+
+func TestPostgresCreateViewWithJoin(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE webhooks (
+			id UUID NOT NULL PRIMARY KEY,
+			kind TEXT NOT NULL,
+			status TEXT NOT NULL,
+			attempts INT NOT NULL DEFAULT 0,
+			payload BYTEA NOT NULL,
+			client_id UUID NOT NULL,
+			response TEXT,
+			created_at TIMESTAMPTZ,
+			sent_at TIMESTAMPTZ,
+			updated_at TIMESTAMPTZ
+		);
+
+		CREATE TABLE clients (
+			id UUID NOT NULL PRIMARY KEY,
+			name TEXT NOT NULL,
+			callback_url TEXT NOT NULL,
+			secret_key TEXT NOT NULL
+		);
+
+		CREATE OR REPLACE VIEW webhook_view AS (
+			SELECT w.*, c.callback_url, c.secret_key
+			FROM webhooks w
+			JOIN clients c ON c.id = w.client_id
+		);
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	schema := cat.Schemas[0]
+	if len(schema.Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(schema.Views))
+	}
+
+	view := schema.Views[0]
+	if view.Name != "webhook_view" {
+		t.Errorf("expected view name 'webhook_view', got %q", view.Name)
+	}
+
+	// w.* should expand to all 10 webhooks columns + 2 explicit columns from clients = 12
+	if len(view.Columns) != 12 {
+		t.Fatalf("expected 12 columns, got %d", len(view.Columns))
+		for _, col := range view.Columns {
+			t.Logf("  %s: %s", col.Name, col.Type)
+		}
+	}
+
+	// Verify first column (from w.*)
+	if view.Columns[0].Name != "id" {
+		t.Errorf("expected first column 'id', got %q", view.Columns[0].Name)
+	}
+	if !strings.EqualFold(view.Columns[0].Type, "uuid") {
+		t.Errorf("expected type 'uuid' for id, got %q", view.Columns[0].Type)
+	}
+
+	// Verify last two columns (from c.callback_url, c.secret_key)
+	callbackCol := view.Columns[10]
+	if callbackCol.Name != "callback_url" {
+		t.Errorf("expected column 'callback_url', got %q", callbackCol.Name)
+	}
+	if !strings.EqualFold(callbackCol.Type, "text") {
+		t.Errorf("expected type 'text' for callback_url, got %q", callbackCol.Type)
+	}
+
+	secretCol := view.Columns[11]
+	if secretCol.Name != "secret_key" {
+		t.Errorf("expected column 'secret_key', got %q", secretCol.Name)
+	}
+	if !strings.EqualFold(secretCol.Type, "text") {
+		t.Errorf("expected type 'text' for secret_key, got %q", secretCol.Type)
+	}
+}

@@ -833,3 +833,148 @@ func TestSqliteFullMigrationsExtended(t *testing.T) {
 		}
 	}
 }
+
+// --- View tests ---
+
+func TestSqliteCreateView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id INTEGER PRIMARY KEY NOT NULL,
+			username TEXT NOT NULL,
+			email TEXT
+		);
+
+		CREATE VIEW active_users AS SELECT id, username, email FROM users;
+	`)
+
+	p := newSqliteParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	views := cat.Schemas[0].Views
+	if len(views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(views))
+	}
+
+	view := views[0]
+	if view.Name != "active_users" {
+		t.Errorf("expected view name 'active_users', got %q", view.Name)
+	}
+	if len(view.Columns) != 3 {
+		t.Fatalf("expected 3 columns, got %d", len(view.Columns))
+	}
+	if view.Query == "" {
+		t.Error("expected non-empty query")
+	}
+}
+
+func TestSqliteCreateViewWithExplicitColumns(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE products (
+			id INTEGER PRIMARY KEY NOT NULL,
+			title TEXT NOT NULL
+		);
+
+		CREATE VIEW product_summary (product_id, product_title) AS
+			SELECT id, title FROM products;
+	`)
+
+	p := newSqliteParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	views := cat.Schemas[0].Views
+	if len(views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(views))
+	}
+
+	view := views[0]
+	if len(view.Columns) != 2 {
+		t.Fatalf("expected 2 columns, got %d", len(view.Columns))
+	}
+	if view.Columns[0].Name != "product_id" {
+		t.Errorf("expected column name 'product_id', got %q", view.Columns[0].Name)
+	}
+	if view.Columns[1].Name != "product_title" {
+		t.Errorf("expected column name 'product_title', got %q", view.Columns[1].Name)
+	}
+}
+
+func TestSqliteDropView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE t1 (id INTEGER NOT NULL);
+		CREATE VIEW v1 AS SELECT id FROM t1;
+		DROP VIEW v1;
+	`)
+
+	p := newSqliteParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas[0].Views) != 0 {
+		t.Errorf("expected 0 views after DROP VIEW, got %d", len(cat.Schemas[0].Views))
+	}
+}
+
+func TestSqliteCreateViewIfNotExists(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE t1 (id INTEGER NOT NULL, name TEXT NOT NULL);
+		CREATE VIEW v1 AS SELECT id FROM t1;
+		CREATE VIEW IF NOT EXISTS v1 AS SELECT id, name FROM t1;
+	`)
+
+	p := newSqliteParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas[0].Views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(cat.Schemas[0].Views))
+	}
+	// Original view should be kept (IF NOT EXISTS)
+	view := cat.Schemas[0].Views[0]
+	if len(view.Columns) != 1 {
+		t.Errorf("expected 1 column (original view), got %d", len(view.Columns))
+	}
+}
+
+func TestSqliteCreateViewWithJoin(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE webhooks (
+			id TEXT PRIMARY KEY NOT NULL,
+			kind TEXT NOT NULL,
+			client_id TEXT NOT NULL
+		);
+		CREATE TABLE clients (
+			id TEXT PRIMARY KEY NOT NULL,
+			callback_url TEXT NOT NULL,
+			secret_key TEXT NOT NULL
+		);
+		CREATE VIEW webhook_view AS
+			SELECT w.*, c.callback_url, c.secret_key
+			FROM webhooks w
+			JOIN clients c ON c.id = w.client_id;
+	`)
+
+	p := newSqliteParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	views := cat.Schemas[0].Views
+	if len(views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(views))
+	}
+	// w.* = 3 columns + 2 explicit = 5
+	if len(views[0].Columns) != 5 {
+		t.Fatalf("expected 5 columns, got %d", len(views[0].Columns))
+	}
+}

@@ -199,6 +199,127 @@ func TestMysqlIfNotExists(t *testing.T) {
 	}
 }
 
+func TestMysqlCreateView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE users (
+			id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			username VARCHAR(255) NOT NULL,
+			email VARCHAR(255) NULL
+		);
+
+		CREATE VIEW active_users AS
+			SELECT id, username, email FROM users;
+	`)
+
+	p := newMysqlParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	views := cat.Schemas[0].Views
+	if len(views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(views))
+	}
+
+	view := views[0]
+	if view.Name != "active_users" {
+		t.Errorf("expected view name 'active_users', got %q", view.Name)
+	}
+	if len(view.Columns) != 3 {
+		t.Fatalf("expected 3 columns, got %d", len(view.Columns))
+	}
+	if view.Columns[0].Name != "id" {
+		t.Errorf("expected first column 'id', got %q", view.Columns[0].Name)
+	}
+	if view.Query == "" {
+		t.Error("expected non-empty query")
+	}
+}
+
+func TestMysqlDropView(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE t1 (id BIGINT NOT NULL PRIMARY KEY);
+		CREATE VIEW v1 AS SELECT id FROM t1;
+		DROP VIEW v1;
+	`)
+
+	p := newMysqlParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	if len(cat.Schemas[0].Views) != 0 {
+		t.Errorf("expected 0 views after DROP VIEW, got %d", len(cat.Schemas[0].Views))
+	}
+}
+
+func TestMysqlCreateViewStar(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE orders (
+			id BIGINT NOT NULL,
+			amount DECIMAL(10,2) NOT NULL,
+			status VARCHAR(50) NOT NULL
+		);
+		CREATE VIEW all_orders AS SELECT * FROM orders;
+	`)
+
+	p := newMysqlParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	views := cat.Schemas[0].Views
+	if len(views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(views))
+	}
+	if len(views[0].Columns) != 3 {
+		t.Fatalf("expected 3 columns from SELECT *, got %d", len(views[0].Columns))
+	}
+}
+
+func TestMysqlCreateViewWithJoin(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE webhooks (
+			id BIGINT NOT NULL PRIMARY KEY,
+			kind VARCHAR(50) NOT NULL,
+			client_id BIGINT NOT NULL
+		);
+		CREATE TABLE clients (
+			id BIGINT NOT NULL PRIMARY KEY,
+			callback_url TEXT NOT NULL,
+			secret_key TEXT NOT NULL
+		);
+		CREATE VIEW webhook_view AS
+			SELECT w.*, c.callback_url, c.secret_key
+			FROM webhooks w
+			JOIN clients c ON c.id = w.client_id;
+	`)
+
+	p := newMysqlParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	views := cat.Schemas[0].Views
+	if len(views) != 1 {
+		t.Fatalf("expected 1 view, got %d", len(views))
+	}
+	// w.* = 3 columns + 2 explicit = 5
+	if len(views[0].Columns) != 5 {
+		t.Fatalf("expected 5 columns, got %d", len(views[0].Columns))
+	}
+	if views[0].Columns[0].Name != "id" {
+		t.Errorf("expected first column 'id', got %q", views[0].Columns[0].Name)
+	}
+	if views[0].Columns[3].Name != "callback_url" {
+		t.Errorf("expected column 'callback_url', got %q", views[0].Columns[3].Name)
+	}
+}
+
 func TestMysqlTestdataFile(t *testing.T) {
 	path := filepath.Join("testdata", "mysql.sql")
 	if _, err := os.Stat(path); os.IsNotExist(err) {

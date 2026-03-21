@@ -174,12 +174,14 @@ func renderModelsRaw(
 	sqlcOverrides *config.SqlcOverridesConfig,
 	sqlcDefaults *config.SqlcDefaultsConfig,
 ) ([]byte, error) {
-	// Collect all enums and tables across schemas
+	// Collect all enums, tables, and views across schemas
 	var allEnums []*catalog.Enum
 	var allTables []*catalog.Table
+	var allViews []*catalog.View
 	for _, s := range cat.Schemas {
 		allEnums = append(allEnums, s.Enums...)
 		allTables = append(allTables, s.Tables...)
+		allViews = append(allViews, s.Views...)
 	}
 
 	sort.Slice(allEnums, func(i, j int) bool {
@@ -188,6 +190,9 @@ func renderModelsRaw(
 	sort.Slice(allTables, func(i, j int) bool {
 		return inflection.Singular(allTables[i].Name) < inflection.Singular(allTables[j].Name)
 	})
+	sort.Slice(allViews, func(i, j int) bool {
+		return inflection.Singular(allViews[i].Name) < inflection.Singular(allViews[j].Name)
+	})
 
 	// First pass: render body to collect which types are used
 	var body bytes.Buffer
@@ -195,7 +200,10 @@ func renderModelsRaw(
 		renderEnum(&body, enum)
 	}
 	for _, table := range allTables {
-		renderStruct(&body, cfg, table, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
+		renderStruct(&body, cfg, table.Name, table.Comment, table.Columns, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
+	}
+	for _, view := range allViews {
+		renderStruct(&body, cfg, view.Name, view.Comment, view.Columns, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
 	}
 
 	// Collect imports from the rendered body
@@ -319,26 +327,28 @@ func renderEnum(buf *bytes.Buffer, enum *catalog.Enum) {
 func renderStruct(
 	buf *bytes.Buffer,
 	cfg *config.ModelsConfig,
-	table *catalog.Table,
+	name string,
+	comment string,
+	columns []*catalog.Column,
 	mapper typemap.TypeMapper,
 	enums []*catalog.Enum,
 	mapOpts typemap.Options,
 	sqlcOverrides *config.SqlcOverridesConfig,
 	sqlcDefaults *config.SqlcDefaultsConfig,
 ) {
-	// Singularize table name: todos → Todo, notes → Note
-	structName := toCamelCase(inflection.Singular(table.Name))
+	// Singularize table/view name: todos → Todo, notes → Note
+	structName := toCamelCase(inflection.Singular(name))
 
-	if table.Comment != "" {
-		fmt.Fprintf(buf, "// %s %s\n", structName, table.Comment)
+	if comment != "" {
+		fmt.Fprintf(buf, "// %s %s\n", structName, comment)
 	}
 
 	fmt.Fprintf(buf, "type %s struct {\n", structName)
 
-	for _, col := range table.Columns {
+	for _, col := range columns {
 		fieldName := toCamelCase(col.Name)
-		fieldType := resolveType(cfg, table.Name, col, mapper, enums, mapOpts, sqlcOverrides)
-		tags := buildTags(cfg, table.Name, col, sqlcOverrides, sqlcDefaults)
+		fieldType := resolveType(cfg, name, col, mapper, enums, mapOpts, sqlcOverrides)
+		tags := buildTags(cfg, name, col, sqlcOverrides, sqlcDefaults)
 
 		tagStr := ""
 		if len(tags) > 0 {

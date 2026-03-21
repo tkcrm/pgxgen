@@ -49,6 +49,10 @@ func (p *sqliteParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 				p.handleCreateIndex(cat, n)
 			case *sqliteDropIndex:
 				p.handleDropIndex(cat, n)
+			case *sqliteCreateView:
+				p.handleCreateView(cat, n)
+			case *sqliteDropView:
+				p.handleDropView(cat, n)
 			}
 		}
 	}
@@ -91,6 +95,20 @@ type sqliteCreateIndex struct {
 }
 
 type sqliteDropIndex struct {
+	Schema string
+	Name   string
+}
+
+type sqliteCreateView struct {
+	Schema      string
+	Name        string
+	IfNotExists bool
+	ColumnNames []string
+	Query       string // raw SELECT text
+	SelectCore  *sqliteparser.Select_coreContext
+}
+
+type sqliteDropView struct {
 	Schema string
 	Name   string
 }
@@ -155,6 +173,9 @@ func convertSqliteStmts(stmt sqliteparser.ISql_stmtContext) []sqliteStmt {
 	}
 	if ci := s.Create_index_stmt(); ci != nil {
 		return []sqliteStmt{convertSqliteCreateIndexStmt(ci)}
+	}
+	if cv := s.Create_view_stmt(); cv != nil {
+		return []sqliteStmt{convertSqliteCreateView(cv)}
 	}
 
 	return nil
@@ -551,6 +572,18 @@ func convertSqliteDropStmt(ctx sqliteparser.IDrop_stmtContext) sqliteStmt {
 		return dt
 	}
 
+	// DROP VIEW
+	if n.VIEW_() != nil {
+		dv := &sqliteDropView{}
+		if n.Schema_name() != nil {
+			dv.Schema = n.Schema_name().GetText()
+		}
+		if n.Any_name() != nil {
+			dv.Name = sqliteIdentifier(n.Any_name().GetText())
+		}
+		return dv
+	}
+
 	// DROP INDEX
 	if n.INDEX_() != nil {
 		di := &sqliteDropIndex{}
@@ -701,6 +734,299 @@ func (p *sqliteParser) getOrCreateSchema(cat *catalog.Catalog, name string) *cat
 	s := &catalog.Schema{Name: name}
 	cat.Schemas = append(cat.Schemas, s)
 	return s
+}
+
+func convertSqliteCreateView(ctx sqliteparser.ICreate_view_stmtContext) *sqliteCreateView {
+	n, ok := ctx.(*sqliteparser.Create_view_stmtContext)
+	if !ok {
+		return nil
+	}
+
+	cv := &sqliteCreateView{
+		IfNotExists: n.EXISTS_() != nil,
+	}
+
+	if n.Schema_name() != nil {
+		cv.Schema = n.Schema_name().GetText()
+	}
+	if n.View_name() != nil {
+		cv.Name = sqliteIdentifier(n.View_name().GetText())
+	}
+
+	// Explicit column names
+	for _, cn := range n.AllColumn_name() {
+		cv.ColumnNames = append(cv.ColumnNames, sqliteIdentifier(cn.GetText()))
+	}
+
+	// Extract raw SELECT text from original token stream
+	if selStmt := n.Select_stmt(); selStmt != nil {
+		selCtx := selStmt.(*sqliteparser.Select_stmtContext)
+		start := selCtx.GetStart()
+		stop := selCtx.GetStop()
+		if start != nil && stop != nil {
+			stream := start.GetTokenSource().GetInputStream()
+			cv.Query = stream.(antlr.CharStream).GetText(start.GetStart(), stop.GetStop())
+		}
+		// Capture Select_core for column resolution
+		if cores := selCtx.AllSelect_core(); len(cores) > 0 {
+			if sc, ok := cores[0].(*sqliteparser.Select_coreContext); ok {
+				cv.SelectCore = sc
+			}
+		}
+	}
+
+	return cv
+}
+
+func (p *sqliteParser) handleCreateView(cat *catalog.Catalog, cv *sqliteCreateView) {
+	schemaName := cv.Schema
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+
+	schema := p.getOrCreateSchema(cat, schemaName)
+
+	if cv.IfNotExists {
+		for _, v := range schema.Views {
+			if strings.EqualFold(v.Name, cv.Name) {
+				return
+			}
+		}
+	}
+
+	// Resolve columns from the query by looking up referenced tables
+	columns := p.resolveViewColumns(cat, cv)
+
+	schema.Views = append(schema.Views, &catalog.View{
+		Name:    cv.Name,
+		Schema:  schemaName,
+		Columns: columns,
+		Query:   cv.Query,
+	})
+}
+
+func (p *sqliteParser) resolveViewColumns(cat *catalog.Catalog, cv *sqliteCreateView) []*catalog.Column {
+	// If explicit column names are provided, use them with fallback type "any"
+	if len(cv.ColumnNames) > 0 {
+		var columns []*catalog.Column
+		for _, name := range cv.ColumnNames {
+			columns = append(columns, &catalog.Column{
+				Name:     name,
+				Type:     "any",
+				FullType: "any",
+			})
+		}
+		return columns
+	}
+
+	// Use the captured SelectCore from the ANTLR parse tree
+	if cv.SelectCore == nil {
+		return nil
+	}
+
+	// Extract FROM tables for type resolution
+	fromTables := p.extractFromTablesSQL(cv.SelectCore)
+
+	var columns []*catalog.Column
+	for _, irc := range cv.SelectCore.AllResult_column() {
+		rc, ok := irc.(*sqliteparser.Result_columnContext)
+		if !ok {
+			continue
+		}
+
+		// Handle SELECT *
+		if rc.STAR() != nil {
+			tableName := ""
+			if rc.Table_name() != nil {
+				tableName = sqliteIdentifier(rc.Table_name().GetText())
+			}
+			expanded := p.expandSqliteStar(cat, tableName, fromTables)
+			columns = append(columns, expanded...)
+			continue
+		}
+
+		colName := ""
+		colType := "any"
+
+		// Get alias
+		if rc.Column_alias() != nil {
+			colName = sqliteIdentifier(rc.Column_alias().GetText())
+		}
+
+		// Try to extract column reference from expression
+		if rc.Expr() != nil {
+			text := rc.Expr().GetText()
+			// Simple column reference: "table.column" or "column"
+			if colName == "" {
+				parts := strings.Split(text, ".")
+				colName = sqliteIdentifier(parts[len(parts)-1])
+			}
+			// Try to resolve type
+			parts := strings.Split(text, ".")
+			var refTable, refCol string
+			if len(parts) == 2 {
+				refTable = sqliteIdentifier(parts[0])
+				refCol = sqliteIdentifier(parts[1])
+			} else if len(parts) == 1 {
+				refCol = sqliteIdentifier(parts[0])
+			}
+			if resolved := p.findSqliteColumnType(cat, refTable, refCol, fromTables); resolved != "" {
+				colType = resolved
+			}
+		}
+
+		if colName == "" {
+			colName = fmt.Sprintf("column%d", len(columns)+1)
+		}
+
+		columns = append(columns, &catalog.Column{
+			Name:     colName,
+			Type:     colType,
+			FullType: colType,
+		})
+	}
+
+	return columns
+}
+
+func (p *sqliteParser) extractFromTablesSQL(sc *sqliteparser.Select_coreContext) map[string]string {
+	tables := make(map[string]string)
+	for _, itos := range sc.AllTable_or_subquery() {
+		tos, ok := itos.(*sqliteparser.Table_or_subqueryContext)
+		if !ok || tos.Table_name() == nil {
+			continue
+		}
+		name := sqliteIdentifier(tos.Table_name().GetText())
+		alias := name
+		if tos.Table_alias() != nil {
+			alias = sqliteIdentifier(tos.Table_alias().GetText())
+		}
+		tables[alias] = name
+	}
+	// Also check join clause
+	if jc := sc.Join_clause(); jc != nil {
+		if joinCtx, ok := jc.(*sqliteparser.Join_clauseContext); ok {
+			for _, itos := range joinCtx.AllTable_or_subquery() {
+				tos, ok := itos.(*sqliteparser.Table_or_subqueryContext)
+				if !ok || tos.Table_name() == nil {
+					continue
+				}
+				name := sqliteIdentifier(tos.Table_name().GetText())
+				alias := name
+				if tos.Table_alias() != nil {
+					alias = sqliteIdentifier(tos.Table_alias().GetText())
+				}
+				tables[alias] = name
+			}
+		}
+	}
+	return tables
+}
+
+func (p *sqliteParser) expandSqliteStar(cat *catalog.Catalog, tableName string, fromTables map[string]string) []*catalog.Column {
+	var columns []*catalog.Column
+
+	if tableName != "" {
+		realName := tableName
+		if real, ok := fromTables[tableName]; ok {
+			realName = real
+		}
+		if cols := p.findTableOrViewColumns(cat, realName); cols != nil {
+			for _, col := range cols {
+				columns = append(columns, &catalog.Column{
+					Name:     col.Name,
+					Type:     col.Type,
+					FullType: col.FullType,
+					NotNull:  col.NotNull,
+				})
+			}
+		}
+		return columns
+	}
+
+	for _, realName := range fromTables {
+		if cols := p.findTableOrViewColumns(cat, realName); cols != nil {
+			for _, col := range cols {
+				columns = append(columns, &catalog.Column{
+					Name:     col.Name,
+					Type:     col.Type,
+					FullType: col.FullType,
+					NotNull:  col.NotNull,
+				})
+			}
+		}
+	}
+	return columns
+}
+
+func (p *sqliteParser) findTableOrViewColumns(cat *catalog.Catalog, name string) []*catalog.Column {
+	for _, s := range cat.Schemas {
+		for _, t := range s.Tables {
+			if strings.EqualFold(t.Name, name) {
+				return t.Columns
+			}
+		}
+		for _, v := range s.Views {
+			if strings.EqualFold(v.Name, name) {
+				return v.Columns
+			}
+		}
+	}
+	return nil
+}
+
+func (p *sqliteParser) findSqliteColumnType(cat *catalog.Catalog, tableName, colName string, fromTables map[string]string) string {
+	if colName == "" {
+		return ""
+	}
+
+	if tableName != "" {
+		if real, ok := fromTables[tableName]; ok {
+			tableName = real
+		}
+	}
+
+	for _, s := range cat.Schemas {
+		for _, t := range s.Tables {
+			if tableName != "" && !strings.EqualFold(t.Name, tableName) {
+				continue
+			}
+			for _, c := range t.Columns {
+				if strings.EqualFold(c.Name, colName) {
+					return c.Type
+				}
+			}
+		}
+		for _, v := range s.Views {
+			if tableName != "" && !strings.EqualFold(v.Name, tableName) {
+				continue
+			}
+			for _, c := range v.Columns {
+				if strings.EqualFold(c.Name, colName) {
+					return c.Type
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func (p *sqliteParser) handleDropView(cat *catalog.Catalog, dv *sqliteDropView) {
+	schemaName := dv.Schema
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+
+	for _, s := range cat.Schemas {
+		if s.Name == schemaName {
+			for i, v := range s.Views {
+				if strings.EqualFold(v.Name, dv.Name) {
+					s.Views = append(s.Views[:i], s.Views[i+1:]...)
+					return
+				}
+			}
+		}
+	}
 }
 
 func sqliteIdentifier(id string) string {

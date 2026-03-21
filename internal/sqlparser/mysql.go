@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	pcast "github.com/pingcap/tidb/pkg/parser/ast"
+	"github.com/pingcap/tidb/pkg/parser/format"
 	"github.com/pingcap/tidb/pkg/parser/mysql"
 	"github.com/pingcap/tidb/pkg/parser/types"
 	"github.com/tkcrm/pgxgen/internal/sqlparser/catalog"
@@ -47,7 +48,13 @@ func (p *mysqlParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 			case *pcast.AlterTableStmt:
 				p.handleAlterTable(cat, n)
 			case *pcast.DropTableStmt:
-				p.handleDropTable(cat, n)
+				if n.IsView {
+					p.handleDropView(cat, n)
+				} else {
+					p.handleDropTable(cat, n)
+				}
+			case *pcast.CreateViewStmt:
+				p.handleCreateView(cat, n)
 			}
 		}
 	}
@@ -222,6 +229,260 @@ func (p *mysqlParser) findTable(cat *catalog.Catalog, schemaName, tableName stri
 		}
 	}
 	return nil
+}
+
+func (p *mysqlParser) handleCreateView(cat *catalog.Catalog, n *pcast.CreateViewStmt) {
+	if n == nil || n.ViewName == nil {
+		return
+	}
+
+	schemaName := n.ViewName.Schema.String()
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+	viewName := n.ViewName.Name.String()
+
+	schema := p.getOrCreateSchema(cat, schemaName)
+
+	// Handle CREATE OR REPLACE
+	for i, v := range schema.Views {
+		if v.Name == viewName {
+			if n.OrReplace {
+				schema.Views = append(schema.Views[:i], schema.Views[i+1:]...)
+				break
+			}
+			return
+		}
+	}
+
+	// Deparse the SELECT query
+	query := mysqlRestoreNode(n.Select)
+
+	// Resolve columns
+	columns := p.resolveViewColumns(cat, n, schemaName)
+
+	schema.Views = append(schema.Views, &catalog.View{
+		Name:    viewName,
+		Schema:  schemaName,
+		Columns: columns,
+		Query:   query,
+	})
+}
+
+func (p *mysqlParser) resolveViewColumns(cat *catalog.Catalog, n *pcast.CreateViewStmt, schemaName string) []*catalog.Column {
+	sel, ok := n.Select.(*pcast.SelectStmt)
+	if !ok {
+		return nil
+	}
+
+	// Collect FROM tables
+	fromTables := p.extractFromTables(sel)
+
+	var columns []*catalog.Column
+	if sel.Fields == nil {
+		return nil
+	}
+
+	for i, field := range sel.Fields.Fields {
+		// Handle SELECT *
+		if field.WildCard != nil {
+			tableName := field.WildCard.Table.String()
+			expanded := p.expandMysqlStar(cat, tableName, fromTables)
+			columns = append(columns, expanded...)
+			continue
+		}
+
+		colName := field.AsName.String()
+		colType := "any"
+
+		// Use explicit view column name if provided
+		if i < len(n.Cols) {
+			colName = n.Cols[i].String()
+		}
+
+		// Try to resolve from ColumnNameExpr
+		if cne, ok := field.Expr.(*pcast.ColumnNameExpr); ok && cne.Name != nil {
+			if colName == "" {
+				colName = cne.Name.Name.String()
+			}
+			refTable := cne.Name.Table.String()
+			if resolved := p.findMysqlColumnType(cat, refTable, cne.Name.Name.String(), fromTables); resolved != "" {
+				colType = resolved
+			}
+		} else if colName == "" {
+			colName = fmt.Sprintf("column%d", i+1)
+		}
+
+		columns = append(columns, &catalog.Column{
+			Name: colName,
+			Type: colType,
+		})
+	}
+
+	return columns
+}
+
+func (p *mysqlParser) extractFromTables(sel *pcast.SelectStmt) map[string]string {
+	tables := make(map[string]string)
+	if sel.From == nil {
+		return tables
+	}
+	p.collectTableSources(sel.From.TableRefs, tables)
+	return tables
+}
+
+func (p *mysqlParser) collectTableSources(join *pcast.Join, tables map[string]string) {
+	if join == nil {
+		return
+	}
+	if join.Left != nil {
+		if ts, ok := join.Left.(*pcast.TableSource); ok {
+			p.addTableSource(ts, tables)
+		} else if j, ok := join.Left.(*pcast.Join); ok {
+			p.collectTableSources(j, tables)
+		}
+	}
+	if join.Right != nil {
+		if ts, ok := join.Right.(*pcast.TableSource); ok {
+			p.addTableSource(ts, tables)
+		} else if j, ok := join.Right.(*pcast.Join); ok {
+			p.collectTableSources(j, tables)
+		}
+	}
+}
+
+func (p *mysqlParser) addTableSource(ts *pcast.TableSource, tables map[string]string) {
+	if ts == nil || ts.Source == nil {
+		return
+	}
+	tn, ok := ts.Source.(*pcast.TableName)
+	if !ok {
+		return
+	}
+	name := tn.Name.String()
+	alias := name
+	if ts.AsName.String() != "" {
+		alias = ts.AsName.String()
+	}
+	tables[alias] = name
+}
+
+func (p *mysqlParser) expandMysqlStar(cat *catalog.Catalog, tableName string, fromTables map[string]string) []*catalog.Column {
+	var columns []*catalog.Column
+
+	if tableName != "" {
+		realName := tableName
+		if real, ok := fromTables[tableName]; ok {
+			realName = real
+		}
+		if cols := p.findTableOrViewColumns(cat, realName); cols != nil {
+			for _, col := range cols {
+				columns = append(columns, &catalog.Column{
+					Name:       col.Name,
+					Type:       col.Type,
+					NotNull:    col.NotNull,
+					IsUnsigned: col.IsUnsigned,
+				})
+			}
+		}
+		return columns
+	}
+
+	for _, realName := range fromTables {
+		if cols := p.findTableOrViewColumns(cat, realName); cols != nil {
+			for _, col := range cols {
+				columns = append(columns, &catalog.Column{
+					Name:       col.Name,
+					Type:       col.Type,
+					NotNull:    col.NotNull,
+					IsUnsigned: col.IsUnsigned,
+				})
+			}
+		}
+	}
+	return columns
+}
+
+func (p *mysqlParser) findMysqlColumnType(cat *catalog.Catalog, tableName, colName string, fromTables map[string]string) string {
+	if colName == "" {
+		return ""
+	}
+
+	if tableName != "" {
+		if real, ok := fromTables[tableName]; ok {
+			tableName = real
+		}
+	}
+
+	for _, s := range cat.Schemas {
+		for _, t := range s.Tables {
+			if tableName != "" && !strings.EqualFold(t.Name, tableName) {
+				continue
+			}
+			for _, c := range t.Columns {
+				if strings.EqualFold(c.Name, colName) {
+					return c.Type
+				}
+			}
+		}
+		for _, v := range s.Views {
+			if tableName != "" && !strings.EqualFold(v.Name, tableName) {
+				continue
+			}
+			for _, c := range v.Columns {
+				if strings.EqualFold(c.Name, colName) {
+					return c.Type
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func (p *mysqlParser) findTableOrViewColumns(cat *catalog.Catalog, name string) []*catalog.Column {
+	for _, s := range cat.Schemas {
+		for _, t := range s.Tables {
+			if strings.EqualFold(t.Name, name) {
+				return t.Columns
+			}
+		}
+		for _, v := range s.Views {
+			if strings.EqualFold(v.Name, name) {
+				return v.Columns
+			}
+		}
+	}
+	return nil
+}
+
+func (p *mysqlParser) handleDropView(cat *catalog.Catalog, n *pcast.DropTableStmt) {
+	for _, t := range n.Tables {
+		schemaName := t.Schema.String()
+		if schemaName == "" {
+			schemaName = cat.DefaultSchema
+		}
+		viewName := t.Name.String()
+
+		for _, s := range cat.Schemas {
+			if s.Name == schemaName {
+				for i, v := range s.Views {
+					if strings.EqualFold(v.Name, viewName) {
+						s.Views = append(s.Views[:i], s.Views[i+1:]...)
+						break
+					}
+				}
+			}
+		}
+	}
+}
+
+func mysqlRestoreNode(node pcast.Node) string {
+	var sb strings.Builder
+	ctx := format.NewRestoreCtx(format.DefaultRestoreFlags, &sb)
+	if err := node.Restore(ctx); err != nil {
+		return ""
+	}
+	return sb.String()
 }
 
 func mysqlIsNotNull(n *pcast.ColumnDef) bool {

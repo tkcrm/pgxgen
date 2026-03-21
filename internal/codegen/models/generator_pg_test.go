@@ -82,6 +82,18 @@ func newPgTestCatalog() *catalog.Catalog {
 					},
 				},
 			},
+			Views: []*catalog.View{
+				{
+					Name:   "user_emails",
+					Schema: "public",
+					Columns: []*catalog.Column{
+						{Name: "id", Type: "uuid", NotNull: true},
+						{Name: "email", Type: "varchar", NotNull: true},
+						{Name: "first_name", Type: "varchar", NotNull: true},
+					},
+					Query: "SELECT id, email, first_name FROM users",
+				},
+			},
 		}},
 	}
 }
@@ -299,4 +311,19 @@ func TestPg_ImportsContainOrb(t *testing.T) {
 	)
 
 	assert.Contains(t, output, `"github.com/paulmach/orb"`)
+}
+
+// --- View model generation for PostgreSQL ---
+
+func TestPg_ViewStructGenerated(t *testing.T) {
+	output := renderPg(t,
+		&config.ModelsConfig{PackageName: "models"},
+		newPgSqlcOverrides(), newPgSqlcDefaults(),
+	)
+
+	assert.Contains(t, output, "type UserEmail struct {")
+	// uuid type override should apply to view columns too
+	assert.Contains(t, output, "\tID uuid.UUID ")
+	assert.Contains(t, output, "\tEmail string ")
+	assert.Contains(t, output, "\tFirstName string ")
 }
