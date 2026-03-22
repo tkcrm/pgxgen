@@ -765,7 +765,7 @@ func convertSqliteCreateView(ctx sqliteparser.ICreate_view_stmtContext) *sqliteC
 		stop := selCtx.GetStop()
 		if start != nil && stop != nil {
 			stream := start.GetTokenSource().GetInputStream()
-			cv.Query = stream.(antlr.CharStream).GetText(start.GetStart(), stop.GetStop())
+			cv.Query = stream.GetText(start.GetStart(), stop.GetStop())
 		}
 		// Capture Select_core for column resolution
 		if cores := selCtx.AllSelect_core(); len(cores) > 0 {

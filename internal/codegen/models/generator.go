@@ -184,6 +184,32 @@ func renderModelsRaw(
 		allViews = append(allViews, s.Views...)
 	}
 
+	// Filter out skipped tables/views and enums
+	if len(cfg.SkipTables) > 0 {
+		skipTables := make(map[string]struct{}, len(cfg.SkipTables))
+		for _, name := range cfg.SkipTables {
+			skipTables[name] = struct{}{}
+		}
+		allTables = filterSlice(allTables, func(t *catalog.Table) bool {
+			_, skip := skipTables[t.Name]
+			return !skip
+		})
+		allViews = filterSlice(allViews, func(v *catalog.View) bool {
+			_, skip := skipTables[v.Name]
+			return !skip
+		})
+	}
+	if len(cfg.SkipEnums) > 0 {
+		skipEnums := make(map[string]struct{}, len(cfg.SkipEnums))
+		for _, name := range cfg.SkipEnums {
+			skipEnums[name] = struct{}{}
+		}
+		allEnums = filterSlice(allEnums, func(e *catalog.Enum) bool {
+			_, skip := skipEnums[e.Name]
+			return !skip
+		})
+	}
+
 	sort.Slice(allEnums, func(i, j int) bool {
 		return allEnums[i].Name < allEnums[j].Name
 	})
@@ -512,6 +538,17 @@ func buildTags(cfg *config.ModelsConfig, tableName string, col *catalog.Column, 
 	}
 
 	return tags
+}
+
+// filterSlice returns a new slice containing only elements for which keep returns true.
+func filterSlice[T any](s []T, keep func(T) bool) []T {
+	result := make([]T, 0, len(s))
+	for _, v := range s {
+		if keep(v) {
+			result = append(result, v)
+		}
+	}
+	return result
 }
 
 // toCamelCase converts snake_case to CamelCase with Go acronym handling.

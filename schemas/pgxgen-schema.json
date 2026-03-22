@@ -91,6 +91,16 @@
           "items": { "type": "string" },
           "description": "Custom types defined in the models package"
         },
+        "skip_tables": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Table/view names to exclude from model generation"
+        },
+        "skip_enums": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Enum names to exclude from model generation"
+        },
         "emit_json_tags": { "type": "boolean", "default": false },
         "emit_db_tags": { "type": "boolean", "default": false },
         "emit_pointers_for_null": { "type": "boolean", "default": false },

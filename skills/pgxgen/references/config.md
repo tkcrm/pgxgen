@@ -52,6 +52,8 @@ models:
   include_struct_comments: false # Optional. Add // @name comments for Swagger
   sql_package: pgx/v5 # Optional. pgx/v5 | pgx/v4 | database/sql
   custom_types: [MyType] # Optional. Types defined in models package
+  skip_tables: [migrations, internal_logs] # Optional. Table/view names to exclude from model generation
+  skip_enums: [internal_status] # Optional. Enum names to exclude from model generation
   type_overrides: # Optional. SQL → Go type overrides
     - sql_type: uuid
       go_type: uuid.UUID
