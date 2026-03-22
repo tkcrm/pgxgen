@@ -26,6 +26,8 @@ type ModelsConfig struct {
 	PackageName           string               `yaml:"package_name" validate:"required"`
 	PackagePath           string               `yaml:"package_path,omitempty"`
 	CustomTypes           []string             `yaml:"custom_types,omitempty"`
+	SkipTables            []string             `yaml:"skip_tables,omitempty"`
+	SkipEnums             []string             `yaml:"skip_enums,omitempty"`
 	EmitJsonTags          bool                 `yaml:"emit_json_tags,omitempty"`
 	EmitDbTags            bool                 `yaml:"emit_db_tags,omitempty"`
 	EmitPointersForNull   bool                 `yaml:"emit_pointers_for_null,omitempty"`

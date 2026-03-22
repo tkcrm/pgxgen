@@ -417,3 +417,69 @@ func TestViewStructComments(t *testing.T) {
 
 	assert.Contains(t, output, "} // @name ActiveTodo\n")
 }
+
+// --- Skip tables/enums ---
+
+func TestSkipTables(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName: "models",
+		SkipTables:  []string{"todos", "workspaces"},
+	}, newTestCatalog(), nil, nil)
+
+	assert.NotContains(t, output, "type Todo struct")
+	assert.NotContains(t, output, "type Workspace struct")
+	assert.Contains(t, output, "type Author struct {")
+	assert.Contains(t, output, "type NoteTag struct {")
+}
+
+func TestSkipViews(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName: "models",
+		SkipTables:  []string{"active_todos"},
+	}, newTestCatalog(), nil, nil)
+
+	assert.NotContains(t, output, "type ActiveTodo struct")
+	assert.Contains(t, output, "type Todo struct {")
+	assert.Contains(t, output, "type Author struct {")
+}
+
+func TestSkipEnums(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName: "models",
+		SkipEnums:   []string{"todo_status"},
+	}, newTestCatalog(), nil, nil)
+
+	assert.NotContains(t, output, "type TodoStatus string")
+	assert.NotContains(t, output, "TodoStatusPending")
+	assert.NotContains(t, output, "func (e TodoStatus) Valid()")
+	assert.Contains(t, output, "type PriorityLevel string")
+	assert.Contains(t, output, "func (e PriorityLevel) Valid() bool {")
+}
+
+func TestSkipTablesAndEnums(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName: "models",
+		SkipTables:  []string{"todos", "workspaces"},
+		SkipEnums:   []string{"todo_status"},
+	}, newTestCatalog(), nil, nil)
+
+	assert.NotContains(t, output, "type Todo struct")
+	assert.NotContains(t, output, "type Workspace struct")
+	assert.NotContains(t, output, "type TodoStatus string")
+	assert.Contains(t, output, "type Author struct {")
+	assert.Contains(t, output, "type NoteTag struct {")
+	assert.Contains(t, output, "type PriorityLevel string")
+}
+
+func TestSkipNonExistentTable(t *testing.T) {
+	output := render(t, &config.ModelsConfig{
+		PackageName: "models",
+		SkipTables:  []string{"nonexistent"},
+		SkipEnums:   []string{"nonexistent"},
+	}, newTestCatalog(), nil, nil)
+
+	assert.Contains(t, output, "type Todo struct {")
+	assert.Contains(t, output, "type Author struct {")
+	assert.Contains(t, output, "type TodoStatus string")
+	assert.Contains(t, output, "type PriorityLevel string")
+}

@@ -919,18 +919,6 @@ func (p *postgresParser) findColumnType(cat *catalog.Catalog, tableName, colName
 	return ""
 }
 
-func (p *postgresParser) findView(cat *catalog.Catalog, schemaName, viewName string) *catalog.View {
-	for _, s := range cat.Schemas {
-		if s.Name == schemaName {
-			for _, v := range s.Views {
-				if v.Name == viewName {
-					return v
-				}
-			}
-		}
-	}
-	return nil
-}
 
 // deparseViewQuery converts a view's query AST node back to SQL text.
 func deparseViewQuery(node *pg.Node) string {
