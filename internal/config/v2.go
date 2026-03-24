@@ -109,12 +109,21 @@ type DefaultsConfig struct {
 	QueriesDirPrefix string `yaml:"queries_dir_prefix,omitempty"`
 	OutputDirPrefix  string `yaml:"output_dir_prefix,omitempty"`
 
+	// Package naming for per-table repos
+	PackagePrefix string `yaml:"package_prefix,omitempty"`
+	PackageSuffix string `yaml:"package_suffix,omitempty"`
+
 	// Pattern B: single repo
 	QueriesDir string `yaml:"queries_dir,omitempty"`
 	OutputDir  string `yaml:"output_dir,omitempty"`
 
 	Crud      *CrudDefaultsConfig      `yaml:"crud,omitempty"`
 	Constants *ConstantsDefaultsConfig `yaml:"constants,omitempty"`
+}
+
+// resolvePackageName returns the table name with optional prefix and suffix applied.
+func (d *DefaultsConfig) resolvePackageName(tableName string) string {
+	return d.PackagePrefix + tableName + d.PackageSuffix
 }
 
 // CrudDefaultsConfig defines default CRUD settings for all tables.
@@ -224,7 +233,7 @@ func (s *SchemaConfig) ResolveQueriesDir(tableName string) string {
 func (s *SchemaConfig) ResolveOutputDir(tableName string) string {
 	if s.Defaults != nil {
 		if s.Defaults.OutputDirPrefix != "" {
-			return s.Defaults.OutputDirPrefix + "/" + tableName
+			return s.Defaults.OutputDirPrefix + "/" + s.Defaults.resolvePackageName(tableName)
 		}
 		if s.Defaults.OutputDir != "" {
 			return s.Defaults.OutputDir

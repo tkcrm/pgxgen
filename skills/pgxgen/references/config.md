@@ -109,6 +109,10 @@ defaults:
   queries_dir_prefix: sql/queries # → sql/queries/{table}/
   output_dir_prefix: internal/store/repos # → internal/store/repos/{table}/
 
+  # Optional: customize directory/package name with prefix/suffix (Pattern A only)
+  # package_prefix: repo_ # → internal/store/repos/repo_{table}/
+  # package_suffix: ""    # → internal/store/repos/repo_{table}/
+
   # Pattern B: single repo (all tables in one directory)
   # queries_dir: sql/queries
   # output_dir: internal/store
@@ -127,6 +131,8 @@ defaults:
 ```
 
 Use `queries_dir_prefix` + `output_dir_prefix` (Pattern A) OR `queries_dir` + `output_dir` (Pattern B). Do not mix.
+
+`package_prefix` and `package_suffix` only apply to Pattern A and only affect `output_dir_prefix` (Go package output). They do NOT affect `queries_dir_prefix` (SQL queries stay organized by raw table name). Example: with `output_dir_prefix: repos` and `package_prefix: repo_`, table `users` output resolves to `repos/repo_users` with package name `repo_users`, while queries remain in `queries/{table}`.
 
 ## Table Config
 

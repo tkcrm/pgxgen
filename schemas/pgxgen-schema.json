@@ -177,11 +177,19 @@
       "properties": {
         "queries_dir_prefix": {
           "type": "string",
-          "description": "Per-table repos: queries_dir = {prefix}/{table_name}"
+          "description": "Per-table repos: queries_dir = {prefix}/{table_name} (not affected by package_prefix/package_suffix)"
         },
         "output_dir_prefix": {
           "type": "string",
-          "description": "Per-table repos: output_dir = {prefix}/{table_name}"
+          "description": "Per-table repos: output_dir = {prefix}/{package_prefix}{table_name}{package_suffix}"
+        },
+        "package_prefix": {
+          "type": "string",
+          "description": "Per-table repos: prefix for the output directory/package name (does not affect queries_dir_prefix), e.g. repo_"
+        },
+        "package_suffix": {
+          "type": "string",
+          "description": "Per-table repos: suffix for the output directory/package name (does not affect queries_dir_prefix), e.g. _repo"
         },
         "queries_dir": {
           "type": "string",
