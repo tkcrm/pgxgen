@@ -26,7 +26,7 @@ This repository includes [AI agent skills](https://github.com/sxwebdev/skills) w
 ```bash
 go install github.com/sxwebdev/skills/cmd/skills@latest
 skills init
-skills repo add tkcrm/pgxgen
+skills repo add tkcrm/pgxgen -all
 ```
 
 ## Install
