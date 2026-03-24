@@ -85,6 +85,8 @@ Two layout patterns exist:
 defaults:
   queries_dir_prefix: sql/queries # → sql/queries/{table}/
   output_dir_prefix: internal/store/repos # → internal/store/repos/{table}/
+  # package_prefix: repo_ # → internal/store/repos/repo_{table}/
+  # package_suffix: ""
 ```
 
 **Single repo** (simpler projects):
