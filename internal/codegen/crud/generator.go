@@ -86,7 +86,13 @@ func (g *Generator) GenerateTable(
 		buf.Write(rendered)
 	}
 
-	return buf.Bytes(), nil
+	out := bytes.TrimRight(buf.Bytes(), "\n")
+	if len(out) == 0 {
+		return nil, nil
+	}
+	out = append(out, '\n')
+
+	return out, nil
 }
 
 func (g *Generator) buildTemplateData(

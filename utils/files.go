@@ -42,7 +42,7 @@ func SaveFile(path, fileName string, data []byte) error {
 	}
 
 	// save file
-	if err := os.WriteFile(filepath.Join(path, fileName), data, os.ModePerm); err != nil {
+	if err := os.WriteFile(filepath.Join(path, fileName), data, 0o644); err != nil {
 		return fmt.Errorf("os write file error: %w", err)
 	}
 

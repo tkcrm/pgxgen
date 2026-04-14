@@ -75,6 +75,45 @@ func TestBatchCreate_Basic(t *testing.T) {
 	}
 }
 
+func TestGenerateTable_SingleTrailingNewline(t *testing.T) {
+	tests := []struct {
+		name    string
+		methods map[string]*config.MethodConfig
+	}{
+		{
+			name:    "single method",
+			methods: map[string]*config.MethodConfig{"create": {}},
+		},
+		{
+			name: "multiple methods",
+			methods: map[string]*config.MethodConfig{
+				"create": {},
+				"update": {},
+				"delete": {},
+				"get":    {},
+				"find":   {},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tableConfig := config.TableConfig{
+				PrimaryColumn: "id",
+				Crud:          &config.TableCrudConfig{Methods: tt.methods},
+			}
+
+			gen := newTestGenerator(t, "postgresql")
+			data, err := gen.GenerateTable("users", tableConfig, nil, testColumns)
+			require.NoError(t, err)
+			require.NotEmpty(t, data)
+
+			assert.Equal(t, byte('\n'), data[len(data)-1], "file must end with newline")
+			assert.NotEqual(t, byte('\n'), data[len(data)-2], "file must not end with blank line")
+		})
+	}
+}
+
 func TestBatchCreate_UnsupportedSQLite(t *testing.T) {
 	tableConfig := config.TableConfig{
 		Crud: &config.TableCrudConfig{
