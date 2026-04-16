@@ -40,8 +40,13 @@ func (g *Generator) Run(schema *config.SchemaConfig) error {
 		return fmt.Errorf("create .pgxgen dir: %w", err)
 	}
 
-	// Write sqlc.yaml
 	sqlcPath := filepath.Join(pgxgenDir, "sqlc.yaml")
+
+	if schema.Sqlc == nil || !schema.Sqlc.KeepGeneratedConfig {
+		defer g.cleanupGeneratedConfig(pgxgenDir, sqlcPath)
+	}
+
+	// Write sqlc.yaml
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return fmt.Errorf("marshal sqlc config: %w", err)
@@ -70,4 +75,17 @@ func (g *Generator) Run(schema *config.SchemaConfig) error {
 	}
 
 	return nil
+}
+
+// cleanupGeneratedConfig removes the generated sqlc.yaml and its .pgxgen
+// directory. The directory is removed only if empty, so user-created
+// siblings (e.g. .pgxgen/templates) are preserved.
+func (g *Generator) cleanupGeneratedConfig(pgxgenDir, sqlcPath string) {
+	if err := os.Remove(sqlcPath); err != nil && !os.IsNotExist(err) {
+		g.logger.Infof("cleanup: remove %s: %v", sqlcPath, err)
+		return
+	}
+	if err := os.Remove(pgxgenDir); err != nil && !os.IsNotExist(err) {
+		g.logger.Infof("cleanup: keep %s (not empty): %v", pgxgenDir, err)
+	}
 }
