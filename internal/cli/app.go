@@ -73,16 +73,12 @@ func runGenerate(ctx context.Context, cmd *cli.Command, l logger.Logger, targets
 	dryRun := cmd.Bool("dry-run")
 	debug := cmd.Bool("debug")
 	orch := codegen.NewOrchestrator(l, cfg, configPath)
-	results, err := orch.Generate(ctx, codegen.GenerateOpts{
+	_, err = orch.Generate(ctx, codegen.GenerateOpts{
 		DryRun:  dryRun,
 		Debug:   debug,
 		Targets: targets,
 	})
-	if err != nil {
-		return err
-	}
-
-	return codegen.WriteResults(results, dryRun)
+	return err
 }
 
 func newGenerateCmd(l logger.Logger) *cli.Command {
