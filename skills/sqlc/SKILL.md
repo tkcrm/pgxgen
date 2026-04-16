@@ -9,7 +9,7 @@ description: >
   "sqlc init", "sqlc vet", "sqlc diff", "sqlc compile", or asks about SQL-to-Go code generation,
   query compilation, database schema parsing, or Go struct generation from SQL tables.
   Applies to PostgreSQL, MySQL, and SQLite engines.
-user-invocable: false
+user-invocable: true
 ---
 
 # sqlc — Compile SQL to type-safe Go code

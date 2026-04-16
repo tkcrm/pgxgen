@@ -10,7 +10,7 @@ description: >
   Also triggers for: configuring per-table repos vs single repo layout, custom CRUD
   templates, nullable type handling (pgtype, sql.Null*), enum generation, and
   struct tag customization (json, db, validate tags).
-user-invocable: false
+user-invocable: true
 ---
 
 # pgxgen
