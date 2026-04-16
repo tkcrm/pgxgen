@@ -136,3 +136,37 @@ func TestGenerate_CrudOnlyTargetSkipsSqlc(t *testing.T) {
 	assert.NoDirExists(t, filepath.Join(tmp, "internal"), "sqlc must not run when target is crud only")
 	assert.NoFileExists(t, filepath.Join(tmp, ".pgxgen", "sqlc.yaml"))
 }
+
+// TestGenerate_SqlcConfigRemovedByDefault verifies that after a
+// successful run the generated .pgxgen/sqlc.yaml and its directory are
+// cleaned up (keep_generated_config defaults to false).
+func TestGenerate_SqlcConfigRemovedByDefault(t *testing.T) {
+	tmp, configPath := setupTestProject(t)
+	cfg := newTestConfig(true)
+
+	orch := NewOrchestrator(logger.New(), cfg, configPath)
+	_, err := orch.Generate(context.Background(), GenerateOpts{})
+	require.NoError(t, err)
+
+	assert.NoFileExists(t, filepath.Join(tmp, ".pgxgen", "sqlc.yaml"), "sqlc.yaml must be removed after run")
+	assert.NoDirExists(t, filepath.Join(tmp, ".pgxgen"), "empty .pgxgen dir must be removed after run")
+}
+
+// TestGenerate_SqlcConfigKeptWhenFlagSet verifies that setting
+// keep_generated_config: true preserves .pgxgen/sqlc.yaml after run.
+func TestGenerate_SqlcConfigKeptWhenFlagSet(t *testing.T) {
+	tmp, configPath := setupTestProject(t)
+	cfg := newTestConfig(true)
+	cfg.Schemas[0].Sqlc.KeepGeneratedConfig = true
+
+	orch := NewOrchestrator(logger.New(), cfg, configPath)
+	_, err := orch.Generate(context.Background(), GenerateOpts{})
+	require.NoError(t, err)
+
+	sqlcPath := filepath.Join(tmp, ".pgxgen", "sqlc.yaml")
+	assert.FileExists(t, sqlcPath, "sqlc.yaml must be kept when keep_generated_config=true")
+	data, err := os.ReadFile(sqlcPath)
+	require.NoError(t, err)
+	assert.NotEmpty(t, data, "kept sqlc.yaml must have content")
+}
+

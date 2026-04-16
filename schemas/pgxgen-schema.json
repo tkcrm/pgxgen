@@ -114,6 +114,11 @@
     "sqlc": {
       "type": "object",
       "properties": {
+        "keep_generated_config": {
+          "type": "boolean",
+          "description": "Keep .pgxgen/sqlc.yaml after run (default: false). When false, the generated config and its containing directory are removed on both success and failure.",
+          "default": false
+        },
         "defaults": {
           "type": "object",
           "description": "Default sqlc gen.go options applied to all repos",

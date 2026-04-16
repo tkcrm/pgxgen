@@ -60,8 +60,9 @@ func (c *ModelsConfig) GetOutputFileName() string {
 
 // SqlcConfig defines sqlc auto-generation settings.
 type SqlcConfig struct {
-	Defaults  *SqlcDefaultsConfig  `yaml:"defaults,omitempty"`
-	Overrides *SqlcOverridesConfig `yaml:"overrides,omitempty"`
+	Defaults            *SqlcDefaultsConfig  `yaml:"defaults,omitempty"`
+	Overrides           *SqlcOverridesConfig `yaml:"overrides,omitempty"`
+	KeepGeneratedConfig bool                 `yaml:"keep_generated_config,omitempty"`
 }
 
 // SqlcDefaultsConfig holds default sqlc gen.go options applied to all repos.

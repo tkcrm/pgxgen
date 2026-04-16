@@ -515,6 +515,7 @@ schemas:
 
     # sqlc auto-generation (pgxgen generates sqlc.yaml automatically)
     sqlc:
+      # keep_generated_config: true  # keep .pgxgen/sqlc.yaml after run (default: false)
       defaults:
         sql_package: pgx/v5
         emit_interface: true
