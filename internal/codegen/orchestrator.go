@@ -107,6 +107,15 @@ func (o *Orchestrator) Generate(ctx context.Context, opts GenerateOpts) ([]Gener
 			debugf("generate custom queries: %s (%d files)", time.Since(stepStart), len(results))
 		}
 
+		// Flush CRUD + custom-query results to disk now so sqlc can read them.
+		// sqlc parses query files from disk, so they must exist before sqlc runs.
+		if err := WriteResults(allResults, opts.DryRun); err != nil {
+			return nil, fmt.Errorf("write crud results for schema %s: %w", schema.Name, err)
+		}
+		for i := range allResults {
+			allResults[i].Action = ActionUnchanged
+		}
+
 		// 2. Generate models (reuses parsed catalog + sqlc config for overrides/defaults)
 		if o.shouldRun("models", opts) && schema.Models != nil {
 			stepStart := time.Now()
@@ -118,8 +127,9 @@ func (o *Orchestrator) Generate(ctx context.Context, opts GenerateOpts) ([]Gener
 			debugf("generate models: %s", time.Since(stepStart))
 		}
 
-		// 3. Run sqlc
-		if o.shouldRun("sqlc", opts) && schema.Sqlc != nil {
+		// 3. Run sqlc — skipped in dry-run because sqlc has no preview mode and
+		// its inputs (CRUD SQL) were not written to disk.
+		if !opts.DryRun && o.shouldRun("sqlc", opts) && schema.Sqlc != nil {
 			stepStart := time.Now()
 			gen := sqlcgen.NewGenerator(o.logger, o.configDir)
 			if err := gen.Run(&schema); err != nil {
