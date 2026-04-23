@@ -54,10 +54,3 @@ type GithubLatestRelesaseResponse struct {
 	ZipballURL      string        `json:"zipball_url"`
 	Body            string        `json:"body"`
 }
-
-type CheckLastestReleaseVersionResponse struct {
-	IsLatest                    bool
-	CurrentVersion              string
-	GithubLatestRelesaseVersion string
-	Message                     string
-}
