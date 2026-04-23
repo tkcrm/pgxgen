@@ -169,4 +169,3 @@ func TestGenerate_SqlcConfigKeptWhenFlagSet(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEmpty(t, data, "kept sqlc.yaml must have content")
 }
-
