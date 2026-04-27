@@ -65,46 +65,83 @@ version: "2"
 
 schemas:
   - name: main
-    engine: postgresql
+    engine: postgresql # postgresql | mysql | sqlite
     schema_dir: sql/migrations
 
+    # Go model generation
     models:
       output_dir: internal/models
-      output_file_name: models_gen.go
+      output_file_name: models_gen.go # default: models.go
       package_name: models
       package_path: github.com/your-org/project/internal/models
+      sql_package: pgx/v5 # pgx/v5 | pgx/v4 | database/sql
       emit_json_tags: true
       emit_db_tags: true
-      # include_struct_comments: true  # Add // @name StructName for Swagger
+      emit_pointers_for_null: false
+      include_struct_comments: false # adds // @name StructName for Swagger
+      custom_types: [MyCustomType] # types defined in models package
+      skip_tables: [migrations, schema_version]
+      skip_enums: [internal_status]
+      type_overrides:
+        - sql_type: uuid
+          go_type: github.com/google/uuid.UUID
+          import: github.com/google/uuid
+      custom_tags:
+        - name: validate
+          format: required # applied to NOT NULL columns
 
+    # sqlc auto-generation (pgxgen generates sqlc.yaml automatically)
     sqlc:
+      keep_generated_config: false # keep .pgxgen/sqlc.yaml after run
       defaults:
-        sql_package: pgx/v5
+        sql_package: pgx/v5 # pgx/v5 | pgx/v4 | database/sql
+        emit_prepared_queries: false
         emit_interface: true
         emit_json_tags: true
         emit_db_tags: true
+        emit_exported_queries: false
+        emit_exact_table_names: false
         emit_empty_slices: true
         emit_result_struct_pointers: true
+        emit_params_struct_pointers: false
         emit_enum_valid_method: true
         emit_all_enum_values: true
+        query_parameter_limit: 1
+        json_tags_case_style: camel # camel | pascal | snake | none
       overrides:
         rename: { d: Params }
         types:
           - db_type: uuid
-            go_type: "github.com/google/uuid.UUID"
+            go_type: github.com/google/uuid.UUID
           - db_type: uuid
             nullable: true
-            go_type: "github.com/google/uuid.NullUUID"
+            go_type: github.com/google/uuid.NullUUID
+          # Object form (with explicit import):
+          # - db_type: jsonb
+          #   go_type:
+          #     type: MyJSON
+          #     import: github.com/your-org/project/internal/types
         columns:
           - column: users.email
             go_struct_tag: 'validate:"required,email"'
+          # - column: users.metadata
+          #   go_type: github.com/your-org/project/internal/types.Metadata
 
+    # Defaults inherited by all tables in this schema
     defaults:
-      queries_dir_prefix: sql/queries
-      output_dir_prefix: internal/store/repos
+      # Pattern A — per-table repos (each table gets its own directory):
+      queries_dir_prefix: sql/queries # → sql/queries/{table}
+      output_dir_prefix: internal/store/repos # → internal/store/repos/{table}
+      package_prefix: "" # optional: prepended to table name for package
+      package_suffix: "" # optional: appended to table name for package
+
+      # Pattern B — single repo (use instead of *_prefix above):
+      # queries_dir: sql/queries
+      # output_dir: internal/store
+
       crud:
         auto_clean: true
-        exclude_table_name: true
+        exclude_table_name: true # GetByID instead of GetUserByID
         methods:
           create:
             skip_columns: [id, updated_at]
@@ -113,9 +150,16 @@ schemas:
       constants:
         include_column_names: true
 
+    # Per-table settings (crud + constants + sqlc + soft_delete)
     tables:
       users:
         primary_column: id
+        # queries_dir: sql/queries/custom    # override defaults for this table
+        # output_dir: internal/store/custom  # override defaults for this table
+        # sqlc:
+        #   query_parameter_limit: 3
+        # constants:
+        #   include_column_names: false
         # soft_delete:
         #   column: deleted_at
         crud:
@@ -131,11 +175,32 @@ schemas:
             get: { name: GetByID }
             delete: {}
             find:
-              order: { by: created_at, direction: DESC }
+              order: { by: created_at, direction: DESC } # direction default: DESC
               limit: true
+              where_additional: ["status = 'active'"] # extra raw SQL conditions
             total: {}
             exists:
-              where: { email: {} }
+              where:
+                email: {} # default: = $1
+                age: { operator: ">=", value: "$2" } # custom operator/value
+            # batch_create:
+            #   skip_columns: [id, created_at]
+
+    # Custom SQL queries (free-form, generated alongside CRUD)
+    custom_queries:
+      - name: GetActiveUsers
+        type: many # one | many | exec | copyfrom
+        table: users # optional: ties query to a table's output_dir
+        # output_dir: internal/store/reports  # optional override
+        sql: |
+          SELECT * FROM users
+          WHERE is_active = true
+          ORDER BY created_at DESC
+
+# Custom templates (optional, override built-in templates)
+templates:
+  crud_dir: .pgxgen/templates/crud
+  models_dir: .pgxgen/templates/models
 ```
 
 ### Path patterns

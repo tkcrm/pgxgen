@@ -1,74 +1,81 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "title": "pgxgen configuration",
-  "description": "Configuration file for pgxgen code generator",
+  "description": "Configuration file for pgxgen — code generator for PostgreSQL, MySQL, and SQLite. Replaces both pgxgen.yaml and sqlc.yaml.",
   "type": "object",
   "required": ["version", "schemas"],
   "properties": {
     "version": {
       "type": "string",
       "const": "2",
-      "description": "Config version (must be '2')"
+      "description": "Config schema version. Must be \"2\". Use `pgxgen migrate` to upgrade legacy v1 configs."
     },
     "schemas": {
       "type": "array",
       "minItems": 1,
-      "description": "Array of schema configurations, each with its own engine and tables",
+      "description": "List of schema sources. Each schema is an independent generation unit with its own engine, migrations, models, and tables. Multiple schemas allow mixing engines (e.g. PostgreSQL + SQLite) in one project.",
       "items": {
         "$ref": "#/definitions/schema"
       }
     },
     "templates": {
       "type": "object",
-      "description": "User-provided template directories",
+      "description": "Optional user-provided template directories that override the built-in templates for CRUD SQL and Go models.",
       "properties": {
         "crud_dir": {
           "type": "string",
-          "description": "Directory with custom CRUD SQL templates"
+          "description": "Directory containing custom CRUD SQL templates. Files in this directory replace the built-in templates of the same name."
         },
         "models_dir": {
           "type": "string",
-          "description": "Directory with custom Go model templates"
+          "description": "Directory containing custom Go model templates. Files in this directory replace the built-in templates of the same name."
         }
-      }
+      },
+      "additionalProperties": false
     }
   },
+  "additionalProperties": false,
   "definitions": {
     "schema": {
       "type": "object",
       "required": ["name", "engine", "schema_dir"],
+      "additionalProperties": false,
       "properties": {
         "name": {
           "type": "string",
-          "description": "Human-readable schema name"
+          "description": "Human-readable schema name. Used in logs and to disambiguate output when multiple schemas are configured."
         },
         "engine": {
           "type": "string",
           "enum": ["postgresql", "mysql", "sqlite"],
-          "description": "Database engine"
+          "description": "Database engine. Controls SQL dialect, type mapping, and the sqlc engine selected when generating sqlc.yaml."
         },
         "schema_dir": {
           "type": "string",
-          "description": "Path to SQL migration/schema files"
+          "description": "Path to the directory (or single file) with SQL migration / schema files. Files are parsed in lexicographic order to derive table and column metadata."
         },
         "models": {
-          "$ref": "#/definitions/models"
+          "$ref": "#/definitions/models",
+          "description": "Settings for generating Go model structs from the parsed schema."
         },
         "sqlc": {
-          "$ref": "#/definitions/sqlc"
+          "$ref": "#/definitions/sqlc",
+          "description": "Settings for the auto-generated sqlc.yaml and the sqlc invocation."
         },
         "defaults": {
-          "$ref": "#/definitions/defaults"
+          "$ref": "#/definitions/defaults",
+          "description": "Defaults inherited by every table in this schema (paths, CRUD methods, constants)."
         },
         "tables": {
           "type": "object",
-          "description": "Per-table configuration (crud + constants + sqlc)",
+          "description": "Per-table configuration keyed by table name. Each entry merges with `defaults` and may override CRUD methods, constants, sqlc, and soft-delete settings.",
           "additionalProperties": {
             "$ref": "#/definitions/table"
           }
         },
         "custom_queries": {
           "type": "array",
+          "description": "Free-form SQL queries that are emitted alongside generated CRUD. Useful for joins, reports, or any query that does not fit the CRUD model.",
           "items": {
             "$ref": "#/definitions/custom_query"
           }
@@ -78,98 +85,259 @@
     "models": {
       "type": "object",
       "required": ["output_dir", "package_name"],
+      "additionalProperties": false,
       "properties": {
-        "output_dir": { "type": "string" },
-        "output_file_name": { "type": "string", "default": "models.go" },
-        "package_name": { "type": "string" },
+        "output_dir": {
+          "type": "string",
+          "description": "Directory where the generated Go models file will be written."
+        },
+        "output_file_name": {
+          "type": "string",
+          "default": "models.go",
+          "description": "Name of the generated models file. Defaults to `models.go`."
+        },
+        "package_name": {
+          "type": "string",
+          "description": "Go package name declared at the top of the generated models file."
+        },
         "package_path": {
           "type": "string",
-          "description": "Full Go import path for the models package"
+          "description": "Full Go import path of the models package (e.g. `github.com/your-org/project/internal/models`). Used by sqlc overrides and by other generated code that needs to import these models."
         },
         "custom_types": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Custom types defined in the models package"
+          "description": "Names of types defined manually in the models package. The generator skips emitting these names so your hand-written definitions are preserved.",
+          "items": { "type": "string" }
         },
         "skip_tables": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Table/view names to exclude from model generation"
+          "description": "Table or view names to exclude from model generation (e.g. internal migration tables).",
+          "items": { "type": "string" }
         },
         "skip_enums": {
           "type": "array",
-          "items": { "type": "string" },
-          "description": "Enum names to exclude from model generation"
+          "description": "Enum type names to exclude from model generation.",
+          "items": { "type": "string" }
         },
-        "emit_json_tags": { "type": "boolean", "default": false },
-        "emit_db_tags": { "type": "boolean", "default": false },
-        "emit_pointers_for_null": { "type": "boolean", "default": false },
-        "include_struct_comments": { "type": "boolean", "default": false, "description": "Add // @name StructName comments to generated structs (useful for Swagger)" },
+        "emit_json_tags": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add `json:\"…\"` struct tags to generated models."
+        },
+        "emit_db_tags": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add `db:\"…\"` struct tags to generated models (useful for sqlx, scany, etc)."
+        },
+        "emit_pointers_for_null": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use Go pointer types (`*T`) for nullable columns instead of nullable wrappers like `pgtype.Text` or `sql.NullString`."
+        },
+        "include_struct_comments": {
+          "type": "boolean",
+          "default": false,
+          "description": "Add `// @name StructName` comments above generated structs (useful for swaggo / Swagger generators)."
+        },
         "sql_package": {
           "type": "string",
-          "enum": ["pgx/v5", "pgx/v4", "database/sql"]
+          "enum": ["pgx/v5", "pgx/v4", "database/sql"],
+          "description": "SQL package used to choose the nullable / array type families in generated models (e.g. `pgtype.Text` vs `sql.NullString`)."
+        },
+        "type_overrides": {
+          "type": "array",
+          "description": "Override the SQL → Go type mapping for the models generator. Affects only model structs (sqlc has its own `sqlc.overrides.types`).",
+          "items": {
+            "type": "object",
+            "required": ["sql_type", "go_type"],
+            "additionalProperties": false,
+            "properties": {
+              "sql_type": {
+                "type": "string",
+                "description": "SQL type to override (e.g. `uuid`, `jsonb`, `timestamptz`)."
+              },
+              "go_type": {
+                "type": "string",
+                "description": "Fully-qualified Go type to use (e.g. `github.com/google/uuid.UUID` or just `string`)."
+              },
+              "import": {
+                "type": "string",
+                "description": "Optional explicit import path. If omitted, it is inferred from `go_type` when it contains a package path."
+              }
+            }
+          }
+        },
+        "custom_tags": {
+          "type": "array",
+          "description": "Additional struct tags emitted on every generated model field. Combined with `emit_json_tags` / `emit_db_tags`.",
+          "items": {
+            "type": "object",
+            "required": ["name"],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Tag name (e.g. `validate`, `binding`)."
+              },
+              "format": {
+                "type": "string",
+                "description": "Tag value format. Applied only to NOT NULL columns (e.g. `required` to emit `validate:\"required\"`)."
+              }
+            }
+          }
         }
       }
     },
     "sqlc": {
       "type": "object",
+      "additionalProperties": false,
+      "description": "Settings consumed when pgxgen generates `.pgxgen/sqlc.yaml` and runs sqlc.",
       "properties": {
         "keep_generated_config": {
           "type": "boolean",
-          "description": "Keep .pgxgen/sqlc.yaml after run (default: false). When false, the generated config and its containing directory are removed on both success and failure.",
-          "default": false
+          "default": false,
+          "description": "Keep `.pgxgen/sqlc.yaml` after the run. When false (default), the generated config and its containing directory are removed on both success and failure."
         },
         "defaults": {
           "type": "object",
-          "description": "Default sqlc gen.go options applied to all repos",
+          "additionalProperties": false,
+          "description": "Default sqlc `gen.go` options applied to every generated repo. Maps 1:1 to sqlc's options of the same name.",
           "properties": {
             "sql_package": {
               "type": "string",
-              "enum": ["pgx/v5", "pgx/v4", "database/sql"]
+              "enum": ["pgx/v5", "pgx/v4", "database/sql"],
+              "description": "sqlc `sql_package` option — selects the driver-specific nullable / array types in generated sqlc code."
             },
-            "emit_prepared_queries": { "type": "boolean" },
-            "emit_interface": { "type": "boolean" },
-            "emit_json_tags": { "type": "boolean" },
-            "emit_db_tags": { "type": "boolean" },
-            "emit_exported_queries": { "type": "boolean" },
-            "emit_exact_table_names": { "type": "boolean" },
-            "emit_empty_slices": { "type": "boolean" },
-            "emit_result_struct_pointers": { "type": "boolean" },
-            "emit_params_struct_pointers": { "type": "boolean" },
-            "emit_enum_valid_method": { "type": "boolean" },
-            "emit_all_enum_values": { "type": "boolean" },
-            "query_parameter_limit": { "type": "integer" },
-            "json_tags_case_style": { "type": "string" }
+            "emit_prepared_queries": {
+              "type": "boolean",
+              "description": "sqlc: emit prepared queries for performance."
+            },
+            "emit_interface": {
+              "type": "boolean",
+              "description": "sqlc: emit a `Querier` interface alongside the concrete `Queries` struct."
+            },
+            "emit_json_tags": {
+              "type": "boolean",
+              "description": "sqlc: add `json:\"…\"` struct tags to generated rows / params."
+            },
+            "emit_db_tags": {
+              "type": "boolean",
+              "description": "sqlc: add `db:\"…\"` struct tags to generated rows / params."
+            },
+            "emit_exported_queries": {
+              "type": "boolean",
+              "description": "sqlc: export the constants holding the SQL text of each query."
+            },
+            "emit_exact_table_names": {
+              "type": "boolean",
+              "description": "sqlc: keep table names exact (no singularization). Off by default."
+            },
+            "emit_empty_slices": {
+              "type": "boolean",
+              "description": "sqlc: emit empty slices instead of `nil` for `:many` queries that match no rows."
+            },
+            "emit_result_struct_pointers": {
+              "type": "boolean",
+              "description": "sqlc: return `*Row` instead of `Row` from generated queries."
+            },
+            "emit_params_struct_pointers": {
+              "type": "boolean",
+              "description": "sqlc: accept `*Params` instead of `Params` for generated queries with multi-field params."
+            },
+            "emit_enum_valid_method": {
+              "type": "boolean",
+              "description": "sqlc: add a `Valid()` method on generated enum types."
+            },
+            "emit_all_enum_values": {
+              "type": "boolean",
+              "description": "sqlc: emit a slice with all values for each generated enum."
+            },
+            "query_parameter_limit": {
+              "type": "integer",
+              "description": "sqlc: maximum number of positional query parameters before sqlc switches the function signature to a single struct param."
+            },
+            "json_tags_case_style": {
+              "type": "string",
+              "enum": ["camel", "pascal", "snake", "none"],
+              "description": "sqlc: case style for `json:` tag values (`camel`, `pascal`, `snake`, or `none`)."
+            }
           }
         },
         "overrides": {
           "type": "object",
+          "additionalProperties": false,
+          "description": "Maps 1:1 to the sqlc `overrides` section. Lets you rename generated types and remap SQL types or specific columns.",
           "properties": {
             "rename": {
               "type": "object",
+              "description": "Rename generated identifiers (e.g. `{ d: Params }` renames a struct named `D` to `Params`).",
               "additionalProperties": { "type": "string" }
             },
             "types": {
               "type": "array",
+              "description": "Override the Go type generated for a SQL type, optionally constrained to nullable columns.",
               "items": {
                 "type": "object",
                 "required": ["db_type", "go_type"],
+                "additionalProperties": false,
                 "properties": {
-                  "db_type": { "type": "string" },
-                  "go_type": {},
-                  "nullable": { "type": "boolean" }
+                  "db_type": {
+                    "type": "string",
+                    "description": "SQL type to override (e.g. `uuid`, `jsonb`)."
+                  },
+                  "go_type": {
+                    "description": "Go type to use. Either a fully-qualified string (`github.com/google/uuid.UUID`) or an object with explicit `type` and `import` keys.",
+                    "oneOf": [
+                      { "type": "string" },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string" },
+                          "import": { "type": "string" },
+                          "package": { "type": "string" },
+                          "pointer": { "type": "boolean" }
+                        }
+                      }
+                    ]
+                  },
+                  "nullable": {
+                    "type": "boolean",
+                    "description": "If true, the override only applies to nullable columns of `db_type`."
+                  }
                 }
               }
             },
             "columns": {
               "type": "array",
+              "description": "Per-column overrides (e.g. add struct tags or change Go type for `users.email`).",
               "items": {
                 "type": "object",
                 "required": ["column"],
+                "additionalProperties": false,
                 "properties": {
-                  "column": { "type": "string" },
-                  "go_type": {},
-                  "go_struct_tag": { "type": "string" }
+                  "column": {
+                    "type": "string",
+                    "description": "Fully-qualified column reference, `table.column` (e.g. `users.email`)."
+                  },
+                  "go_type": {
+                    "description": "Override the Go type for this specific column. String or object form, same shape as `types[].go_type`.",
+                    "oneOf": [
+                      { "type": "string" },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": { "type": "string" },
+                          "import": { "type": "string" },
+                          "package": { "type": "string" },
+                          "pointer": { "type": "boolean" }
+                        }
+                      }
+                    ]
+                  },
+                  "go_struct_tag": {
+                    "type": "string",
+                    "description": "Extra struct tag appended to this column's field (e.g. `validate:\"required,email\"`)."
+                  }
                 }
               }
             }
@@ -179,38 +347,49 @@
     },
     "defaults": {
       "type": "object",
+      "additionalProperties": false,
+      "description": "Defaults inherited by every table in the schema. Choose one of two layouts: per-table repos (use `*_prefix`) OR a single shared repo (use `queries_dir` / `output_dir`).",
       "properties": {
         "queries_dir_prefix": {
           "type": "string",
-          "description": "Per-table repos: queries_dir = {prefix}/{table_name} (not affected by package_prefix/package_suffix)"
+          "description": "Per-table layout: queries directory is computed as `{prefix}/{table_name}`. Mutually exclusive with `queries_dir`. Not affected by `package_prefix` / `package_suffix`."
         },
         "output_dir_prefix": {
           "type": "string",
-          "description": "Per-table repos: output_dir = {prefix}/{package_prefix}{table_name}{package_suffix}"
+          "description": "Per-table layout: sqlc output directory is computed as `{prefix}/{package_prefix}{table_name}{package_suffix}`. Mutually exclusive with `output_dir`."
         },
         "package_prefix": {
           "type": "string",
-          "description": "Per-table repos: prefix for the output directory/package name (does not affect queries_dir_prefix), e.g. repo_"
+          "description": "Per-table layout: prefix prepended to the table name when forming the output directory and Go package name (e.g. `repo_`). Does not affect `queries_dir_prefix`."
         },
         "package_suffix": {
           "type": "string",
-          "description": "Per-table repos: suffix for the output directory/package name (does not affect queries_dir_prefix), e.g. _repo"
+          "description": "Per-table layout: suffix appended to the table name when forming the output directory and Go package name (e.g. `_repo`). Does not affect `queries_dir_prefix`."
         },
         "queries_dir": {
           "type": "string",
-          "description": "Single repo: all queries in one directory"
+          "description": "Single-repo layout: directory where every table's queries are placed. Mutually exclusive with `queries_dir_prefix`."
         },
         "output_dir": {
           "type": "string",
-          "description": "Single repo: all output in one directory"
+          "description": "Single-repo layout: directory where every table's sqlc output is written. Mutually exclusive with `output_dir_prefix`."
         },
         "crud": {
           "type": "object",
+          "additionalProperties": false,
+          "description": "Default CRUD generation settings inherited by every table.",
           "properties": {
-            "auto_clean": { "type": "boolean" },
-            "exclude_table_name": { "type": "boolean" },
+            "auto_clean": {
+              "type": "boolean",
+              "description": "Remove stale generated CRUD files that no longer correspond to a configured method."
+            },
+            "exclude_table_name": {
+              "type": "boolean",
+              "description": "Drop the table name from generated method names (e.g. `GetByID` instead of `GetUserByID`)."
+            },
             "methods": {
               "type": "object",
+              "description": "Default method definitions applied to every table. Per-table `tables.{name}.crud.methods` overrides these key-by-key.",
               "additionalProperties": {
                 "$ref": "#/definitions/method"
               }
@@ -219,35 +398,52 @@
         },
         "constants": {
           "type": "object",
+          "additionalProperties": false,
+          "description": "Default constants generation settings inherited by every table.",
           "properties": {
-            "include_column_names": { "type": "boolean" }
+            "include_column_names": {
+              "type": "boolean",
+              "description": "Emit per-table column-name constants (e.g. `UsersColumnEmail = \"email\"`)."
+            }
           }
         }
       }
     },
     "table": {
       "type": "object",
+      "additionalProperties": false,
+      "description": "Per-table overrides. Anything omitted here is inherited from the schema's `defaults`.",
       "properties": {
-        "primary_column": { "type": "string" },
+        "primary_column": {
+          "type": "string",
+          "description": "Name of the primary-key column. Used by CRUD methods like `get`, `update`, `delete` to build the WHERE clause when no explicit `where` is set."
+        },
         "queries_dir": {
           "type": "string",
-          "description": "Override queries directory"
+          "description": "Override the queries directory for this table (otherwise resolved from `defaults.queries_dir` / `defaults.queries_dir_prefix`)."
         },
         "output_dir": {
           "type": "string",
-          "description": "Override output directory"
+          "description": "Override the sqlc output directory for this table (otherwise resolved from `defaults.output_dir` / `defaults.output_dir_prefix`)."
         },
         "sqlc": {
           "type": "object",
+          "additionalProperties": false,
+          "description": "Per-table sqlc options that override `sqlc.defaults` for this table only.",
           "properties": {
-            "query_parameter_limit": { "type": "integer" }
+            "query_parameter_limit": {
+              "type": "integer",
+              "description": "sqlc `query_parameter_limit` for this table only."
+            }
           }
         },
         "crud": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
             "methods": {
               "type": "object",
+              "description": "CRUD methods to generate for this table. Method keys are well-known: `create`, `update`, `delete`, `get`, `find`, `total`, `exists`, `batch_create`. An empty object (`{}`) enables a method with default settings.",
               "additionalProperties": {
                 "$ref": "#/definitions/method"
               }
@@ -256,59 +452,94 @@
         },
         "constants": {
           "type": "object",
+          "additionalProperties": false,
           "properties": {
-            "include_column_names": { "type": "boolean" }
+            "include_column_names": {
+              "type": "boolean",
+              "description": "Override `defaults.constants.include_column_names` for this table."
+            }
           }
         },
         "soft_delete": {
           "type": "object",
           "required": ["column"],
+          "additionalProperties": false,
+          "description": "Enable soft-delete behavior. The `delete` method becomes an UPDATE that sets the column to `now()`; `get` and `find` automatically add `WHERE {column} IS NULL`.",
           "properties": {
-            "column": { "type": "string" }
+            "column": {
+              "type": "string",
+              "description": "Name of the soft-delete timestamp column (commonly `deleted_at`)."
+            }
           }
         }
       }
     },
     "method": {
       "type": ["object", "null"],
+      "additionalProperties": false,
+      "description": "CRUD method definition. `null` or `{}` enables the method with default settings derived from the table.",
       "properties": {
-        "name": { "type": "string", "description": "Override method name" },
+        "name": {
+          "type": "string",
+          "description": "Override the generated Go method name (e.g. `GetByID`)."
+        },
         "returning": {
           "type": "string",
-          "description": "RETURNING clause (PostgreSQL)"
+          "description": "RETURNING clause for INSERT/UPDATE/DELETE (PostgreSQL only). Use `*` to return all columns."
         },
         "where": {
           "type": "object",
+          "description": "WHERE conditions keyed by column name. An empty object (`{}`) means `column = $N`. Use `value`/`operator` to customize.",
           "additionalProperties": {
             "type": "object",
+            "additionalProperties": false,
             "properties": {
-              "value": { "type": "string" },
-              "operator": { "type": "string", "default": "=" }
+              "value": {
+                "type": "string",
+                "description": "Right-hand side of the condition. Defaults to the next positional parameter (`$N`). Set to a literal (e.g. `'active'`) or expression to override."
+              },
+              "operator": {
+                "type": "string",
+                "default": "=",
+                "description": "Comparison operator. Defaults to `=`. Common values: `=`, `!=`, `>`, `>=`, `<`, `<=`, `IN`, `LIKE`, `IS NOT`."
+              }
             }
           }
         },
         "where_additional": {
           "type": "array",
+          "description": "Additional raw SQL conditions appended to the WHERE clause (e.g. `\"status = 'active'\"`). Combined with AND.",
           "items": { "type": "string" }
         },
         "skip_columns": {
           "type": "array",
+          "description": "Columns to omit from this method's INSERT/UPDATE column list (e.g. `[id, created_at]`).",
           "items": { "type": "string" }
         },
         "column_values": {
           "type": "object",
+          "description": "Override the generated value for specific columns with a literal SQL expression (e.g. `{ created_at: \"now()\" }`). Such columns are filled by SQL instead of Go.",
           "additionalProperties": { "type": "string" }
         },
-        "limit": { "type": "boolean" },
+        "limit": {
+          "type": "boolean",
+          "description": "For `find`: emit `LIMIT $N OFFSET $N` and accept the corresponding parameters."
+        },
         "order": {
           "type": "object",
           "required": ["by"],
+          "additionalProperties": false,
+          "description": "ORDER BY clause for `find`.",
           "properties": {
-            "by": { "type": "string" },
+            "by": {
+              "type": "string",
+              "description": "Column name to order by."
+            },
             "direction": {
               "type": "string",
               "enum": ["ASC", "DESC"],
-              "default": "DESC"
+              "default": "DESC",
+              "description": "Sort direction. Defaults to `DESC`."
             }
           }
         }
@@ -317,18 +548,30 @@
     "custom_query": {
       "type": "object",
       "required": ["name", "type", "sql"],
+      "additionalProperties": false,
+      "description": "Free-form SQL query emitted alongside generated CRUD.",
       "properties": {
-        "name": { "type": "string" },
+        "name": {
+          "type": "string",
+          "description": "Generated Go function name (e.g. `GetActiveUsers`)."
+        },
         "type": {
           "type": "string",
-          "enum": ["one", "many", "exec", "copyfrom"]
+          "enum": ["one", "many", "exec", "copyfrom"],
+          "description": "sqlc query annotation: `one` (single row), `many` (slice of rows), `exec` (no result), `copyfrom` (PostgreSQL COPY FROM)."
         },
         "table": {
           "type": "string",
-          "description": "Output to this table's queries_dir"
+          "description": "Optional table name. When set, the query is emitted into that table's resolved `queries_dir` and uses its row type."
         },
-        "output_dir": { "type": "string" },
-        "sql": { "type": "string" }
+        "output_dir": {
+          "type": "string",
+          "description": "Explicit output directory for the query. Takes precedence over `table`."
+        },
+        "sql": {
+          "type": "string",
+          "description": "The SQL body. Use `$1`, `$2`, … for PostgreSQL parameters or `?` for MySQL/SQLite."
+        }
       }
     }
   }
