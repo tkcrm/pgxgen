@@ -49,6 +49,8 @@ func (p *postgresParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 				p.handleCreateSchema(cat, n.CreateSchemaStmt)
 			case *pg.Node_AlterTableStmt:
 				p.handleAlterTable(cat, n.AlterTableStmt)
+			case *pg.Node_AlterEnumStmt:
+				p.handleAlterEnum(cat, n.AlterEnumStmt)
 			case *pg.Node_DropStmt:
 				p.handleDropStmt(cat, n.DropStmt)
 			case *pg.Node_IndexStmt:
@@ -282,6 +284,74 @@ func (p *postgresParser) handleCreateEnum(cat *catalog.Catalog, n *pg.CreateEnum
 	}
 
 	schema.Enums = append(schema.Enums, enum)
+}
+
+func (p *postgresParser) handleAlterEnum(cat *catalog.Catalog, n *pg.AlterEnumStmt) {
+	if n == nil {
+		return
+	}
+
+	schemaName, enumName := pgParseTypeName(n.TypeName)
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+
+	var enum *catalog.Enum
+	for _, s := range cat.Schemas {
+		if s.Name != schemaName {
+			continue
+		}
+		for _, e := range s.Enums {
+			if e.Name == enumName {
+				enum = e
+				break
+			}
+		}
+		if enum != nil {
+			break
+		}
+	}
+	if enum == nil {
+		return
+	}
+
+	// RENAME VALUE: OldVal is set.
+	if n.OldVal != "" {
+		for i, v := range enum.Values {
+			if v == n.OldVal {
+				enum.Values[i] = n.NewVal
+				return
+			}
+		}
+		return
+	}
+
+	// ADD VALUE: skip duplicates regardless of IF NOT EXISTS — the catalog
+	// represents the resulting set of values, not the replayed DDL stream.
+	for _, v := range enum.Values {
+		if v == n.NewVal {
+			return
+		}
+	}
+
+	if n.NewValNeighbor != "" {
+		for i, v := range enum.Values {
+			if v != n.NewValNeighbor {
+				continue
+			}
+			insertAt := i
+			if n.NewValIsAfter {
+				insertAt = i + 1
+			}
+			enum.Values = append(
+				enum.Values[:insertAt],
+				append([]string{n.NewVal}, enum.Values[insertAt:]...)...,
+			)
+			return
+		}
+	}
+
+	enum.Values = append(enum.Values, n.NewVal)
 }
 
 func (p *postgresParser) handleComment(cat *catalog.Catalog, n *pg.CommentStmt) {

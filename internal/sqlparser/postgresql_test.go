@@ -146,6 +146,109 @@ func TestPostgresCreateEnum(t *testing.T) {
 	}
 }
 
+func TestPostgresAlterEnum(t *testing.T) {
+	findEnum := func(t *testing.T, cat *catalog.Catalog, schemaName, enumName string) *catalog.Enum {
+		t.Helper()
+		for _, s := range cat.Schemas {
+			if s.Name != schemaName {
+				continue
+			}
+			for _, e := range s.Enums {
+				if e.Name == enumName {
+					return e
+				}
+			}
+		}
+		t.Fatalf("enum %s.%s not found", schemaName, enumName)
+		return nil
+	}
+
+	assertValues := func(t *testing.T, enum *catalog.Enum, want ...string) {
+		t.Helper()
+		got := strings.Join(enum.Values, ",")
+		expected := strings.Join(want, ",")
+		if got != expected {
+			t.Errorf("enum %q values: want [%s], got [%s]", enum.Name, expected, got)
+		}
+	}
+
+	t.Run("add value appends to end", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TYPE status AS ENUM ('active', 'inactive');
+			ALTER TYPE status ADD VALUE 'pending';
+		`)
+		cat, err := newPostgresParser().ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		assertValues(t, findEnum(t, cat, "public", "status"), "active", "inactive", "pending")
+	})
+
+	t.Run("add value if not exists skips duplicate", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TYPE status AS ENUM ('active', 'inactive');
+			ALTER TYPE status ADD VALUE IF NOT EXISTS 'active';
+		`)
+		cat, err := newPostgresParser().ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		assertValues(t, findEnum(t, cat, "public", "status"), "active", "inactive")
+	})
+
+	t.Run("add value before neighbor", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TYPE status AS ENUM ('active', 'inactive');
+			ALTER TYPE status ADD VALUE 'draft' BEFORE 'active';
+		`)
+		cat, err := newPostgresParser().ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		assertValues(t, findEnum(t, cat, "public", "status"), "draft", "active", "inactive")
+	})
+
+	t.Run("add value after neighbor", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TYPE status AS ENUM ('active', 'inactive', 'pending');
+			ALTER TYPE status ADD VALUE 'archived' AFTER 'pending';
+			ALTER TYPE status ADD VALUE 'review' AFTER 'active';
+		`)
+		cat, err := newPostgresParser().ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		assertValues(t, findEnum(t, cat, "public", "status"),
+			"active", "review", "inactive", "pending", "archived")
+	})
+
+	t.Run("rename value preserves order", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE TYPE status AS ENUM ('active', 'inactive', 'pending');
+			ALTER TYPE status RENAME VALUE 'inactive' TO 'disabled';
+		`)
+		cat, err := newPostgresParser().ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		assertValues(t, findEnum(t, cat, "public", "status"), "active", "disabled", "pending")
+	})
+
+	t.Run("schema-qualified alter type", func(t *testing.T) {
+		path := writeTemp(t, `
+			CREATE SCHEMA IF NOT EXISTS billing;
+			CREATE TYPE billing.payment_status AS ENUM ('pending', 'paid');
+			ALTER TYPE billing.payment_status ADD VALUE 'refunded';
+		`)
+		cat, err := newPostgresParser().ParseSchema([]string{path})
+		if err != nil {
+			t.Fatalf("ParseSchema error: %v", err)
+		}
+		assertValues(t, findEnum(t, cat, "billing", "payment_status"),
+			"pending", "paid", "refunded")
+	})
+}
+
 func TestPostgresAlterTable(t *testing.T) {
 	path := writeTemp(t, `
 		CREATE TABLE profiles (
