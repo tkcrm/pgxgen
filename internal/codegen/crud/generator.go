@@ -46,8 +46,11 @@ func New(eng engine.Engine) *Generator {
 }
 
 // GenerateTable generates all CRUD SQL for a single table.
+// sqlTableName is the schema-qualified name used in SQL (e.g. "shop.orders"),
+// bareTableName is the plain name used for Go identifiers (e.g. "orders").
 func (g *Generator) GenerateTable(
-	tableName string,
+	sqlTableName string,
+	bareTableName string,
 	tableConfig config.TableConfig,
 	defaultCrud *config.CrudDefaultsConfig,
 	columns []string,
@@ -72,15 +75,15 @@ func (g *Generator) GenerateTable(
 		}
 
 		data, templateName, err := g.buildTemplateData(
-			tableName, methodName, methodCfg, tableConfig, defaultCrud, columns,
+			sqlTableName, bareTableName, methodName, methodCfg, tableConfig, defaultCrud, columns,
 		)
 		if err != nil {
-			return nil, fmt.Errorf("build template data for %s.%s: %w", tableName, methodName, err)
+			return nil, fmt.Errorf("build template data for %s.%s: %w", sqlTableName, methodName, err)
 		}
 
 		rendered, err := g.renderTemplate(templateName, data)
 		if err != nil {
-			return nil, fmt.Errorf("render template %s for %s.%s: %w", templateName, tableName, methodName, err)
+			return nil, fmt.Errorf("render template %s for %s.%s: %w", templateName, sqlTableName, methodName, err)
 		}
 
 		buf.Write(rendered)
@@ -96,21 +99,21 @@ func (g *Generator) GenerateTable(
 }
 
 func (g *Generator) buildTemplateData(
-	tableName, methodName string,
+	sqlTableName, bareTableName, methodName string,
 	methodCfg *config.MethodConfig,
 	tableConfig config.TableConfig,
 	defaultCrud *config.CrudDefaultsConfig,
 	allColumns []string,
 ) (*TemplateData, string, error) {
 	data := &TemplateData{
-		TableName:     tableName,
+		TableName:     sqlTableName,
 		PrimaryColumn: tableConfig.PrimaryColumn,
 	}
 
-	// Resolve method name
+	// Resolve method name using bare table name (no schema prefix in Go identifiers)
 	data.MethodName = methodCfg.Name
 	if data.MethodName == "" {
-		data.MethodName = g.defaultMethodName(methodName, tableName, defaultCrud)
+		data.MethodName = g.defaultMethodName(methodName, bareTableName, defaultCrud)
 	}
 
 	// Soft delete
@@ -400,10 +403,18 @@ func cloneWhere(w map[string]config.WhereParamConfig) map[string]config.WherePar
 }
 
 // GetTableColumns extracts column names from a catalog table.
+// tableName can be a bare name ("users") or schema-qualified ("shop.users").
+// When schema-qualified, it matches only the specific schema; when bare,
+// it searches all schemas (backward-compatible behavior).
 func GetTableColumns(cat *catalog.Catalog, tableName string) []string {
+	schemaName, bareName := splitSchemaTable(tableName)
+
 	for _, schema := range cat.Schemas {
+		if schemaName != "" && schema.Name != schemaName {
+			continue
+		}
 		for _, table := range schema.Tables {
-			if table.Name == tableName {
+			if table.Name == bareName {
 				columns := make([]string, len(table.Columns))
 				for i, col := range table.Columns {
 					columns[i] = col.Name
@@ -413,4 +424,13 @@ func GetTableColumns(cat *catalog.Catalog, tableName string) []string {
 		}
 	}
 	return nil
+}
+
+// splitSchemaTable splits "schema.table" into ("schema", "table").
+// For a bare "table" name it returns ("", "table").
+func splitSchemaTable(name string) (string, string) {
+	if idx := strings.LastIndex(name, "."); idx != -1 {
+		return name[:idx], name[idx+1:]
+	}
+	return "", name
 }

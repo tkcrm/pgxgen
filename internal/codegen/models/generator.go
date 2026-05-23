@@ -111,6 +111,7 @@ func GenerateFromV2Config(
 	mapOpts := typemap.Options{
 		SqlPackage:          sqlPackage,
 		EmitPointersForNull: emitPointers,
+		DefaultSchema:       cat.DefaultSchema,
 	}
 
 	var sqlcOverrides *config.SqlcOverridesConfig
@@ -174,11 +175,24 @@ func renderModelsRaw(
 	sqlcOverrides *config.SqlcOverridesConfig,
 	sqlcDefaults *config.SqlcDefaultsConfig,
 ) ([]byte, error) {
-	// Collect all enums, tables, and views across schemas
+	// Collect all enums, tables, and views across schemas.
+	// For non-default schemas, prefix names with schema to match sqlc's naming
+	// (e.g. shop.shops → "shop_shops" → Go type "ShopShop").
+	type enumEntry struct {
+		enum   *catalog.Enum
+		goName string // schema-prefixed name for Go type generation
+	}
+	var allEnumEntries []enumEntry
 	var allEnums []*catalog.Enum
 	var allTables []*catalog.Table
 	var allViews []*catalog.View
 	for _, s := range cat.Schemas {
+		for _, e := range s.Enums {
+			allEnumEntries = append(allEnumEntries, enumEntry{
+				enum:   e,
+				goName: sqlcGoName(e.Name, s.Name, cat.DefaultSchema),
+			})
+		}
 		allEnums = append(allEnums, s.Enums...)
 		allTables = append(allTables, s.Tables...)
 		allViews = append(allViews, s.Views...)
@@ -204,32 +218,40 @@ func renderModelsRaw(
 		for _, name := range cfg.SkipEnums {
 			skipEnums[name] = struct{}{}
 		}
+		allEnumEntries = filterSlice(allEnumEntries, func(e enumEntry) bool {
+			_, skip := skipEnums[e.enum.Name]
+			return !skip
+		})
 		allEnums = filterSlice(allEnums, func(e *catalog.Enum) bool {
 			_, skip := skipEnums[e.Name]
 			return !skip
 		})
 	}
 
-	sort.Slice(allEnums, func(i, j int) bool {
-		return allEnums[i].Name < allEnums[j].Name
+	sort.Slice(allEnumEntries, func(i, j int) bool {
+		return allEnumEntries[i].goName < allEnumEntries[j].goName
 	})
 	sort.Slice(allTables, func(i, j int) bool {
-		return inflection.Singular(allTables[i].Name) < inflection.Singular(allTables[j].Name)
+		return inflection.Singular(sqlcGoName(allTables[i].Name, allTables[i].Schema, cat.DefaultSchema)) <
+			inflection.Singular(sqlcGoName(allTables[j].Name, allTables[j].Schema, cat.DefaultSchema))
 	})
 	sort.Slice(allViews, func(i, j int) bool {
-		return inflection.Singular(allViews[i].Name) < inflection.Singular(allViews[j].Name)
+		return inflection.Singular(sqlcGoName(allViews[i].Name, allViews[i].Schema, cat.DefaultSchema)) <
+			inflection.Singular(sqlcGoName(allViews[j].Name, allViews[j].Schema, cat.DefaultSchema))
 	})
 
 	// First pass: render body to collect which types are used
 	var body bytes.Buffer
-	for _, enum := range allEnums {
-		renderEnum(&body, enum)
+	for _, entry := range allEnumEntries {
+		renderEnum(&body, entry.goName, entry.enum)
 	}
 	for _, table := range allTables {
-		renderStruct(&body, cfg, table.Name, table.Comment, table.Columns, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
+		goName := sqlcGoName(table.Name, table.Schema, cat.DefaultSchema)
+		renderStruct(&body, cfg, goName, table.Name, table.Comment, table.Columns, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
 	}
 	for _, view := range allViews {
-		renderStruct(&body, cfg, view.Name, view.Comment, view.Columns, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
+		goName := sqlcGoName(view.Name, view.Schema, cat.DefaultSchema)
+		renderStruct(&body, cfg, goName, view.Name, view.Comment, view.Columns, mapper, allEnums, mapOpts, sqlcOverrides, sqlcDefaults)
 	}
 
 	// Collect imports from the rendered body
@@ -323,8 +345,8 @@ func extractImportPath(v interface{}) string {
 	return ""
 }
 
-func renderEnum(buf *bytes.Buffer, enum *catalog.Enum) {
-	typeName := toCamelCase(enum.Name)
+func renderEnum(buf *bytes.Buffer, goName string, enum *catalog.Enum) {
+	typeName := toCamelCase(goName)
 
 	fmt.Fprintf(buf, "type %s string\n\n", typeName)
 	buf.WriteString("const (\n")
@@ -353,7 +375,8 @@ func renderEnum(buf *bytes.Buffer, enum *catalog.Enum) {
 func renderStruct(
 	buf *bytes.Buffer,
 	cfg *config.ModelsConfig,
-	name string,
+	goName string,
+	tableName string,
 	comment string,
 	columns []*catalog.Column,
 	mapper typemap.TypeMapper,
@@ -362,8 +385,9 @@ func renderStruct(
 	sqlcOverrides *config.SqlcOverridesConfig,
 	sqlcDefaults *config.SqlcDefaultsConfig,
 ) {
-	// Singularize table/view name: todos → Todo, notes → Note
-	structName := toCamelCase(inflection.Singular(name))
+	// Singularize and PascalCase the Go name (matches sqlc's naming convention).
+	// For non-default schemas, goName is "schema_table" (e.g. "shop_shops" → "ShopShop").
+	structName := toCamelCase(inflection.Singular(goName))
 
 	if comment != "" {
 		fmt.Fprintf(buf, "// %s %s\n", structName, comment)
@@ -373,8 +397,8 @@ func renderStruct(
 
 	for _, col := range columns {
 		fieldName := toCamelCase(col.Name)
-		fieldType := resolveType(cfg, name, col, mapper, enums, mapOpts, sqlcOverrides)
-		tags := buildTags(cfg, name, col, sqlcOverrides, sqlcDefaults)
+		fieldType := resolveType(cfg, tableName, col, mapper, enums, mapOpts, sqlcOverrides)
+		tags := buildTags(cfg, tableName, col, sqlcOverrides, sqlcDefaults)
 
 		tagStr := ""
 		if len(tags) > 0 {
@@ -549,6 +573,17 @@ func filterSlice[T any](s []T, keep func(T) bool) []T {
 		}
 	}
 	return result
+}
+
+// sqlcGoName returns the name that sqlc would use for a database object.
+// For objects in the default schema (e.g. "public"), it returns the bare name.
+// For objects in other schemas, it prepends the schema name with an underscore,
+// matching sqlc's convention (e.g. schema "shop", table "shops" → "shop_shops").
+func sqlcGoName(name, schema, defaultSchema string) string {
+	if schema == "" || schema == defaultSchema {
+		return name
+	}
+	return schema + "_" + name
 }
 
 // toCamelCase converts snake_case to CamelCase with Go acronym handling.

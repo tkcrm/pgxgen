@@ -146,6 +146,7 @@ func renderPg(t *testing.T, cfg *config.ModelsConfig, overrides *config.SqlcOver
 	mapOpts := typemap.Options{
 		SqlPackage:          sqlPkg,
 		EmitPointersForNull: cfg.EmitPointersForNull,
+		DefaultSchema:       cat.DefaultSchema,
 	}
 	code, err := renderModelsRaw(cfg, cat, mapper, mapOpts, overrides, defaults)
 	require.NoError(t, err)
@@ -311,6 +312,223 @@ func TestPg_ImportsContainOrb(t *testing.T) {
 	)
 
 	assert.Contains(t, output, `"github.com/paulmach/orb"`)
+}
+
+// --- sqlcGoName ---
+
+func TestSqlcGoName(t *testing.T) {
+	tests := []struct {
+		name, schema, defaultSchema, want string
+	}{
+		{"users", "public", "public", "users"},
+		{"users", "", "public", "users"},
+		{"orders", "shop", "public", "shop_orders"},
+		{"items", "main", "main", "items"},
+		{"items", "other", "main", "other_items"},
+	}
+	for _, tt := range tests {
+		got := sqlcGoName(tt.name, tt.schema, tt.defaultSchema)
+		if got != tt.want {
+			t.Errorf("sqlcGoName(%q, %q, %q) = %q, want %q", tt.name, tt.schema, tt.defaultSchema, got, tt.want)
+		}
+	}
+}
+
+// --- Multi-schema model generation ---
+
+func TestPg_MultiSchemaEnumAndStruct(t *testing.T) {
+	cat := &catalog.Catalog{
+		DefaultSchema: "public",
+		Schemas: []*catalog.Schema{
+			{
+				Name: "public",
+				Enums: []*catalog.Enum{
+					{Name: "user_status", Schema: "public", Values: []string{"active", "inactive"}},
+				},
+				Tables: []*catalog.Table{
+					{
+						Name:   "users",
+						Schema: "public",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "uuid", NotNull: true},
+							{Name: "status", Type: "user_status", NotNull: true},
+						},
+					},
+				},
+			},
+			{
+				Name: "shop",
+				Enums: []*catalog.Enum{
+					{Name: "order_status", Schema: "shop", Values: []string{"pending", "shipped"}},
+				},
+				Tables: []*catalog.Table{
+					{
+						Name:   "orders",
+						Schema: "shop",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "uuid", NotNull: true},
+							{Name: "status", Type: "shop.order_status", NotNull: true},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mapper, err := typemap.NewTypeMapper("postgresql")
+	require.NoError(t, err)
+	mapOpts := typemap.Options{
+		SqlPackage:    "pgx/v5",
+		DefaultSchema: cat.DefaultSchema,
+	}
+	code, err := renderModelsRaw(
+		&config.ModelsConfig{PackageName: "models"},
+		cat, mapper, mapOpts, nil, nil,
+	)
+	require.NoError(t, err)
+	output := string(code)
+
+	// Public schema enum — no prefix
+	assert.Contains(t, output, "type UserStatus string")
+	assert.Contains(t, output, `UserStatusActive UserStatus = "active"`)
+
+	// Non-default schema enum — prefixed
+	assert.Contains(t, output, "type ShopOrderStatus string")
+	assert.Contains(t, output, `ShopOrderStatusPending ShopOrderStatus = "pending"`)
+
+	// Public schema struct — no prefix
+	assert.Contains(t, output, "type User struct {")
+	assert.Contains(t, output, "\tStatus UserStatus")
+
+	// Non-default schema struct — prefixed
+	assert.Contains(t, output, "type ShopOrder struct {")
+	assert.Contains(t, output, "\tStatus ShopOrderStatus")
+}
+
+// --- Cross-schema enum reference ---
+
+func TestPg_CrossSchemaEnumReference(t *testing.T) {
+	// A table in "public" schema references an enum defined in "shop" schema
+	cat := &catalog.Catalog{
+		DefaultSchema: "public",
+		Schemas: []*catalog.Schema{
+			{
+				Name: "public",
+				Tables: []*catalog.Table{
+					{
+						Name:   "audit_logs",
+						Schema: "public",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "uuid", NotNull: true},
+							{Name: "order_status", Type: "shop.order_status", NotNull: true},
+							{Name: "nullable_status", Type: "shop.order_status", NotNull: false},
+						},
+					},
+				},
+			},
+			{
+				Name: "shop",
+				Enums: []*catalog.Enum{
+					{Name: "order_status", Schema: "shop", Values: []string{"pending", "shipped", "delivered"}},
+				},
+			},
+		},
+	}
+
+	mapper, err := typemap.NewTypeMapper("postgresql")
+	require.NoError(t, err)
+	mapOpts := typemap.Options{
+		SqlPackage:    "pgx/v5",
+		DefaultSchema: cat.DefaultSchema,
+	}
+	code, err := renderModelsRaw(
+		&config.ModelsConfig{PackageName: "models"},
+		cat, mapper, mapOpts, nil, nil,
+	)
+	require.NoError(t, err)
+	output := string(code)
+
+	// Enum type should be schema-prefixed
+	assert.Contains(t, output, "type ShopOrderStatus string")
+
+	// NOT NULL column referencing cross-schema enum
+	assert.Contains(t, output, "\tOrderStatus ShopOrderStatus")
+
+	// Nullable column referencing cross-schema enum
+	assert.Contains(t, output, "\tNullableStatus NullShopOrderStatus")
+}
+
+// --- Same-named enums in different schemas ---
+
+func TestPg_SameNamedEnumsInDifferentSchemas(t *testing.T) {
+	cat := &catalog.Catalog{
+		DefaultSchema: "public",
+		Schemas: []*catalog.Schema{
+			{
+				Name: "public",
+				Enums: []*catalog.Enum{
+					{Name: "status", Schema: "public", Values: []string{"active", "inactive"}},
+				},
+				Tables: []*catalog.Table{
+					{
+						Name:   "users",
+						Schema: "public",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "uuid", NotNull: true},
+							{Name: "status", Type: "status", NotNull: true},
+						},
+					},
+				},
+			},
+			{
+				Name: "shop",
+				Enums: []*catalog.Enum{
+					{Name: "status", Schema: "shop", Values: []string{"pending", "shipped"}},
+				},
+				Tables: []*catalog.Table{
+					{
+						Name:   "orders",
+						Schema: "shop",
+						Columns: []*catalog.Column{
+							{Name: "id", Type: "uuid", NotNull: true},
+							{Name: "status", Type: "shop.status", NotNull: true},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	mapper, err := typemap.NewTypeMapper("postgresql")
+	require.NoError(t, err)
+	mapOpts := typemap.Options{
+		SqlPackage:    "pgx/v5",
+		DefaultSchema: cat.DefaultSchema,
+	}
+	code, err := renderModelsRaw(
+		&config.ModelsConfig{PackageName: "models"},
+		cat, mapper, mapOpts, nil, nil,
+	)
+	require.NoError(t, err)
+	output := string(code)
+
+	// Public schema enum — no prefix
+	assert.Contains(t, output, "type Status string")
+	assert.Contains(t, output, `StatusActive Status = "active"`)
+	assert.Contains(t, output, `StatusInactive Status = "inactive"`)
+
+	// Shop schema enum — prefixed to avoid collision
+	assert.Contains(t, output, "type ShopStatus string")
+	assert.Contains(t, output, `ShopStatusPending ShopStatus = "pending"`)
+	assert.Contains(t, output, `ShopStatusShipped ShopStatus = "shipped"`)
+
+	// Public table uses bare enum type
+	assert.Contains(t, output, "type User struct {")
+	assert.Contains(t, output, "\tStatus Status")
+
+	// Shop table uses prefixed enum type
+	assert.Contains(t, output, "type ShopOrder struct {")
+	assert.Contains(t, output, "\tStatus ShopStatus")
 }
 
 // --- View model generation for PostgreSQL ---

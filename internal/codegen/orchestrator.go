@@ -199,6 +199,7 @@ func (o *Orchestrator) generateCrud(schema *config.SchemaConfig, cat *catalog.Ca
 
 	for _, tableName := range tableNames {
 		tableConfig := schema.Tables[tableName]
+		parts := config.ParseTableKey(tableName)
 
 		columns := crud.GetTableColumns(cat, tableName)
 		if columns == nil {
@@ -210,7 +211,9 @@ func (o *Orchestrator) generateCrud(schema *config.SchemaConfig, cat *catalog.Ca
 			defaultCrud = schema.Defaults.Crud
 		}
 
-		data, err := gen.GenerateTable(tableName, tableConfig, defaultCrud, columns)
+		// Pass schema-qualified name for SQL generation, Go name for identifiers
+		goName := parts.GoName()
+		data, err := gen.GenerateTable(parts.SQLTableName(), goName, tableConfig, defaultCrud, columns)
 		if err != nil {
 			return nil, fmt.Errorf("generate table %s: %w", tableName, err)
 		}
@@ -219,7 +222,8 @@ func (o *Orchestrator) generateCrud(schema *config.SchemaConfig, cat *catalog.Ca
 			continue
 		}
 
-		queriesDir := schema.ResolveQueriesDir(tableName)
+		// Use Go name for directory and file paths
+		queriesDir := schema.ResolveQueriesDir(goName)
 		if tableConfig.QueriesDir != "" {
 			queriesDir = tableConfig.QueriesDir
 		}
@@ -227,7 +231,7 @@ func (o *Orchestrator) generateCrud(schema *config.SchemaConfig, cat *catalog.Ca
 			return nil, fmt.Errorf("no queries_dir resolved for table %s", tableName)
 		}
 
-		outputPath := filepath.Join(o.resolvePath(queriesDir), tableName+"_gen.sql")
+		outputPath := filepath.Join(o.resolvePath(queriesDir), goName+"_gen.sql")
 		results = append(results, PrepareResult(outputPath, data))
 	}
 

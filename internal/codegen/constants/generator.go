@@ -6,6 +6,7 @@ import (
 	"go/format"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/gobeam/stringy"
 	"github.com/tkcrm/pgxgen/internal/config"
@@ -55,6 +56,7 @@ func generateConstants(
 
 	for _, tableName := range tableNames {
 		tableConfig := schema.Tables[tableName]
+		parts := config.ParseTableKey(tableName)
 
 		includeColumns := defaultIncludeColumns
 		hasConstants := tableConfig.Constants != nil
@@ -65,7 +67,8 @@ func generateConstants(
 			continue
 		}
 
-		outputDir := schema.ResolveOutputDir(tableName)
+		// Use Go name for directory resolution
+		outputDir := schema.ResolveOutputDir(parts.GoName())
 		if tableConfig.OutputDir != "" {
 			outputDir = tableConfig.OutputDir
 		}
@@ -103,10 +106,16 @@ func generateConstants(
 		}
 
 		for _, entry := range entries {
-			tablePreffix := stringy.New(entry.tableName).CamelCase().UcFirst()
+			parts := config.ParseTableKey(entry.tableName)
+			goName := parts.GoName()
+			// Use Go name for identifier prefix (schema-prefixed when applicable)
+			tablePreffix := stringy.New(goName).CamelCase().UcFirst()
+			// Use schema-qualified name for constant value (SQL usage)
+			sqlName := parts.SQLTableName()
 			params.Tables = append(params.Tables, ConstantsTableNamesParamsItem{
-				NamePreffix: tablePreffix,
-				Name:        entry.tableName,
+				NamePreffix:   tablePreffix,
+				Name:          sqlName,
+				BareTableName: goName,
 			})
 
 			if entry.includeColumns {
@@ -114,7 +123,7 @@ func generateConstants(
 				for _, col := range columns {
 					colPreffix := tablePreffix + stringy.New(col).CamelCase().UcFirst()
 					params.ColumnNames = append(params.ColumnNames, ConstantsColumnNamesParamsItem{
-						TableName:   entry.tableName,
+						TableName:   sqlName,
 						NamePreffix: colPreffix,
 						Name:        col,
 					})
@@ -144,9 +153,14 @@ func generateConstants(
 }
 
 func getTableColumns(cat *catalog.Catalog, tableName string) []string {
+	schemaName, bareName := splitSchemaTable(tableName)
+
 	for _, s := range cat.Schemas {
+		if schemaName != "" && s.Name != schemaName {
+			continue
+		}
 		for _, t := range s.Tables {
-			if t.Name == tableName {
+			if t.Name == bareName {
 				cols := make([]string, len(t.Columns))
 				for i, c := range t.Columns {
 					cols[i] = c.Name
@@ -156,4 +170,13 @@ func getTableColumns(cat *catalog.Catalog, tableName string) []string {
 		}
 	}
 	return nil
+}
+
+// splitSchemaTable splits "schema.table" into ("schema", "table").
+// For a bare "table" name it returns ("", "table").
+func splitSchemaTable(name string) (string, string) {
+	if idx := strings.LastIndex(name, "."); idx != -1 {
+		return name[:idx], name[idx+1:]
+	}
+	return "", name
 }

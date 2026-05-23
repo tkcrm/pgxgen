@@ -93,5 +93,6 @@ type CheckConstraint struct {
 // Enum represents a database enum type.
 type Enum struct {
 	Name   string
+	Schema string
 	Values []string
 }

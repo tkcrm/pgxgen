@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/tkcrm/pgxgen/internal/config"
 	"github.com/tkcrm/pgxgen/internal/engine"
+	"github.com/tkcrm/pgxgen/internal/sqlparser/catalog"
 	"gopkg.in/yaml.v3"
 )
 
@@ -23,7 +24,7 @@ func newTestGenerator(t *testing.T, engineName string) *Generator {
 func generateTable(t *testing.T, engineName, tableName string, tableConfig config.TableConfig, defaultCrud *config.CrudDefaultsConfig, columns []string) string {
 	t.Helper()
 	gen := newTestGenerator(t, engineName)
-	result, err := gen.GenerateTable(tableName, tableConfig, defaultCrud, columns)
+	result, err := gen.GenerateTable(tableName, tableName, tableConfig, defaultCrud, columns)
 	require.NoError(t, err)
 	return string(result)
 }
@@ -104,7 +105,7 @@ func TestGenerateTable_SingleTrailingNewline(t *testing.T) {
 			}
 
 			gen := newTestGenerator(t, "postgresql")
-			data, err := gen.GenerateTable("users", tableConfig, nil, testColumns)
+			data, err := gen.GenerateTable("users", "users", tableConfig, nil, testColumns)
 			require.NoError(t, err)
 			require.NotEmpty(t, data)
 
@@ -124,7 +125,7 @@ func TestBatchCreate_UnsupportedSQLite(t *testing.T) {
 	}
 
 	gen := newTestGenerator(t, "sqlite")
-	_, err := gen.GenerateTable("users", tableConfig, nil, testColumns)
+	_, err := gen.GenerateTable("users", "users", tableConfig, nil, testColumns)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "batch_create is not supported for SQLite")
 }
@@ -188,6 +189,68 @@ func TestBatchCreate_CustomName(t *testing.T) {
 	result := generateTable(t, "postgresql", "users", tableConfig, nil, testColumns)
 
 	assert.Contains(t, result, "-- name: InsertBulkUsers :copyfrom")
+}
+
+func TestSchemaQualifiedTableName(t *testing.T) {
+	tableConfig := config.TableConfig{
+		PrimaryColumn: "id",
+		Crud: &config.TableCrudConfig{
+			Methods: map[string]*config.MethodConfig{
+				"create": {Returning: "*"},
+				"get":    {},
+			},
+		},
+	}
+
+	gen := newTestGenerator(t, "postgresql")
+	// sqlTableName is schema-qualified, goName is schema-prefixed for Go identifiers
+	result, err := gen.GenerateTable("shop.orders", "shop_orders", tableConfig, nil, testColumns)
+	require.NoError(t, err)
+	sql := string(result)
+
+	// SQL should use schema-qualified table name
+	assert.Contains(t, sql, "INSERT INTO shop.orders")
+	assert.Contains(t, sql, "SELECT * FROM shop.orders")
+
+	// Go method names should use schema-prefixed name
+	assert.Contains(t, sql, "-- name: CreateShopOrder :one")
+	assert.Contains(t, sql, "-- name: GetShopOrder :one")
+}
+
+func TestSchemaQualifiedGetTableColumns(t *testing.T) {
+	cat := &catalog.Catalog{
+		DefaultSchema: "public",
+		Schemas: []*catalog.Schema{
+			{
+				Name: "public",
+				Tables: []*catalog.Table{
+					{Name: "users", Schema: "public", Columns: []*catalog.Column{
+						{Name: "id"}, {Name: "name"},
+					}},
+				},
+			},
+			{
+				Name: "shop",
+				Tables: []*catalog.Table{
+					{Name: "orders", Schema: "shop", Columns: []*catalog.Column{
+						{Name: "id"}, {Name: "total"}, {Name: "user_id"},
+					}},
+				},
+			},
+		},
+	}
+
+	// Bare name — searches all schemas, finds first match
+	cols := GetTableColumns(cat, "users")
+	assert.Equal(t, []string{"id", "name"}, cols)
+
+	// Schema-qualified — matches only the specific schema
+	cols = GetTableColumns(cat, "shop.orders")
+	assert.Equal(t, []string{"id", "total", "user_id"}, cols)
+
+	// Schema-qualified — wrong schema returns nil
+	cols = GetTableColumns(cat, "public.orders")
+	assert.Nil(t, cols)
 }
 
 func TestBatchCreate_ExcludeTableName(t *testing.T) {
