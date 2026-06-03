@@ -379,15 +379,55 @@ func (m *postgresMapper) GoType(col *catalog.Column, enums []*catalog.Enum, opts
 		return "interface{}"
 
 	default:
-		// Check for enum types
-		for _, enum := range enums {
-			if strings.EqualFold(enum.Name, columnType) {
-				if notNull {
-					return structName(enum.Name)
+		// Check for enum types.
+		// Column type may be schema-qualified (e.g. "shop.order_status").
+		// When schema-qualified, prefer an exact schema+name match to avoid
+		// collisions between same-named enums in different schemas.
+		defaultSchema := opts.DefaultSchema
+		if defaultSchema == "" {
+			defaultSchema = "public"
+		}
+
+		colSchema := ""
+		bareColumnType := columnType
+		if idx := strings.LastIndex(columnType, "."); idx != -1 {
+			colSchema = columnType[:idx]
+			bareColumnType = columnType[idx+1:]
+		}
+
+		// First pass: if column type is schema-qualified, find exact schema match
+		if colSchema != "" {
+			for _, enum := range enums {
+				if strings.EqualFold(enum.Name, bareColumnType) && strings.EqualFold(enum.Schema, colSchema) {
+					goName := enumGoName(enum, defaultSchema)
+					if notNull {
+						return structName(goName)
+					}
+					return "Null" + structName(goName)
 				}
-				return "Null" + structName(enum.Name)
+			}
+		}
+
+		// Second pass: match by bare name (backward-compatible for non-qualified types)
+		for _, enum := range enums {
+			if strings.EqualFold(enum.Name, columnType) || strings.EqualFold(enum.Name, bareColumnType) {
+				goName := enumGoName(enum, defaultSchema)
+				if notNull {
+					return structName(goName)
+				}
+				return "Null" + structName(goName)
 			}
 		}
 		return "interface{}"
 	}
+}
+
+// enumGoName returns the name to use for Go type generation.
+// For enums in non-default schemas, it prepends the schema name to match
+// sqlc's convention (e.g. schema "subscription", enum "order_status" → "subscription_order_status").
+func enumGoName(enum *catalog.Enum, defaultSchema string) string {
+	if enum.Schema != "" && enum.Schema != defaultSchema {
+		return enum.Schema + "_" + enum.Name
+	}
+	return enum.Name
 }

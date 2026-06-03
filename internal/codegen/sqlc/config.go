@@ -116,13 +116,16 @@ func BuildSqlcConfig(schema *config.SchemaConfig) *sqlcConfig {
 
 	for _, tableName := range tableNames {
 		tableConfig := schema.Tables[tableName]
+		parts := config.ParseTableKey(tableName)
 
-		queriesDir := schema.ResolveQueriesDir(tableName)
+		// Use Go name for directory resolution (schema-prefixed when applicable)
+		goName := parts.GoName()
+		queriesDir := schema.ResolveQueriesDir(goName)
 		if tableConfig.QueriesDir != "" {
 			queriesDir = tableConfig.QueriesDir
 		}
 
-		outputDir := schema.ResolveOutputDir(tableName)
+		outputDir := schema.ResolveOutputDir(goName)
 		if tableConfig.OutputDir != "" {
 			outputDir = tableConfig.OutputDir
 		}

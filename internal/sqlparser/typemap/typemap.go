@@ -11,6 +11,7 @@ import (
 type Options struct {
 	SqlPackage          string // "pgx/v5", "pgx/v4", "database/sql"
 	EmitPointersForNull bool
+	DefaultSchema       string // default database schema (e.g. "public" for PostgreSQL)
 }
 
 // TypeMapper maps SQL column types to Go types.

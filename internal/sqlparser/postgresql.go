@@ -275,7 +275,8 @@ func (p *postgresParser) handleCreateEnum(cat *catalog.Catalog, n *pg.CreateEnum
 	schema := p.getOrCreateSchema(cat, schemaName)
 
 	enum := &catalog.Enum{
-		Name: enumName,
+		Name:   enumName,
+		Schema: schemaName,
 	}
 	for _, val := range n.Vals {
 		if s, ok := val.Node.(*pg.Node_String_); ok {

@@ -259,6 +259,53 @@ func TestPostgresEnumType(t *testing.T) {
 	}
 }
 
+func TestPostgresEnumType_NonDefaultSchema(t *testing.T) {
+	m := &postgresMapper{}
+	enums := []*catalog.Enum{
+		{Name: "order_status", Schema: "shop", Values: []string{"pending", "shipped"}},
+	}
+	opts := Options{DefaultSchema: "public"}
+
+	// NOT NULL enum in non-default schema → prefixed Go type
+	got := m.GoType(col("order_status", true), enums, opts)
+	if got != "ShopOrderStatus" {
+		t.Errorf("non-default schema enum NOT NULL = %q, want ShopOrderStatus", got)
+	}
+
+	// NULL enum in non-default schema → Null-prefixed
+	got = m.GoType(col("order_status", false), enums, opts)
+	if got != "NullShopOrderStatus" {
+		t.Errorf("non-default schema enum NULL = %q, want NullShopOrderStatus", got)
+	}
+}
+
+func TestPostgresEnumType_DefaultSchemaNotPrefixed(t *testing.T) {
+	m := &postgresMapper{}
+	enums := []*catalog.Enum{
+		{Name: "user_status", Schema: "public", Values: []string{"active", "inactive"}},
+	}
+	opts := Options{DefaultSchema: "public"}
+
+	got := m.GoType(col("user_status", true), enums, opts)
+	if got != "UserStatus" {
+		t.Errorf("default schema enum = %q, want UserStatus (no prefix)", got)
+	}
+}
+
+func TestPostgresEnumType_SchemaQualifiedColumnType(t *testing.T) {
+	m := &postgresMapper{}
+	enums := []*catalog.Enum{
+		{Name: "order_status", Schema: "shop", Values: []string{"pending", "shipped"}},
+	}
+	opts := Options{DefaultSchema: "public"}
+
+	// Column type is schema-qualified (e.g. "shop.order_status")
+	got := m.GoType(col("shop.order_status", true), enums, opts)
+	if got != "ShopOrderStatus" {
+		t.Errorf("schema-qualified column type = %q, want ShopOrderStatus", got)
+	}
+}
+
 func TestPostgresNullablePointers(t *testing.T) {
 	m := &postgresMapper{}
 	opts := Options{SqlPackage: "pgx/v5", EmitPointersForNull: true}

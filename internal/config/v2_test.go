@@ -82,6 +82,38 @@ func TestResolveOutputDir(t *testing.T) {
 	}
 }
 
+func TestParseTableKey(t *testing.T) {
+	tests := []struct {
+		key        string
+		wantSchema string
+		wantTable  string
+		wantSQL    string
+		wantGoName string
+	}{
+		{key: "users", wantSchema: "", wantTable: "users", wantSQL: "users", wantGoName: "users"},
+		{key: "shop.orders", wantSchema: "shop", wantTable: "orders", wantSQL: "shop.orders", wantGoName: "shop_orders"},
+		{key: "my_schema.my_table", wantSchema: "my_schema", wantTable: "my_table", wantSQL: "my_schema.my_table", wantGoName: "my_schema_my_table"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.key, func(t *testing.T) {
+			parts := ParseTableKey(tt.key)
+			if parts.Schema != tt.wantSchema {
+				t.Errorf("ParseTableKey(%q).Schema = %q, want %q", tt.key, parts.Schema, tt.wantSchema)
+			}
+			if parts.Table != tt.wantTable {
+				t.Errorf("ParseTableKey(%q).Table = %q, want %q", tt.key, parts.Table, tt.wantTable)
+			}
+			if parts.SQLTableName() != tt.wantSQL {
+				t.Errorf("ParseTableKey(%q).SQLTableName() = %q, want %q", tt.key, parts.SQLTableName(), tt.wantSQL)
+			}
+			if parts.GoName() != tt.wantGoName {
+				t.Errorf("ParseTableKey(%q).GoName() = %q, want %q", tt.key, parts.GoName(), tt.wantGoName)
+			}
+		})
+	}
+}
+
 func TestResolveQueriesDir(t *testing.T) {
 	tests := []struct {
 		name     string

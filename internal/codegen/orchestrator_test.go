@@ -107,6 +107,161 @@ func TestGenerate_CrudWrittenBeforeSqlc(t *testing.T) {
 	assert.NotEmpty(t, goFiles, "sqlc must have generated at least one .go file in %s", sqlcOutDir)
 }
 
+// TestGenerate_SchemaQualifiedTableNames verifies that when table keys
+// contain a schema prefix (e.g. "myschema.users"), CRUD SQL uses the
+// schema-qualified name in SQL statements and schema-prefixed Go name for paths.
+func TestGenerate_SchemaQualifiedTableNames(t *testing.T) {
+	tmp := t.TempDir()
+	migrationsDir := filepath.Join(tmp, "sql", "migrations")
+	require.NoError(t, os.MkdirAll(migrationsDir, 0o755))
+
+	schemaSQL := `CREATE SCHEMA myschema;
+CREATE TABLE myschema.users (
+  id TEXT PRIMARY KEY,
+  email TEXT NOT NULL,
+  name TEXT NOT NULL
+);`
+	require.NoError(t, os.WriteFile(filepath.Join(migrationsDir, "001_init.sql"), []byte(schemaSQL), 0o644))
+
+	configPath := filepath.Join(tmp, "pgxgen.yaml")
+	cfg := &config.V2Config{
+		Version: "2",
+		Schemas: []config.SchemaConfig{
+			{
+				Name:      "main",
+				Engine:    "postgresql",
+				SchemaDir: "sql/migrations",
+				Defaults: &config.DefaultsConfig{
+					QueriesDirPrefix: "sql/queries",
+					OutputDirPrefix:  "internal/store/repos",
+				},
+				Tables: map[string]config.TableConfig{
+					"myschema.users": {
+						PrimaryColumn: "id",
+						Crud: &config.TableCrudConfig{
+							Methods: map[string]*config.MethodConfig{
+								"get":    {},
+								"create": {Returning: "*"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	orch := NewOrchestrator(logger.New(), cfg, configPath)
+	_, err := orch.Generate(context.Background(), GenerateOpts{Targets: []string{"crud"}})
+	require.NoError(t, err)
+
+	// File should use schema-prefixed Go name for path
+	sqlPath := filepath.Join(tmp, "sql", "queries", "myschema_users", "myschema_users_gen.sql")
+	assert.FileExists(t, sqlPath, "CRUD SQL file should use schema-prefixed Go name for path")
+
+	// Schema-qualified dot path should NOT exist
+	assert.NoFileExists(t, filepath.Join(tmp, "sql", "queries", "myschema.users", "myschema.users_gen.sql"))
+	// Bare name path should NOT exist either (schema prefix required)
+	assert.NoFileExists(t, filepath.Join(tmp, "sql", "queries", "users", "users_gen.sql"))
+
+	// SQL content should use schema-qualified name
+	data, err := os.ReadFile(sqlPath)
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "myschema.users", "SQL should contain schema-qualified table name")
+	assert.Contains(t, content, "INSERT INTO myschema.users", "INSERT should use schema-qualified name")
+	assert.Contains(t, content, "SELECT * FROM myschema.users", "SELECT should use schema-qualified name")
+
+	// Method names should use schema-prefixed Go name
+	assert.Contains(t, content, "CreateMyschemaUser", "method name should use schema-prefixed name")
+	assert.Contains(t, content, "GetMyschemaUser", "method name should use schema-prefixed name")
+}
+
+// TestGenerate_SameNameTablesInDifferentSchemas verifies that two tables
+// with the same bare name in different schemas produce distinct output files,
+// method names, and SQL with correct schema qualification.
+func TestGenerate_SameNameTablesInDifferentSchemas(t *testing.T) {
+	tmp := t.TempDir()
+	migrationsDir := filepath.Join(tmp, "sql", "migrations")
+	require.NoError(t, os.MkdirAll(migrationsDir, 0o755))
+
+	schemaSQL := `CREATE SCHEMA shop;
+CREATE TABLE orders (
+  id TEXT PRIMARY KEY,
+  total TEXT NOT NULL
+);
+CREATE TABLE shop.orders (
+  id TEXT PRIMARY KEY,
+  amount TEXT NOT NULL
+);`
+	require.NoError(t, os.WriteFile(filepath.Join(migrationsDir, "001_init.sql"), []byte(schemaSQL), 0o644))
+
+	configPath := filepath.Join(tmp, "pgxgen.yaml")
+	cfg := &config.V2Config{
+		Version: "2",
+		Schemas: []config.SchemaConfig{
+			{
+				Name:      "main",
+				Engine:    "postgresql",
+				SchemaDir: "sql/migrations",
+				Defaults: &config.DefaultsConfig{
+					QueriesDirPrefix: "sql/queries",
+					OutputDirPrefix:  "internal/store/repos",
+				},
+				Tables: map[string]config.TableConfig{
+					"orders": {
+						PrimaryColumn: "id",
+						Crud: &config.TableCrudConfig{
+							Methods: map[string]*config.MethodConfig{
+								"get":    {},
+								"create": {Returning: "*"},
+							},
+						},
+					},
+					"shop.orders": {
+						PrimaryColumn: "id",
+						Crud: &config.TableCrudConfig{
+							Methods: map[string]*config.MethodConfig{
+								"get":    {},
+								"create": {Returning: "*"},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	orch := NewOrchestrator(logger.New(), cfg, configPath)
+	_, err := orch.Generate(context.Background(), GenerateOpts{Targets: []string{"crud"}})
+	require.NoError(t, err)
+
+	// Public schema table — bare name paths
+	publicPath := filepath.Join(tmp, "sql", "queries", "orders", "orders_gen.sql")
+	assert.FileExists(t, publicPath)
+
+	// Shop schema table — schema-prefixed paths
+	shopPath := filepath.Join(tmp, "sql", "queries", "shop_orders", "shop_orders_gen.sql")
+	assert.FileExists(t, shopPath)
+
+	// Verify public schema SQL
+	publicData, err := os.ReadFile(publicPath)
+	require.NoError(t, err)
+	publicSQL := string(publicData)
+	assert.Contains(t, publicSQL, "SELECT * FROM orders")
+	assert.Contains(t, publicSQL, "INSERT INTO orders")
+	assert.Contains(t, publicSQL, "-- name: CreateOrder :one")
+	assert.Contains(t, publicSQL, "-- name: GetOrder :one")
+
+	// Verify shop schema SQL
+	shopData, err := os.ReadFile(shopPath)
+	require.NoError(t, err)
+	shopSQL := string(shopData)
+	assert.Contains(t, shopSQL, "SELECT * FROM shop.orders")
+	assert.Contains(t, shopSQL, "INSERT INTO shop.orders")
+	assert.Contains(t, shopSQL, "-- name: CreateShopOrder :one")
+	assert.Contains(t, shopSQL, "-- name: GetShopOrder :one")
+}
+
 // TestGenerate_DryRunSkipsWritesAndSqlc verifies that dry-run touches
 // nothing on disk and does not invoke sqlc (which has no preview mode).
 func TestGenerate_DryRunSkipsWritesAndSqlc(t *testing.T) {

@@ -10,8 +10,9 @@ import (
 )
 
 type ConstantsTableNamesParamsItem struct {
-	NamePreffix string
-	Name        string
+	NamePreffix   string
+	Name          string
+	BareTableName string
 }
 
 type ConstantsColumnNamesParamsItem struct {
@@ -94,7 +95,7 @@ func (s ColumnNames) Strings() []string {
 	content.WriteString(")\n\n")
 
 	for _, tableName := range p.Tables {
-		fmt.Fprintf(&content, "func %sColumnNames() ColumnNames {\n", utils.ToPascalCase(tableName.Name))
+		fmt.Fprintf(&content, "func %sColumnNames() ColumnNames {\n", utils.ToPascalCase(tableName.BareTableName))
 		content.WriteString("return ColumnNames{\n")
 		for _, item := range p.GetColumnsForTable(tableName.Name) {
 			fmt.Fprintf(&content, "ColumnName%s,\n", item.NamePreffix)

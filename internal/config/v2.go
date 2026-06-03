@@ -1,5 +1,7 @@
 package config
 
+import "strings"
+
 // V2Config is the root configuration for pgxgen v2.
 type V2Config struct {
 	Version   string           `yaml:"version" validate:"required,eq=2"`
@@ -246,4 +248,44 @@ func (s *SchemaConfig) ResolveOutputDir(tableName string) string {
 // IsPerTableMode returns true if per-table repos pattern is used.
 func (s *SchemaConfig) IsPerTableMode() bool {
 	return s.Defaults != nil && s.Defaults.QueriesDirPrefix != ""
+}
+
+// TableKeyParts holds the parsed components of a table key from pgxgen.yaml.
+// A key like "shop.orders" is split into Schema="shop", Table="orders".
+// A key like "orders" is split into Schema="", Table="orders".
+type TableKeyParts struct {
+	Schema string // database schema name, empty for default/public
+	Table  string // bare table name without schema prefix
+}
+
+// SQLTableName returns the table name as it should appear in SQL statements.
+// If a schema is specified, it returns "schema.table"; otherwise just "table".
+func (p TableKeyParts) SQLTableName() string {
+	if p.Schema != "" {
+		return p.Schema + "." + p.Table
+	}
+	return p.Table
+}
+
+// GoName returns the name used for Go identifiers, file paths, and directories.
+// For schema-qualified keys, it prepends the schema name with an underscore
+// (e.g. "shop_orders") to avoid collisions between same-named tables in
+// different schemas. For plain table keys, it returns the bare table name.
+func (p TableKeyParts) GoName() string {
+	if p.Schema != "" {
+		return p.Schema + "_" + p.Table
+	}
+	return p.Table
+}
+
+// ParseTableKey splits a pgxgen.yaml table map key into schema and table parts.
+// Supports "schema.table" (dot-separated) and plain "table" formats.
+func ParseTableKey(key string) TableKeyParts {
+	if idx := strings.LastIndex(key, "."); idx != -1 {
+		return TableKeyParts{
+			Schema: key[:idx],
+			Table:  key[idx+1:],
+		}
+	}
+	return TableKeyParts{Table: key}
 }

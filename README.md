@@ -248,6 +248,47 @@ tables:
         find: {} # → auto adds WHERE deleted_at IS NULL
 ```
 
+### Schema-qualified table names
+
+For tables in non-default schemas, use dot notation in the table key. The migration files must include `CREATE SCHEMA` before creating objects in that schema:
+
+```sql
+-- sql/migrations/001_init.sql
+CREATE SCHEMA shop;
+
+CREATE TABLE users ( id UUID PRIMARY KEY, email TEXT NOT NULL );
+CREATE TABLE shop.orders ( id UUID PRIMARY KEY, total NUMERIC NOT NULL );
+
+CREATE TYPE shop.order_status AS ENUM ('pending', 'shipped', 'delivered');
+```
+
+```yaml
+tables:
+  users:                    # public schema (default)
+    primary_column: id
+    crud:
+      methods:
+        get: {}
+        create: { returning: "*" }
+
+  shop.orders:              # "shop" schema
+    primary_column: id
+    crud:
+      methods:
+        get: {}
+        create: { returning: "*" }
+```
+
+When a schema prefix is specified:
+
+- **SQL** uses the schema-qualified name: `INSERT INTO shop.orders`, `SELECT * FROM shop.orders`
+- **Go identifiers** are prefixed with the schema name: `CreateShopOrder`, `GetShopOrder`
+- **File paths** are prefixed with the schema name: `sql/queries/shop_orders/shop_orders_gen.sql`
+- **Go types** (models, enums) are prefixed to match sqlc's naming convention: `shop.orders` → `ShopOrder`, `shop.order_status` → `ShopOrderStatus`
+- **Cross-schema references** are resolved correctly — a column of type `shop.order_status` in any schema resolves to `ShopOrderStatus`
+
+This ensures no collisions when the same table name exists in different schemas. Tables in the default schema (`public` for PostgreSQL, `main` for SQLite) remain unprefixed.
+
 ## Commands
 
 | Command                     | Description                                            |
