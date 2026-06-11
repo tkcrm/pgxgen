@@ -22,7 +22,7 @@ require (
 	github.com/go-playground/validator/v10 v10.30.3
 	github.com/pganalyze/pg_query_go/v6 v6.2.2
 	github.com/pingcap/tidb/pkg/parser v0.0.0-20260611124548-dc498a21707b
-	github.com/sqlc-dev/sqlc v1.31.1
+	github.com/sqlc-dev/sqlc v1.31.2-0.20260609165605-ecec179f076f
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.9.1
 )
@@ -46,6 +46,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
 	github.com/sqlc-dev/doubleclick v1.0.0 // indirect
+	github.com/sqlc-dev/marino v0.1.0 // indirect
 	github.com/tetratelabs/wazero v1.12.0 // indirect
 	github.com/wasilibs/go-pgquery v0.0.0-20260609010136-660d982fa4df // indirect
 	github.com/wasilibs/wazero-helpers v0.0.0-20250123031827-cd30c44769bb // indirect
