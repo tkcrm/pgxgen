@@ -292,6 +292,41 @@ func TestPostgresAlterTable(t *testing.T) {
 	}
 }
 
+func TestPostgresRenameTableAndColumn(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE old_name (
+			id SERIAL PRIMARY KEY,
+			bio TEXT NULL
+		);
+		ALTER TABLE old_name RENAME TO new_name;
+		ALTER TABLE new_name RENAME COLUMN bio TO description;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	table := cat.Schemas[0].Tables[0]
+	if table.Name != "new_name" {
+		t.Fatalf("expected table 'new_name', got %q", table.Name)
+	}
+
+	found := false
+	for _, col := range table.Columns {
+		if col.Name == "description" {
+			found = true
+		}
+		if col.Name == "bio" {
+			t.Error("column 'bio' should have been renamed to 'description'")
+		}
+	}
+	if !found {
+		t.Error("expected renamed column 'description' not found")
+	}
+}
+
 func TestPostgresDropTable(t *testing.T) {
 	path := writeTemp(t, `
 		CREATE TABLE temp_data (id SERIAL PRIMARY KEY, data TEXT);
