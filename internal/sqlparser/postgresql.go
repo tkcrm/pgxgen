@@ -52,13 +52,15 @@ func (p *postgresParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 			case *pg.Node_AlterEnumStmt:
 				p.handleAlterEnum(cat, n.AlterEnumStmt)
 			case *pg.Node_DropStmt:
-				p.handleDropStmt(cat, n.DropStmt)
+				p.handleDrop(cat, n.DropStmt)
 			case *pg.Node_IndexStmt:
 				p.handleCreateIndex(cat, n.IndexStmt)
 			case *pg.Node_CreateExtensionStmt:
 				p.handleCreateExtension(cat, n.CreateExtensionStmt)
 			case *pg.Node_ViewStmt:
 				p.handleCreateView(cat, n.ViewStmt)
+			case *pg.Node_RenameStmt:
+				p.handleRename(cat, n.RenameStmt)
 			}
 		}
 	}
@@ -586,7 +588,7 @@ func (p *postgresParser) handleCreateExtension(cat *catalog.Catalog, n *pg.Creat
 	schema.Extensions = append(schema.Extensions, n.Extname)
 }
 
-func (p *postgresParser) handleDropStmt(cat *catalog.Catalog, n *pg.DropStmt) {
+func (p *postgresParser) handleDrop(cat *catalog.Catalog, n *pg.DropStmt) {
 	if n == nil {
 		return
 	}
@@ -758,6 +760,35 @@ func (p *postgresParser) handleCreateView(cat *catalog.Catalog, n *pg.ViewStmt) 
 		Columns: columns,
 		Query:   query,
 	})
+}
+
+// handleRename processes ALTER TABLE ... RENAME TO / RENAME COLUMN, which
+// Postgres represents as a separate RenameStmt node, not an AlterTableCmd.
+func (p *postgresParser) handleRename(cat *catalog.Catalog, n *pg.RenameStmt) {
+	if n == nil || n.Relation == nil {
+		return
+	}
+
+	schemaName := n.Relation.Schemaname
+	if schemaName == "" {
+		schemaName = cat.DefaultSchema
+	}
+	table := p.findTable(cat, schemaName, n.Relation.Relname)
+	if table == nil {
+		return
+	}
+
+	switch n.RenameType {
+	case pg.ObjectType_OBJECT_TABLE:
+		table.Name = n.Newname
+	case pg.ObjectType_OBJECT_COLUMN:
+		for _, col := range table.Columns {
+			if col.Name == n.Subname {
+				col.Name = n.Newname
+				break
+			}
+		}
+	}
 }
 
 // resolveViewColumns extracts column names and types from a CREATE VIEW statement.
