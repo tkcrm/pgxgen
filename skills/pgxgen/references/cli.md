@@ -125,9 +125,23 @@ pgxgen schema sql/migrations/001_init.up.sql             # Single file
 
 **Flags:**
 
-| Flag             | Default      | Description                          |
-| ---------------- | ------------ | ------------------------------------ |
-| `--engine`, `-e` | `postgresql` | Database engine (postgresql, sqlite) |
+| Flag             | Default      | Description                                 |
+| ---------------- | ------------ | ------------------------------------------- |
+| `--engine`, `-e` | `postgresql` | Database engine (postgresql, mysql, sqlite) |
+
+**What is captured:**
+
+- Tables with all columns (types, NOT NULL, defaults)
+- PRIMARY KEY (inline and composite)
+- FOREIGN KEY (inline REFERENCES and table-level) with ON DELETE/UPDATE actions
+- UNIQUE and CHECK constraints
+- CREATE INDEX (regular, unique, partial with WHERE, IF NOT EXISTS)
+- CREATE EXTENSION (PostgreSQL)
+- CREATE TYPE / ENUM (PostgreSQL)
+- CREATE VIEW and materialized views
+- COMMENT ON TABLE / COLUMN / VIEW (PostgreSQL)
+- `ALTER TABLE ... RENAME TO` and `RENAME COLUMN` — applied to the final schema state (PostgreSQL and SQLite)
+- Tables are topologically sorted by FK dependencies
 
 ### fmt
 
@@ -165,18 +179,6 @@ pgxgen fmt . -e mysql                               # Use MySQL dialect
 3. Shows the list of files to format
 4. Asks for confirmation (`y/N`) — skipped with `--yes` or `--check`
 5. Writes formatted files
-
-**What is captured:**
-
-- Tables with all columns (types, NOT NULL, defaults)
-- PRIMARY KEY (inline and composite)
-- FOREIGN KEY (inline REFERENCES and table-level) with ON DELETE/UPDATE actions
-- UNIQUE and CHECK constraints
-- CREATE INDEX (regular, unique, partial with WHERE, IF NOT EXISTS)
-- CREATE EXTENSION (PostgreSQL)
-- CREATE TYPE / ENUM (PostgreSQL)
-- COMMENT ON TABLE/COLUMN (PostgreSQL)
-- Tables are topologically sorted by FK dependencies
 
 ### update
 

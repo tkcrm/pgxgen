@@ -69,6 +69,7 @@ pgxgen auto-generates `.pgxgen/sqlc.yaml` from this section.
 
 ```yaml
 sqlc:
+  keep_generated_config: false # Optional. Keep .pgxgen/sqlc.yaml after the run. Default: false (config and .pgxgen/ dir removed on both success and failure)
   defaults:
     sql_package: pgx/v5 # pgx/v5 | pgx/v4 | database/sql
     emit_prepared_queries: false

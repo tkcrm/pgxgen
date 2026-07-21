@@ -169,6 +169,11 @@ sqlc:
       - db_type: uuid
         nullable: true
         go_type: "github.com/google/uuid.NullUUID"
+      - db_type: pg_catalog.numeric
+        go_type: github.com/shopspring/decimal.Decimal
+      - db_type: pg_catalog.numeric
+        go_type: github.com/shopspring/decimal.NullDecimal
+        nullable: true
 ```
 
 ## Key principles

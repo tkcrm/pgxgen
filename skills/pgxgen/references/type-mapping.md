@@ -10,6 +10,7 @@ When resolving a column's Go type, pgxgen checks in this order (highest priority
 2. **sqlc type overrides** — `db_type` → `go_type` in `sqlc.overrides.types`
 3. **models type_overrides** — `sql_type` → `go_type` in `models.type_overrides`
 4. **Default typemap** — engine-specific built-in mapping (tables below)
+5. **Pointer replacement** — when `models.emit_pointers_for_null` is set, the resolved nullable wrapper type is replaced with a `*T` pointer (see the "Nullable (pointers)" columns below)
 
 ## PostgreSQL Type Mapping
 
@@ -167,4 +168,3 @@ sqlc:
       - column: orders.amount
         go_type: "github.com/shopspring/decimal.Decimal"
 ```
-
