@@ -60,7 +60,8 @@ func structName(name string) string {
 		if p == "" {
 			continue
 		}
-		out.WriteString(strings.ToUpper(p[:1]) + p[1:])
+		out.WriteString(strings.ToUpper(p[:1]))
+		out.WriteString(p[1:])
 	}
 	return out.String()
 }
