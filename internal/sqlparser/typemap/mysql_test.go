@@ -6,9 +6,6 @@ import (
 	"github.com/tkcrm/pgxgen/internal/sqlparser/catalog"
 )
 
-//go:fix inline
-func intPtr(v int) *int { return new(v) }
-
 func TestMysqlIntegerTypes(t *testing.T) {
 	m := &mysqlMapper{}
 	opts := Options{}
