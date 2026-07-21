@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
@@ -53,32 +54,17 @@ func (formatter Token) AddIndent(lev int) {
 
 // IsTieClauseStart determines if token type is included in TokenTypesOfTieClause
 func (formatter Token) IsTieClauseStart() bool {
-	for _, v := range lexer.TokenTypesOfTieClause {
-		if formatter.Type == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(lexer.TokenTypesOfTieClause, formatter.Type)
 }
 
 // IsLimitClauseStart determines token type is included in TokenTypesOfLimitClause
 func (formatter Token) IsLimitClauseStart() bool {
-	for _, v := range lexer.TokenTypesOfLimitClause {
-		if formatter.Type == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(lexer.TokenTypesOfLimitClause, formatter.Type)
 }
 
 // IsJoinStart determines if token type is included in TokenTypesOfJoinMaker
 func (formatter Token) IsJoinStart() bool {
-	for _, v := range lexer.TokenTypesOfJoinMaker {
-		if formatter.Type == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(lexer.TokenTypesOfJoinMaker, formatter.Type)
 }
 
 // ContinueNewline returns true if a token should be moved to a new line
@@ -88,12 +74,7 @@ func (formatter Token) ContinueNewline() bool {
 		lexer.FETCH, lexer.RETURNING, lexer.USING, lexer.UNION, lexer.INTERSECT, lexer.EXCEPT, lexer.UNION,
 		lexer.CREATE, lexer.UPDATE, lexer.SET, lexer.INSERT, lexer.VALUES, lexer.DELETE, lexer.DROP,
 	}
-	for _, v := range ttypes {
-		if formatter.Type == v {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ttypes, formatter.Type)
 }
 
 // ContinueLine should be called on the last parent token to see, if a token should continue in the same line

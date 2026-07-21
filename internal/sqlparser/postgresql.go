@@ -3,6 +3,7 @@ package sqlparser
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	pg "github.com/pganalyze/pg_query_go/v6"
@@ -331,10 +332,8 @@ func (p *postgresParser) handleAlterEnum(cat *catalog.Catalog, n *pg.AlterEnumSt
 
 	// ADD VALUE: skip duplicates regardless of IF NOT EXISTS — the catalog
 	// represents the resulting set of values, not the replayed DDL stream.
-	for _, v := range enum.Values {
-		if v == n.NewVal {
-			return
-		}
+	if slices.Contains(enum.Values, n.NewVal) {
+		return
 	}
 
 	if n.NewValNeighbor != "" {
@@ -580,10 +579,8 @@ func (p *postgresParser) handleCreateExtension(cat *catalog.Catalog, n *pg.Creat
 	schema := p.getOrCreateSchema(cat, cat.DefaultSchema)
 
 	// Avoid duplicates
-	for _, ext := range schema.Extensions {
-		if ext == n.Extname {
-			return
-		}
+	if slices.Contains(schema.Extensions, n.Extname) {
+		return
 	}
 	schema.Extensions = append(schema.Extensions, n.Extname)
 }

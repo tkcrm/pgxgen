@@ -66,7 +66,7 @@ func (o *Orchestrator) Generate(ctx context.Context, opts GenerateOpts) ([]Gener
 			crud.SetCustomTemplateDir(filepath.Join(o.configDir, o.cfg.Templates.CrudDir))
 		}
 
-		debugf := func(format string, args ...interface{}) {
+		debugf := func(format string, args ...any) {
 			if opts.Debug {
 				o.logger.Infof("[debug] "+format, args...)
 			}

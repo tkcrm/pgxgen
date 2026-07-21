@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/formatters"
 	"github.com/tkcrm/pgxgen/internal/sqlfmt/lexer"
@@ -267,10 +268,8 @@ func (r *Parser) hasEndType() bool {
 
 	// Check if end type is contained
 	for _, token := range r.tokens {
-		for _, ttype := range r.endTypes {
-			if token.Type == ttype {
-				return true
-			}
+		if slices.Contains(r.endTypes, token.Type) {
+			return true
 		}
 	}
 

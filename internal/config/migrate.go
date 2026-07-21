@@ -131,8 +131,8 @@ type v1SqlcConfig struct {
 	} `yaml:"sql"`
 	Overrides *struct {
 		Go *struct {
-			Rename    map[string]string        `yaml:"rename,omitempty"`
-			Overrides []map[string]interface{} `yaml:"overrides,omitempty"`
+			Rename    map[string]string `yaml:"rename,omitempty"`
+			Overrides []map[string]any  `yaml:"overrides,omitempty"`
 		} `yaml:"go,omitempty"`
 	} `yaml:"overrides,omitempty"`
 }

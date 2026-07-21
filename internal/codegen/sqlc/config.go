@@ -20,7 +20,7 @@ type sqlcOverrides struct {
 
 type sqlcGoOverrides struct {
 	Rename    map[string]string `yaml:"rename,omitempty"`
-	Overrides []interface{}     `yaml:"overrides,omitempty"`
+	Overrides []any             `yaml:"overrides,omitempty"`
 }
 
 type sqlcSQLEntry struct {
@@ -71,9 +71,9 @@ func BuildSqlcConfig(schema *config.SchemaConfig) *sqlcConfig {
 		}
 
 		// Combine type overrides and column overrides into sqlc format
-		var allOverrides []interface{}
+		var allOverrides []any
 		for _, t := range overrides.Types {
-			entry := map[string]interface{}{
+			entry := map[string]any{
 				"db_type": t.DbType,
 				"go_type": t.GoType,
 			}
@@ -83,7 +83,7 @@ func BuildSqlcConfig(schema *config.SchemaConfig) *sqlcConfig {
 			allOverrides = append(allOverrides, entry)
 		}
 		for _, c := range overrides.Columns {
-			entry := map[string]interface{}{
+			entry := map[string]any{
 				"column": c.Column,
 			}
 			if c.GoType != nil {
