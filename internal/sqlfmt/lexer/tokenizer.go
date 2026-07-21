@@ -468,7 +468,8 @@ func isDollarSign(ch rune) bool {
 // readDollarTag reads a dollar-quote tag after the initial '$'. Returns the full tag (e.g. "$$" or "$tag$").
 // If the sequence is not a valid dollar-quote opening, unreads consumed characters and returns an error.
 func (t *tokenizer) readDollarTag(buf *bytes.Buffer) (string, error) {
-	tag := "$"
+	var tag strings.Builder
+	tag.WriteString("$")
 	var consumed []rune
 	for {
 		ch, _, err := t.r.ReadRune()
@@ -480,13 +481,13 @@ func (t *tokenizer) readDollarTag(buf *bytes.Buffer) (string, error) {
 			return "", fmt.Errorf("unexpected EOF in dollar tag")
 		}
 		consumed = append(consumed, ch)
-		tag += string(ch)
+		tag.WriteString(string(ch))
 		if ch == '$' {
 			// Valid dollar-quote tag found, write consumed chars to buf
 			for _, r := range consumed {
 				buf.WriteRune(r)
 			}
-			return tag, nil
+			return tag.String(), nil
 		}
 		// Tag chars must be identifier-safe (letter, digit, underscore)
 		if !isTagChar(ch) {

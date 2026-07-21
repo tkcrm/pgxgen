@@ -61,7 +61,7 @@ func (p *sqliteParser) ParseSchema(files []string) (*catalog.Catalog, error) {
 }
 
 // sqliteStmt is a parsed SQLite statement.
-type sqliteStmt interface{}
+type sqliteStmt any
 
 type sqliteCreateTable struct {
 	Schema      string
@@ -118,7 +118,7 @@ type sqliteErrorListener struct {
 	err string
 }
 
-func (el *sqliteErrorListener) SyntaxError(_ antlr.Recognizer, _ interface{}, _, _ int, msg string, _ antlr.RecognitionException) {
+func (el *sqliteErrorListener) SyntaxError(_ antlr.Recognizer, _ any, _, _ int, msg string, _ antlr.RecognitionException) {
 	el.err = msg
 }
 
@@ -387,7 +387,7 @@ func sqliteParseForeignKeyClause(ctx sqliteparser.IForeign_key_clauseContext) *c
 
 	// Parse ON DELETE / ON UPDATE actions by walking children
 	children := fkc.GetChildren()
-	for i := 0; i < len(children); i++ {
+	for i := range children {
 		tn, ok := children[i].(antlr.TerminalNode)
 		if !ok {
 			continue

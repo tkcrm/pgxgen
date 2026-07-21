@@ -330,14 +330,14 @@ func collectImports(code string, sqlcOverrides *config.SqlcOverridesConfig) map[
 }
 
 // extractImportPath gets the import path from a go_type value.
-func extractImportPath(v interface{}) string {
+func extractImportPath(v any) string {
 	switch t := v.(type) {
 	case string:
 		// "github.com/google/uuid.UUID" → "github.com/google/uuid"
 		if idx := strings.LastIndex(t, "."); idx > 0 {
 			return t[:idx]
 		}
-	case map[string]interface{}:
+	case map[string]any:
 		if imp, ok := t["import"].(string); ok {
 			return imp
 		}
@@ -492,7 +492,7 @@ func normalizeDbType(t string) string {
 //   - {"type": "JSONField", "import": "github.com/example/storecmn"} → "storecmn.JSONField"
 //   - "string" → "string"
 //   - {"type": "map[string]any"} → "map[string]any"
-func extractGoType(v interface{}) string {
+func extractGoType(v any) string {
 	switch t := v.(type) {
 	case string:
 		// Handle full import path like "github.com/google/uuid.UUID"
@@ -507,7 +507,7 @@ func extractGoType(v interface{}) string {
 			}
 		}
 		return t
-	case map[string]interface{}:
+	case map[string]any:
 		typeName, _ := t["type"].(string)
 		importPath, _ := t["import"].(string)
 		if importPath != "" && typeName != "" {

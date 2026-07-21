@@ -156,7 +156,8 @@ func renderPg(t *testing.T, cfg *config.ModelsConfig, overrides *config.SqlcOver
 // --- Singularization for PostgreSQL tables ---
 
 func TestPg_SingularTableNames(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		nil, newPgSqlcDefaults(),
 	)
@@ -177,7 +178,8 @@ func TestPg_SingularTableNames(t *testing.T) {
 // --- ID field naming with pgx/v5 ---
 
 func TestPg_IDFieldNaming(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -198,7 +200,8 @@ func TestPg_IDFieldNaming(t *testing.T) {
 // --- Tags from sqlc defaults ---
 
 func TestPg_DbJsonTags(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		nil, newPgSqlcDefaults(),
 	)
@@ -211,7 +214,8 @@ func TestPg_DbJsonTags(t *testing.T) {
 // --- sqlc column overrides: validate tags ---
 
 func TestPg_SqlcColumnOverrideTags(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -224,7 +228,8 @@ func TestPg_SqlcColumnOverrideTags(t *testing.T) {
 // --- sqlc type overrides: uuid ---
 
 func TestPg_UuidTypeOverride(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -243,7 +248,8 @@ func TestPg_UuidTypeOverride(t *testing.T) {
 // --- sqlc type overrides: geography ---
 
 func TestPg_GeographyTypeOverride(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -255,7 +261,8 @@ func TestPg_GeographyTypeOverride(t *testing.T) {
 // --- sqlc column overrides: custom go_type ---
 
 func TestPg_SqlcColumnOverrideGoType(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -269,7 +276,8 @@ func TestPg_SqlcColumnOverrideGoType(t *testing.T) {
 // --- Enum resolves from column type ---
 
 func TestPg_EnumColumnType(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		nil, newPgSqlcDefaults(),
 	)
@@ -281,7 +289,8 @@ func TestPg_EnumColumnType(t *testing.T) {
 // --- sql_package fallback from sqlc defaults ---
 
 func TestPg_SqlPackageFallback(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		nil, newPgSqlcDefaults(),
 	)
@@ -297,7 +306,8 @@ func TestPg_SqlPackageFallback(t *testing.T) {
 // --- Imports ---
 
 func TestPg_ImportsContainUUID(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -306,7 +316,8 @@ func TestPg_ImportsContainUUID(t *testing.T) {
 }
 
 func TestPg_ImportsContainOrb(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)
@@ -534,7 +545,8 @@ func TestPg_SameNamedEnumsInDifferentSchemas(t *testing.T) {
 // --- View model generation for PostgreSQL ---
 
 func TestPg_ViewStructGenerated(t *testing.T) {
-	output := renderPg(t,
+	output := renderPg(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newPgSqlcOverrides(), newPgSqlcDefaults(),
 	)

@@ -3,6 +3,7 @@ package crud
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -396,9 +397,7 @@ func cloneWhere(w map[string]config.WhereParamConfig) map[string]config.WherePar
 		return nil
 	}
 	result := make(map[string]config.WhereParamConfig, len(w))
-	for k, v := range w {
-		result[k] = v
-	}
+	maps.Copy(result, w)
 	return result
 }
 

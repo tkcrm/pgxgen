@@ -943,7 +943,7 @@ var comparatorMap = map[string]TokenType{
 func peekComparator(r *bufio.Reader) (string, error) {
 	// Peek step by step into subsequent characters to search for a valid comparator
 	steps := 1
-	sequence := ""
+	var sequence strings.Builder
 	for {
 		b, errPeek := r.Peek(steps)
 		if errPeek != nil {
@@ -956,7 +956,7 @@ func peekComparator(r *bufio.Reader) (string, error) {
 
 		// Check if character is plausible comparator
 		if strings.Contains("~*!=<>", string(ch)) {
-			sequence += string(ch)
+			sequence.WriteString(string(ch))
 		} else {
 			break
 		}
@@ -966,15 +966,15 @@ func peekComparator(r *bufio.Reader) (string, error) {
 	}
 
 	// Check if read sequence is valid comparator
-	if sequence != "" {
+	if sequence.String() != "" {
 
 		// Return comparator sequence
-		if _, ok := comparatorMap[sequence]; ok {
-			return sequence, nil
+		if _, ok := comparatorMap[sequence.String()]; ok {
+			return sequence.String(), nil
 		}
 
 		// Return error if invalid comparator sequence was detected
-		return "", fmt.Errorf("invalid comparator sequence: %s", sequence)
+		return "", fmt.Errorf("invalid comparator sequence: %s", sequence.String())
 	}
 
 	// Return empty string if sequence was not a comparator

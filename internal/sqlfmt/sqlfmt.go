@@ -238,8 +238,8 @@ func readDollarTagFromRunes(runes []rune, i int) string {
 // isCommentOnly checks if the string contains only comments (no SQL statements).
 func isCommentOnly(s string) bool {
 	inBlock := false
-	lines := strings.Split(s, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(s, "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
@@ -297,20 +297,20 @@ func addPadding(s string, leftPadding string) string {
 
 // removeComments removes one-line comments to make sure their formatting did not manipulate semantics.
 func removeComments(str string) string {
-	var strNew string
+	var strNew strings.Builder
 	var quoted bool
 	var skip bool
 	for i, c := range str {
 		if !quoted && c == '\'' {
 			quoted = true
-			strNew += string(c)
+			strNew.WriteString(string(c))
 			continue
 		} else if quoted && c == '\'' {
 			quoted = false
-			strNew += string(c)
+			strNew.WriteString(string(c))
 			continue
 		} else if quoted {
-			strNew += string(c)
+			strNew.WriteString(string(c))
 			continue
 		}
 
@@ -330,10 +330,10 @@ func removeComments(str string) string {
 		}
 
 		if !skip {
-			strNew += string(c)
+			strNew.WriteString(string(c))
 		}
 	}
-	return strNew
+	return strNew.String()
 }
 
 // removeSymbols removes semantically unnecessary characters for comparison.

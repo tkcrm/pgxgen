@@ -94,16 +94,16 @@ type SqlcOverridesConfig struct {
 
 // SqlcTypeOverride defines a db_type → go_type mapping.
 type SqlcTypeOverride struct {
-	DbType   string      `yaml:"db_type" validate:"required"`
-	GoType   interface{} `yaml:"go_type" validate:"required"` // string or {type: ..., import: ...}
-	Nullable bool        `yaml:"nullable,omitempty"`
+	DbType   string `yaml:"db_type" validate:"required"`
+	GoType   any    `yaml:"go_type" validate:"required"` // string or {type: ..., import: ...}
+	Nullable bool   `yaml:"nullable,omitempty"`
 }
 
 // SqlcColumnOverride defines per-column overrides (struct tags, go types).
 type SqlcColumnOverride struct {
-	Column      string      `yaml:"column" validate:"required"`
-	GoType      interface{} `yaml:"go_type,omitempty"`
-	GoStructTag string      `yaml:"go_struct_tag,omitempty"`
+	Column      string `yaml:"column" validate:"required"`
+	GoType      any    `yaml:"go_type,omitempty"`
+	GoStructTag string `yaml:"go_struct_tag,omitempty"`
 }
 
 // DefaultsConfig defines defaults inherited by all tables in this schema.

@@ -420,13 +420,7 @@ func TestSqliteRealMigrations(t *testing.T) {
 		t.Errorf("todos: expected %d columns, got %d: %v", len(expectedTodoCols), len(todoCols), todoCols)
 	}
 	for _, exp := range expectedTodoCols {
-		found := false
-		for _, c := range todoCols {
-			if c == exp {
-				found = true
-				break
-			}
-		}
+		found := slices.Contains(todoCols, exp)
 		if !found {
 			t.Errorf("todos: missing column %q. Got: %v", exp, todoCols)
 		}

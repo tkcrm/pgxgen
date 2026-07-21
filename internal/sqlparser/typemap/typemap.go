@@ -55,12 +55,12 @@ func parseDriver(pkg string) sqlDriver {
 
 // structName converts a SQL name to a Go exported name (CamelCase).
 func structName(name string) string {
-	out := ""
-	for _, p := range strings.Split(name, "_") {
+	var out strings.Builder
+	for p := range strings.SplitSeq(name, "_") {
 		if p == "" {
 			continue
 		}
-		out += strings.ToUpper(p[:1]) + p[1:]
+		out.WriteString(strings.ToUpper(p[:1]) + p[1:])
 	}
-	return out
+	return out.String()
 }

@@ -18,10 +18,10 @@ func ToPascalCase(s string) string {
 
 	titleCaser := cases.Title(language.English)
 
-	var pascalCase string
+	var pascalCase strings.Builder
 	for _, word := range words {
-		pascalCase += titleCaser.String(strings.ToLower(word))
+		pascalCase.WriteString(titleCaser.String(strings.ToLower(word)))
 	}
 
-	return strings.ReplaceAll(pascalCase, "Id", "ID")
+	return strings.ReplaceAll(pascalCase.String(), "Id", "ID")
 }

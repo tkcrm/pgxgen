@@ -234,7 +234,8 @@ func TestEmitDbAndJsonTags(t *testing.T) {
 }
 
 func TestEmitTagsFromSqlcDefaults(t *testing.T) {
-	output := render(t,
+	output := render(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newTestCatalog(),
 		nil,
@@ -253,7 +254,8 @@ func TestNoTagsWhenDisabled(t *testing.T) {
 }
 
 func TestSqlcColumnOverrideGoStructTag(t *testing.T) {
-	output := render(t,
+	output := render(
+		t,
 		&config.ModelsConfig{PackageName: "models", EmitDbTags: true, EmitJsonTags: true},
 		newTestCatalog(),
 		&config.SqlcOverridesConfig{
@@ -274,12 +276,13 @@ func TestSqlcColumnOverrideGoStructTag(t *testing.T) {
 // --- Type resolution ---
 
 func TestSqlcColumnOverrideGoType(t *testing.T) {
-	output := render(t,
+	output := render(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newTestCatalog(),
 		&config.SqlcOverridesConfig{
 			Columns: []config.SqlcColumnOverride{
-				{Column: "todos.status", GoType: map[string]interface{}{"type": "TodoStatusType"}},
+				{Column: "todos.status", GoType: map[string]any{"type": "TodoStatusType"}},
 			},
 		},
 		nil,
@@ -303,14 +306,15 @@ func TestSqlcTypeOverrideWithImport(t *testing.T) {
 		}},
 	}
 
-	output := render(t,
+	output := render(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		cat,
 		&config.SqlcOverridesConfig{
 			Types: []config.SqlcTypeOverride{
 				{
 					DbType: "JSONB",
-					GoType: map[string]interface{}{
+					GoType: map[string]any{
 						"type":   "JSONField",
 						"import": "github.com/example/store/storecmn",
 					},
@@ -338,7 +342,8 @@ func TestModelTypeOverrides(t *testing.T) {
 		}},
 	}
 
-	output := render(t,
+	output := render(
+		t,
 		&config.ModelsConfig{
 			PackageName: "models",
 			TypeOverrides: []config.TypeOverrideConfig{
@@ -373,7 +378,8 @@ func TestNoStructCommentsWhenDisabled(t *testing.T) {
 // --- Nullable types ---
 
 func TestNullableTypesDefault(t *testing.T) {
-	output := render(t,
+	output := render(
+		t,
 		&config.ModelsConfig{PackageName: "models"},
 		newTestCatalog(), nil, nil,
 	)

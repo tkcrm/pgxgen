@@ -6,7 +6,8 @@ import (
 	"github.com/tkcrm/pgxgen/internal/sqlparser/catalog"
 )
 
-func intPtr(v int) *int { return &v }
+//go:fix inline
+func intPtr(v int) *int { return new(v) }
 
 func TestMysqlIntegerTypes(t *testing.T) {
 	m := &mysqlMapper{}
@@ -49,13 +50,13 @@ func TestMysqlTinyintBool(t *testing.T) {
 	opts := Options{}
 
 	// tinyint(1) → bool
-	c := &catalog.Column{Type: "tinyint", NotNull: true, Length: intPtr(1)}
+	c := &catalog.Column{Type: "tinyint", NotNull: true, Length: new(1)}
 	got := m.GoType(c, noEnums, opts)
 	if got != "bool" {
 		t.Errorf("tinyint(1) NOT NULL = %q, want bool", got)
 	}
 
-	c = &catalog.Column{Type: "tinyint", NotNull: false, Length: intPtr(1)}
+	c = &catalog.Column{Type: "tinyint", NotNull: false, Length: new(1)}
 	got = m.GoType(c, noEnums, opts)
 	if got != "sql.NullBool" {
 		t.Errorf("tinyint(1) NULL = %q, want sql.NullBool", got)
