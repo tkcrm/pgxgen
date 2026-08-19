@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/tkcrm/pgxgen/internal/sqlparser/catalog"
+	"github.com/tkcrm/pgxgen/internal/sqlparser/typemap"
 )
 
 func writeTemp(t *testing.T, sql string) string {
@@ -1461,5 +1462,241 @@ func TestPostgresCreateViewWithJoin(t *testing.T) {
 	}
 	if !strings.EqualFold(secretCol.Type, "text") {
 		t.Errorf("expected type 'text' for secret_key, got %q", secretCol.Type)
+	}
+}
+
+func TestPostgresCreateViewInfersBuiltinFunctionTypes(t *testing.T) {
+	path := writeTemp(t, `
+		CREATE TABLE products (
+			id UUID NOT NULL PRIMARY KEY,
+			name TEXT NOT NULL,
+			quantity INTEGER NOT NULL,
+			price NUMERIC(10,2),
+			published_at TIMESTAMPTZ NOT NULL,
+			categories TEXT[] NOT NULL
+		);
+
+		CREATE TABLE product_reviews (
+			id UUID NOT NULL PRIMARY KEY,
+			product_id UUID NOT NULL REFERENCES products (id)
+		);
+
+		CREATE VIEW product_statistics AS
+			SELECT
+				count(*) AS product_count,
+				sum(quantity) AS quantity_sum,
+				avg(quantity) AS quantity_average,
+				min(quantity) AS minimum_quantity,
+				max(quantity) AS maximum_quantity,
+				bool_and(quantity > 0) AS all_available,
+				bit_and(quantity) AS quantity_bits,
+				corr(price, price) AS price_correlation,
+				regr_count(price, price) AS regression_count,
+				stddev(quantity) AS quantity_deviation,
+				string_agg(name, ',') AS product_names,
+				json_agg(name) AS product_names_json,
+				jsonb_agg(name) AS product_names_jsonb,
+				array_agg(quantity) AS quantities
+			FROM products;
+
+		CREATE VIEW product_details AS
+			SELECT
+				lower(name) AS normalized_name,
+				pg_catalog.upper(name) AS uppercase_name,
+				char_length(name) AS name_length,
+				concat(name, quantity) AS display_name,
+				format('%s: %s', name, quantity) AS formatted_name,
+				concat_ws(':', name, quantity) AS joined_name,
+				date_trunc('day', published_at) AS publication_day,
+				date_part('epoch', published_at) AS publication_epoch,
+				to_date('2026-01-01', 'YYYY-MM-DD') AS parsed_date,
+				to_timestamp(0) AS unix_epoch,
+				coalesce(price, 0::numeric) AS effective_price,
+				greatest(quantity, 0) AS effective_quantity,
+				abs(quantity) AS absolute_quantity,
+				array_append(categories, 'featured') AS extended_categories,
+				json_build_object('name', name) AS product_json,
+				jsonb_build_object('name', name) AS product_jsonb,
+				to_json(name) AS name_json,
+				to_jsonb(name) AS name_jsonb,
+				gen_random_uuid() AS generated_id,
+				CURRENT_TIMESTAMP AS generated_at,
+				CURRENT_DATE AS generated_date,
+				CURRENT_TIME AS generated_time,
+				LOCALTIMESTAMP AS generated_local_timestamp,
+				CURRENT_USER AS generated_by,
+				now() AS current_instant,
+				timeofday() AS current_time_text,
+				random() AS random_value,
+				pg_backend_pid() AS backend_pid,
+				current_schema() AS schema_name,
+				current_schemas(true) AS schema_names,
+				row_number() OVER (ORDER BY id) AS row_position,
+				percent_rank() OVER (ORDER BY quantity) AS quantity_rank,
+				ntile(4) OVER (ORDER BY quantity) AS quantity_bucket,
+				lag(name) OVER (ORDER BY id) AS previous_name
+			FROM products;
+
+		CREATE VIEW product_review_counts AS
+			SELECT
+				p.id,
+				(SELECT count(*) FROM product_reviews r WHERE r.product_id = p.id) AS review_count
+			FROM products p;
+	`)
+
+	p := newPostgresParser()
+	cat, err := p.ParseSchema([]string{path})
+	if err != nil {
+		t.Fatalf("ParseSchema error: %v", err)
+	}
+
+	tests := []struct {
+		view     string
+		column   string
+		wantType string
+		wantGo   string
+		notNull  bool
+		isArray  bool
+	}{
+		{view: "product_statistics", column: "product_count", wantType: "bigint", wantGo: "int64", notNull: true},
+		{view: "product_statistics", column: "quantity_sum", wantType: "bigint", wantGo: "pgtype.Int8"},
+		{view: "product_statistics", column: "quantity_average", wantType: "numeric", wantGo: "pgtype.Numeric"},
+		{view: "product_statistics", column: "minimum_quantity", wantType: "int4", wantGo: "pgtype.Int4"},
+		{view: "product_statistics", column: "maximum_quantity", wantType: "int4", wantGo: "pgtype.Int4"},
+		{view: "product_statistics", column: "all_available", wantType: "boolean", wantGo: "pgtype.Bool"},
+		{view: "product_statistics", column: "quantity_bits", wantType: "int4", wantGo: "pgtype.Int4"},
+		{view: "product_statistics", column: "price_correlation", wantType: "double precision", wantGo: "pgtype.Float8"},
+		{view: "product_statistics", column: "regression_count", wantType: "bigint", wantGo: "int64", notNull: true},
+		{view: "product_statistics", column: "quantity_deviation", wantType: "numeric", wantGo: "pgtype.Numeric"},
+		{view: "product_statistics", column: "product_names", wantType: "text", wantGo: "pgtype.Text"},
+		{view: "product_statistics", column: "product_names_json", wantType: "json", wantGo: "[]byte"},
+		{view: "product_statistics", column: "product_names_jsonb", wantType: "jsonb", wantGo: "[]byte"},
+		{view: "product_statistics", column: "quantities", wantType: "int4", wantGo: "[]int32", isArray: true},
+		{view: "product_details", column: "normalized_name", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "uppercase_name", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "name_length", wantType: "integer", wantGo: "int32", notNull: true},
+		{view: "product_details", column: "display_name", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "formatted_name", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "joined_name", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "publication_day", wantType: "timestamptz", wantGo: "pgtype.Timestamptz", notNull: true},
+		{view: "product_details", column: "publication_epoch", wantType: "double precision", wantGo: "float64", notNull: true},
+		{view: "product_details", column: "parsed_date", wantType: "date", wantGo: "pgtype.Date", notNull: true},
+		{view: "product_details", column: "unix_epoch", wantType: "timestamptz", wantGo: "pgtype.Timestamptz", notNull: true},
+		{view: "product_details", column: "effective_price", wantType: "numeric", wantGo: "pgtype.Numeric", notNull: true},
+		{view: "product_details", column: "effective_quantity", wantType: "int4", wantGo: "int32", notNull: true},
+		{view: "product_details", column: "absolute_quantity", wantType: "int4", wantGo: "int32", notNull: true},
+		{view: "product_details", column: "extended_categories", wantType: "text", wantGo: "[]string", notNull: true, isArray: true},
+		{view: "product_details", column: "product_json", wantType: "json", wantGo: "[]byte", notNull: true},
+		{view: "product_details", column: "product_jsonb", wantType: "jsonb", wantGo: "[]byte", notNull: true},
+		{view: "product_details", column: "name_json", wantType: "json", wantGo: "[]byte", notNull: true},
+		{view: "product_details", column: "name_jsonb", wantType: "jsonb", wantGo: "[]byte", notNull: true},
+		{view: "product_details", column: "generated_id", wantType: "uuid", wantGo: "pgtype.UUID", notNull: true},
+		{view: "product_details", column: "generated_at", wantType: "timestamptz", wantGo: "pgtype.Timestamptz", notNull: true},
+		{view: "product_details", column: "generated_date", wantType: "date", wantGo: "pgtype.Date", notNull: true},
+		{view: "product_details", column: "generated_time", wantType: "pg_catalog.timetz", wantGo: "time.Time", notNull: true},
+		{view: "product_details", column: "generated_local_timestamp", wantType: "timestamp", wantGo: "pgtype.Timestamp", notNull: true},
+		{view: "product_details", column: "generated_by", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "current_instant", wantType: "timestamptz", wantGo: "pgtype.Timestamptz", notNull: true},
+		{view: "product_details", column: "current_time_text", wantType: "text", wantGo: "string", notNull: true},
+		{view: "product_details", column: "random_value", wantType: "double precision", wantGo: "float64", notNull: true},
+		{view: "product_details", column: "backend_pid", wantType: "integer", wantGo: "int32", notNull: true},
+		{view: "product_details", column: "schema_name", wantType: "text", wantGo: "pgtype.Text"},
+		{view: "product_details", column: "schema_names", wantType: "text", wantGo: "[]string", notNull: true, isArray: true},
+		{view: "product_details", column: "row_position", wantType: "bigint", wantGo: "int64", notNull: true},
+		{view: "product_details", column: "quantity_rank", wantType: "double precision", wantGo: "float64", notNull: true},
+		{view: "product_details", column: "quantity_bucket", wantType: "integer", wantGo: "int32", notNull: true},
+		{view: "product_details", column: "previous_name", wantType: "text", wantGo: "pgtype.Text"},
+		{view: "product_review_counts", column: "review_count", wantType: "bigint", wantGo: "int64", notNull: true},
+	}
+	mapper, err := typemap.NewTypeMapper("postgresql")
+	if err != nil {
+		t.Fatalf("NewTypeMapper error: %v", err)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.view+"/"+tt.column, func(t *testing.T) {
+			var got *catalog.Column
+			for _, schema := range cat.Schemas {
+				for _, view := range schema.Views {
+					if view.Name != tt.view {
+						continue
+					}
+					for _, column := range view.Columns {
+						if column.Name == tt.column {
+							got = column
+							break
+						}
+					}
+				}
+			}
+
+			if got == nil {
+				t.Fatalf("column %s.%s not found", tt.view, tt.column)
+			}
+			if got.Type != tt.wantType {
+				t.Errorf("type = %q, want %q", got.Type, tt.wantType)
+			}
+			gotGo := mapper.GoType(got, nil, typemap.Options{SqlPackage: "pgx/v5"})
+			if got.IsArray && !strings.HasPrefix(gotGo, "[]") {
+				gotGo = "[]" + gotGo
+			}
+			if gotGo != tt.wantGo {
+				t.Errorf("Go type = %q, want %q", gotGo, tt.wantGo)
+			}
+			if got.NotNull != tt.notNull {
+				t.Errorf("not null = %v, want %v", got.NotNull, tt.notNull)
+			}
+			if got.IsArray != tt.isArray {
+				t.Errorf("is array = %v, want %v", got.IsArray, tt.isArray)
+			}
+		})
+	}
+}
+
+func TestPostgresNumericAggregateReturnTypes(t *testing.T) {
+	tests := []struct {
+		name     string
+		function string
+		argType  string
+		want     string
+	}{
+		{name: "sum smallint", function: "sum", argType: "int2", want: "bigint"},
+		{name: "sum integer", function: "sum", argType: "int4", want: "bigint"},
+		{name: "sum bigint", function: "sum", argType: "int8", want: "numeric"},
+		{name: "sum numeric", function: "sum", argType: "numeric", want: "numeric"},
+		{name: "sum real", function: "sum", argType: "float4", want: "real"},
+		{name: "sum double precision", function: "sum", argType: "float8", want: "double precision"},
+		{name: "sum money", function: "sum", argType: "money", want: "money"},
+		{name: "sum interval", function: "sum", argType: "interval", want: "interval"},
+		{name: "average integer", function: "avg", argType: "integer", want: "numeric"},
+		{name: "average bigint", function: "avg", argType: "bigint", want: "numeric"},
+		{name: "average real", function: "avg", argType: "real", want: "double precision"},
+		{name: "average interval", function: "avg", argType: "interval", want: "interval"},
+		{name: "statistics numeric", function: "statistics", argType: "numeric", want: "numeric"},
+		{name: "statistics double precision", function: "statistics", argType: "double precision", want: "double precision"},
+		{name: "unsupported sum input", function: "sum", argType: "text", want: "any"},
+		{name: "unsupported average input", function: "avg", argType: "text", want: "any"},
+		{name: "unsupported statistics input", function: "statistics", argType: "text", want: "any"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			var got string
+			switch tt.function {
+			case "sum":
+				got = postgresSumType(tt.argType)
+			case "avg":
+				got = postgresAverageType(tt.argType)
+			case "statistics":
+				got = postgresStatisticsType(tt.argType)
+			default:
+				t.Fatalf("unknown aggregate function %q", tt.function)
+			}
+			if got != tt.want {
+				t.Errorf("return type = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }

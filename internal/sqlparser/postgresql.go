@@ -821,26 +821,27 @@ func (p *postgresParser) resolveViewColumns(cat *catalog.Catalog, n *pg.ViewStmt
 		}
 
 		colName := rt.ResTarget.Name // AS alias
-		colType := "any"
+		col := &catalog.Column{Type: "any", FullType: "any"}
 
 		// Use explicit alias name if provided
 		if i < len(n.Aliases) {
 			colName = pgStringVal(n.Aliases[i])
 		}
 
-		// Try to resolve type from ColumnRef
+		// Resolve the expression type from columns, casts, built-in functions,
+		// scalar subqueries, and other expressions understood by PostgreSQL.
 		if rt.ResTarget.Val != nil {
 			if colRef, ok := rt.ResTarget.Val.Node.(*pg.Node_ColumnRef); ok {
-				refTable, refCol := p.extractColumnRef(colRef.ColumnRef)
+				_, refCol := p.extractColumnRef(colRef.ColumnRef)
 				if colName == "" {
 					colName = refCol
-				}
-				if resolved := p.findColumnType(cat, refTable, refCol, fromTables); resolved != "" {
-					colType = resolved
 				}
 			} else if colName == "" {
 				// Expression without alias — use deparsed expression as name
 				colName = deparseExpr(rt.ResTarget.Val)
+			}
+			if resolved := p.resolvePostgresExpression(cat, rt.ResTarget.Val, fromTables); resolved != nil {
+				col = resolved
 			}
 		}
 
@@ -848,10 +849,8 @@ func (p *postgresParser) resolveViewColumns(cat *catalog.Catalog, n *pg.ViewStmt
 			colName = fmt.Sprintf("column%d", i+1)
 		}
 
-		columns = append(columns, &catalog.Column{
-			Name: colName,
-			Type: colType,
-		})
+		col.Name = colName
+		columns = append(columns, col)
 	}
 
 	return columns
@@ -978,10 +977,10 @@ func (p *postgresParser) extractColumnRef(ref *pg.ColumnRef) (tableName, colName
 	return
 }
 
-// findColumnType looks up the type of a column in the catalog's tables and views.
-func (p *postgresParser) findColumnType(cat *catalog.Catalog, tableName, colName string, fromTables map[string]string) string {
+// findColumn looks up a column in the catalog's tables and views.
+func (p *postgresParser) findColumn(cat *catalog.Catalog, tableName, colName string, fromTables map[string]string) *catalog.Column {
 	if colName == "" {
-		return ""
+		return nil
 	}
 
 	// Resolve alias to real table name
@@ -999,7 +998,7 @@ func (p *postgresParser) findColumnType(cat *catalog.Catalog, tableName, colName
 			}
 			for _, c := range t.Columns {
 				if c.Name == colName {
-					return c.Type
+					return c
 				}
 			}
 		}
@@ -1010,12 +1009,12 @@ func (p *postgresParser) findColumnType(cat *catalog.Catalog, tableName, colName
 			}
 			for _, c := range v.Columns {
 				if c.Name == colName {
-					return c.Type
+					return c
 				}
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
 // deparseViewQuery converts a view's query AST node back to SQL text.
