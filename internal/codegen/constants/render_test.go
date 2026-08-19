@@ -2,11 +2,34 @@ package constants
 
 import (
 	"bytes"
+	"go/format"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRenderConstants_TableNamesDoNotImportColumnDependencies(t *testing.T) {
+	params := ConstantsParams{
+		Package: "repo_countries",
+		Tables: []ConstantsTableNamesParamsItem{
+			{NamePreffix: "Countries", Name: "countries", BareTableName: "countries"},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := RenderConstants(params, &buf)
+	require.NoError(t, err)
+
+	output := buf.String()
+	assert.NotContains(t, output, "import (")
+	assert.NotContains(t, output, "github.com/gobeam/stringy")
+	assert.NotContains(t, output, `"strings"`)
+	assert.Contains(t, output, `TableNameCountries TableName = "countries"`)
+
+	_, err = format.Source(buf.Bytes())
+	require.NoError(t, err)
+}
 
 func TestRenderConstants_SameNamedTablesInDifferentSchemas(t *testing.T) {
 	params := ConstantsParams{
@@ -65,6 +88,9 @@ func TestRenderConstants_SingleSchemaUnchanged(t *testing.T) {
 	err := RenderConstants(params, &buf)
 	require.NoError(t, err)
 	output := buf.String()
+
+	assert.Contains(t, output, `"strings"`)
+	assert.Contains(t, output, `"github.com/gobeam/stringy"`)
 
 	// Plain table — no schema prefix
 	assert.Contains(t, output, `TableNameUsers TableName = "users"`)
